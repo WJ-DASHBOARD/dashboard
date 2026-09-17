@@ -317,9 +317,11 @@
         <th>DOS</th>
         <th>Status Saldo</th>
         <th>GA (MTD)</th>
+        <th>Status GA</th>
         <th>Sell In SP</th>
         <th>Sell In Voucher</th>
         <th>Sell In Saldo</th>
+        <th>Total Sell In</th>
         <th>Tertiary</th>
         <th>Secondary</th>
         <th>Status Sell In</th>
@@ -371,16 +373,19 @@
       <div class="slab-top"><span class="kpi-label">Saldo 0</span></div>
       <div class="slab-top"><span class="slab-num" id="slabZero">–</span><span class="slab-pct" id="slabZeroPct">–</span></div>
       <div class="slab-bar"><div id="slabZeroBar" style="width:0%"></div></div>
+      <div class="slab-cat-pct" id="slabZeroCatPct" style="font-size:10.5px;color:var(--muted);margin-top:4px;">–</div>
     </div>
     <div class="slab-card low">
       <div class="slab-top"><span class="kpi-label">Saldo &lt; 100K</span></div>
       <div class="slab-top"><span class="slab-num" id="slabLow">–</span><span class="slab-pct" id="slabLowPct">–</span></div>
       <div class="slab-bar"><div id="slabLowBar" style="width:0%"></div></div>
+      <div class="slab-cat-pct" id="slabLowCatPct" style="font-size:10.5px;color:var(--muted);margin-top:4px;">–</div>
     </div>
     <div class="slab-card ok">
       <div class="slab-top"><span class="kpi-label">Saldo &ge; 100K</span></div>
       <div class="slab-top"><span class="slab-num" id="slabOk">–</span><span class="slab-pct" id="slabOkPct">–</span></div>
       <div class="slab-bar"><div id="slabOkBar" style="width:0%"></div></div>
+      <div class="slab-cat-pct" id="slabOkCatPct" style="font-size:10.5px;color:var(--muted);margin-top:4px;">–</div>
     </div>
   </div>
 
@@ -422,7 +427,7 @@
             <th style="font-weight:500;">Inj</th>
             <th style="font-weight:500;">Ori</th>
             <th style="font-weight:500;">Inj</th>
-            <th style="font-weight:500;">Saldo 0</th>
+            <th style="font-weight:500;white-space:nowrap;">Saldo 0</th>
             <th style="font-weight:500;">&lt;100K</th>
             <th style="font-weight:500;">&ge;100K</th>
           </tr>
@@ -446,12 +451,18 @@
   <table class="data">
     <thead>
       <tr>
-        <th data-k="brandIdx">Brand</th>
-        <th data-k="branchIdx">Branch</th>
-        <th data-k="microIdx">Micro Cluster</th>
-        <th data-k="outletId">Outlet ID</th>
-        <th data-k="outletName">Nama Outlet</th>
-        <th data-k="catIdx">Kategori</th>
+        <th rowspan="2" data-k="brandIdx">Brand</th>
+        <th rowspan="2" data-k="branchIdx">Branch</th>
+        <th rowspan="2" data-k="microIdx">Micro Cluster</th>
+        <th rowspan="2" data-k="outletId">Outlet ID</th>
+        <th rowspan="2" data-k="outletName">Nama Outlet</th>
+        <th rowspan="2" data-k="catIdx">Kategori</th>
+        <th colspan="9" style="text-align:center;">Stock Outlet</th>
+        <th colspan="4" style="text-align:center;">DOS</th>
+        <th rowspan="2" data-k="status">Status Saldo</th>
+        <th colspan="4" style="text-align:center;">Sell In</th>
+      </tr>
+      <tr>
         <th data-k="spoQty">SP Ori Qty</th>
         <th data-k="spoAmt">SP Ori Amt</th>
         <th data-k="spiQty">SP Inj Qty</th>
@@ -461,9 +472,14 @@
         <th data-k="viQty">Vou Inj Qty</th>
         <th data-k="viAmt">Vou Inj Amt</th>
         <th data-k="salAmt">Salmo Amt</th>
-        <th data-k="demandAmt">Demand 30D</th>
-        <th data-k="dos">DOS</th>
-        <th data-k="status">Status Saldo</th>
+        <th data-k="dosSp">SP</th>
+        <th data-k="dosVou">Voucher</th>
+        <th data-k="dosSal">Salmo</th>
+        <th data-k="dosAll">All Product</th>
+        <th data-k="sellinSp">SP</th>
+        <th data-k="sellinVou">Voucher</th>
+        <th data-k="sellinSaldo">Saldo</th>
+        <th data-k="totalSellin">Total</th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
@@ -622,6 +638,7 @@
         <th data-sk="outletName">Nama Outlet</th>
         <th data-sk="catIdx">Kategori</th>
         <th data-sk="rguGa">GA (MTD)</th>
+        <th data-sk="statusGa">Status GA</th>
         <th data-sk="sellinSp">Sell In SP</th>
         <th data-sk="sellinVou">Sell In Voucher</th>
         <th data-sk="sellinSaldo">Sell In Saldo</th>
@@ -785,8 +802,11 @@
 (function(){
 
 const FIELDS_O = ['brandIdx','areaIdx','branchIdx','microIdx','outletId','outletName','catIdx',
-  'spoQty','spoAmt','spiQty','spiAmt','voQty','voAmt','viQty','viAmt','salQty','salAmt','demandAmt'];
+  'spoQty','spoAmt','spiQty','spiAmt','voQty','voAmt','viQty','viAmt','salQty','salAmt',
+  'dspAmt','dvouAmt','dsalAmt'];
 const IDX = Object.fromEntries(FIELDS_O.map((k,i)=>[k,i]));
+function totalDemandAmt(r){ return r[IDX.dspAmt]+r[IDX.dvouAmt]+r[IDX.dsalAmt]; }
+function dosOf(stockA, demandA){ return demandA>0 ? (stockA/demandA) : null; }
 
 const FIELDS_S = ['brandIdx','areaIdx','branchIdx','microIdx','outletId','outletName','catIdx',
   'rguGa','qsso','sellinSp','sellinVou','sellinSaldo','tertiary','secondary'];
@@ -826,6 +846,18 @@ function fmtBn(n){
 }
 function stockAmt(r){ return r[IDX.spoAmt]+r[IDX.spiAmt]+r[IDX.voAmt]+r[IDX.viAmt]+r[IDX.salAmt]; }
 function catName(i){ return META.cats[i]; }
+function gaSlabLabel(gaVal){
+  if(gaVal<=0) return 'No GA';
+  if(gaVal<25) return '<25';
+  if(gaVal<50) return '25-50';
+  if(gaVal<100) return '50-100';
+  return '>100';
+}
+function gaSlabClass(gaVal){
+  if(gaVal<=0) return 'zero';
+  if(gaVal<25) return 'low';
+  return 'ok';
+}
 function outletStatus(salAmt){
   if(salAmt <= 0) return 'zero';
   if(salAmt < 100000) return 'low';
@@ -1110,9 +1142,18 @@ function sortFiltered(){
   const key = sortKey;
   filtered.sort((a,b)=>{
     let va, vb;
-    if(key==='dos'){
-      va = a[IDX.demandAmt] ? stockAmt(a)/a[IDX.demandAmt] : -1;
-      vb = b[IDX.demandAmt] ? stockAmt(b)/b[IDX.demandAmt] : -1;
+    if(key==='dosSp'){
+      va = dosOf(a[IDX.spoAmt]+a[IDX.spiAmt], a[IDX.dspAmt]) ?? -1;
+      vb = dosOf(b[IDX.spoAmt]+b[IDX.spiAmt], b[IDX.dspAmt]) ?? -1;
+    } else if(key==='dosVou'){
+      va = dosOf(a[IDX.voAmt]+a[IDX.viAmt], a[IDX.dvouAmt]) ?? -1;
+      vb = dosOf(b[IDX.voAmt]+b[IDX.viAmt], b[IDX.dvouAmt]) ?? -1;
+    } else if(key==='dosSal'){
+      va = dosOf(a[IDX.salAmt], a[IDX.dsalAmt]) ?? -1;
+      vb = dosOf(b[IDX.salAmt], b[IDX.dsalAmt]) ?? -1;
+    } else if(key==='dosAll'){
+      va = dosOf(stockAmt(a), totalDemandAmt(a)) ?? -1;
+      vb = dosOf(stockAmt(b), totalDemandAmt(b)) ?? -1;
     } else if(key==='outletName'){
       return sortDir * String(a[IDX.outletName]).localeCompare(String(b[IDX.outletName]));
     } else if(IDX[key]!==undefined){
@@ -1336,6 +1377,8 @@ function renderSellinTable(){
   tbody.innerHTML = pageRows.map(r=>{
     const flags = sellinStatusFlags(r);
     const statusHtml = flags.map(f=>`<span class="badge ${f==='Sell In Lengkap'?'ok':'low'}" style="margin-right:3px;">${f}</span>`).join('');
+    const statusGa = gaSlabClass(r[IDX_S.rguGa]);
+    const statusGaLabel = gaSlabLabel(r[IDX_S.rguGa]);
     return `<tr>
       <td>${META.brands[r[IDX_S.brandIdx]]}</td>
       <td>${META.branches[r[IDX_S.branchIdx]]}</td>
@@ -1344,6 +1387,7 @@ function renderSellinTable(){
       <td class="name-cell">${r[IDX_S.outletName]||'-'}</td>
       <td><span class="badge ${catName(r[IDX_S.catIdx])}">${catName(r[IDX_S.catIdx])}</span></td>
       <td>${fmtN(r[IDX_S.rguGa])}</td>
+      <td><span class="badge ${statusGa}">${statusGaLabel}</span></td>
       <td>${fmtN(r[IDX_S.sellinSp])}</td>
       <td>${fmtN(r[IDX_S.sellinVou])}</td>
       <td>${fmtN(r[IDX_S.sellinSaldo])}</td>
@@ -1359,13 +1403,14 @@ function renderSellinTable(){
 }
 
 function exportSellinCsv(){
-  const headers = ['brand','area','branch','micro_cluster','outlet_id','outlet_name','kategori','ga_mtd','sellin_sp','sellin_voucher','sellin_saldo','tertiary','secondary','status_sellin'];
+  const headers = ['brand','area','branch','micro_cluster','outlet_id','outlet_name','kategori','ga_mtd','status_ga','sellin_sp','sellin_voucher','sellin_saldo','tertiary','secondary','status_sellin'];
   const lines = [headers.join(',')];
   filteredSellin.forEach(r=>{
+    const statusGa = gaSlabLabel(r[IDX_S.rguGa]);
     lines.push([
       META.brands[r[IDX_S.brandIdx]], META.areas[r[IDX_S.areaIdx]], META.branches[r[IDX_S.branchIdx]], META.micros[r[IDX_S.microIdx]],
       r[IDX_S.outletId], JSON.stringify(r[IDX_S.outletName]||''), catName(r[IDX_S.catIdx]),
-      r[IDX_S.rguGa], r[IDX_S.sellinSp], r[IDX_S.sellinVou], r[IDX_S.sellinSaldo], r[IDX_S.tertiary], r[IDX_S.secondary],
+      r[IDX_S.rguGa], statusGa, r[IDX_S.sellinSp], r[IDX_S.sellinVou], r[IDX_S.sellinSaldo], r[IDX_S.tertiary], r[IDX_S.secondary],
       JSON.stringify(sellinStatusFlags(r).join('; '))
     ].join(','));
   });
@@ -1382,12 +1427,22 @@ function renderKpis(){
   document.getElementById('kpiTotal').textContent = fmtN(n);
 
   let low=0, zero=0, ok=0, stockTotal=0, demand=0;
+  // per-category (KAM/KRO/PJP) counts, so each slab can show what % that
+  // category itself contributes — not just the % of the overall total
+  const catTotals = {}, catZero = {}, catLow = {}, catOk = {};
+  META.cats.forEach(c=>{ catTotals[c]=0; catZero[c]=0; catLow[c]=0; catOk[c]=0; });
+
   filtered.forEach(r=>{
     const sal = r[IDX.salAmt];
     const st = outletStatus(sal);
     if(st==='zero') zero++; else if(st==='low') low++; else ok++;
     stockTotal += stockAmt(r);
-    demand += r[IDX.demandAmt];
+    demand += totalDemandAmt(r);
+    const cat = catName(r[IDX.catIdx]);
+    if(catTotals[cat]!==undefined){
+      catTotals[cat]++;
+      if(st==='zero') catZero[cat]++; else if(st==='low') catLow[cat]++; else catOk[cat]++;
+    }
   });
   const lowTotal = low+zero;
   const avgDos = demand>0 ? (stockTotal/demand) : 0;
@@ -1406,6 +1461,18 @@ function renderKpis(){
   document.getElementById('slabZeroBar').style.width = n? (zero/n*100)+'%':'0%';
   document.getElementById('slabLowBar').style.width = n? (low/n*100)+'%':'0%';
   document.getElementById('slabOkBar').style.width = n? (ok/n*100)+'%':'0%';
+
+  // "thd" = "terhadap" (as % of that category's own total) — e.g. "KAM: 12% ·
+  // KRO: 30% · PJP: 51%" tells you how prevalent this slab is WITHIN each
+  // category, not just its share of the overall total shown above
+  const catPctLine = (zeroLowOk) => META.cats.map(c=>{
+    const t = catTotals[c];
+    const v = zeroLowOk[c];
+    return `${c}: ${t? (v/t*100).toFixed(0) : 0}%`;
+  }).join(' · ');
+  document.getElementById('slabZeroCatPct').textContent = 'thd kategori: ' + catPctLine(catZero);
+  document.getElementById('slabLowCatPct').textContent = 'thd kategori: ' + catPctLine(catLow);
+  document.getElementById('slabOkCatPct').textContent = 'thd kategori: ' + catPctLine(catOk);
 }
 
 function groupContext(){
@@ -1564,11 +1631,21 @@ function renderTable(){
   const start = (page-1)*PAGE_SIZE;
   const pageRows = filtered.slice(start, start+PAGE_SIZE);
 
+  const sellinIdx = new Map();
+  filteredSellin.forEach(r=>sellinIdx.set(META.brands[r[IDX_S.brandIdx]]+'|'+r[IDX_S.outletId], r));
+
   tbody.innerHTML = pageRows.map(r=>{
-    const stock = stockAmt(r);
-    const dos = r[IDX.demandAmt]>0 ? (stock/r[IDX.demandAmt]).toFixed(2) : '–';
+    const spStock = r[IDX.spoAmt]+r[IDX.spiAmt];
+    const vouStock = r[IDX.voAmt]+r[IDX.viAmt];
+    const dosSp = dosOf(spStock, r[IDX.dspAmt]);
+    const dosVou = dosOf(vouStock, r[IDX.dvouAmt]);
+    const dosSal = dosOf(r[IDX.salAmt], r[IDX.dsalAmt]);
+    const dosAll = dosOf(stockAmt(r), totalDemandAmt(r));
     const status = outletStatus(r[IDX.salAmt]);
     const statusLabel = status==='zero'?'Saldo 0':(status==='low'?'Low Balance':'≥ 100K');
+    const key = META.brands[r[IDX.brandIdx]]+'|'+r[IDX.outletId];
+    const s = sellinIdx.get(key);
+    const totalSellin = s ? (s[IDX_S.sellinSp]+s[IDX_S.sellinVou]+s[IDX_S.sellinSaldo]) : null;
     return `<tr>
       <td>${META.brands[r[IDX.brandIdx]]}</td>
       <td>${META.branches[r[IDX.branchIdx]]}</td>
@@ -1585,9 +1662,15 @@ function renderTable(){
       <td>${fmtN(r[IDX.viQty])}</td>
       <td>${fmtN(r[IDX.viAmt])}</td>
       <td>${fmtN(r[IDX.salAmt])}</td>
-      <td>${fmtN(r[IDX.demandAmt])}</td>
-      <td>${dos}</td>
+      <td>${dosSp!==null ? dosSp.toFixed(2) : '–'}</td>
+      <td>${dosVou!==null ? dosVou.toFixed(2) : '–'}</td>
+      <td>${dosSal!==null ? dosSal.toFixed(2) : '–'}</td>
+      <td>${dosAll!==null ? dosAll.toFixed(2) : '–'}</td>
       <td><span class="badge ${status}">${statusLabel}</span></td>
+      <td>${s ? fmtN(s[IDX_S.sellinSp]) : '–'}</td>
+      <td>${s ? fmtN(s[IDX_S.sellinVou]) : '–'}</td>
+      <td>${s ? fmtN(s[IDX_S.sellinSaldo]) : '–'}</td>
+      <td>${totalSellin!==null ? fmtN(totalSellin) : '–'}</td>
     </tr>`;
   }).join('');
 
@@ -1599,19 +1682,32 @@ function renderTable(){
 
 // ---------- CSV export ----------
 function exportCsv(){
+  const sellinIdx = new Map();
+  filteredSellin.forEach(r=>sellinIdx.set(META.brands[r[IDX_S.brandIdx]]+'|'+r[IDX_S.outletId], r));
+
   const headers = ['brand','area','branch','micro_cluster','outlet_id','outlet_name','kategori',
     'sp_ori_qty','sp_ori_amt','sp_inj_qty','sp_inj_amt','vou_ori_qty','vou_ori_amt','vou_inj_qty','vou_inj_amt',
-    'salmo_amt','demand_30_amt','dos','status_saldo'];
+    'salmo_amt','dos_sp','dos_voucher','dos_salmo','dos_all_product','status_saldo',
+    'sellin_sp','sellin_voucher','sellin_saldo','total_sellin'];
   const lines = [headers.join(',')];
   filtered.forEach(r=>{
-    const stock = stockAmt(r);
-    const dos = r[IDX.demandAmt]>0 ? (stock/r[IDX.demandAmt]).toFixed(2) : '';
+    const spStock = r[IDX.spoAmt]+r[IDX.spiAmt];
+    const vouStock = r[IDX.voAmt]+r[IDX.viAmt];
+    const dosSp = dosOf(spStock, r[IDX.dspAmt]);
+    const dosVou = dosOf(vouStock, r[IDX.dvouAmt]);
+    const dosSal = dosOf(r[IDX.salAmt], r[IDX.dsalAmt]);
+    const dosAll = dosOf(stockAmt(r), totalDemandAmt(r));
     const status = outletStatus(r[IDX.salAmt]);
+    const key = META.brands[r[IDX.brandIdx]]+'|'+r[IDX.outletId];
+    const s = sellinIdx.get(key);
+    const totalSellin = s ? (s[IDX_S.sellinSp]+s[IDX_S.sellinVou]+s[IDX_S.sellinSaldo]) : '';
     const row = [
       META.brands[r[IDX.brandIdx]], META.areas[r[IDX.areaIdx]], META.branches[r[IDX.branchIdx]], META.micros[r[IDX.microIdx]],
       r[IDX.outletId], JSON.stringify(r[IDX.outletName]||''), catName(r[IDX.catIdx]),
       r[IDX.spoQty], r[IDX.spoAmt], r[IDX.spiQty], r[IDX.spiAmt], r[IDX.voQty], r[IDX.voAmt], r[IDX.viQty], r[IDX.viAmt],
-      r[IDX.salAmt], r[IDX.demandAmt], dos, status
+      r[IDX.salAmt],
+      dosSp!==null?dosSp.toFixed(2):'', dosVou!==null?dosVou.toFixed(2):'', dosSal!==null?dosSal.toFixed(2):'', dosAll!==null?dosAll.toFixed(2):'', status,
+      s ? s[IDX_S.sellinSp] : '', s ? s[IDX_S.sellinVou] : '', s ? s[IDX_S.sellinSaldo] : '', totalSellin
     ];
     lines.push(row.join(','));
   });
@@ -1635,24 +1731,27 @@ function exportCombinedCsv(){
     'sp_ori_qty','sp_ori_amt','sp_inj_qty','sp_inj_amt','vou_ori_qty','vou_ori_amt','vou_inj_qty','vou_inj_amt',
     'salmo_amt','demand_30_amt','dos','status_saldo',
     // GA + sell in
-    'ga_mtd','sellin_sp','sellin_voucher','sellin_saldo','tertiary','secondary','status_sellin'
+    'ga_mtd','status_ga','sellin_sp','sellin_voucher','sellin_saldo','total_sellin','tertiary','secondary','status_sellin'
   ];
   const lines = [headers.join(',')];
 
   filtered.forEach(r=>{
     const stock = stockAmt(r);
-    const dos = r[IDX.demandAmt]>0 ? (stock/r[IDX.demandAmt]).toFixed(2) : '';
+    const totalDem = totalDemandAmt(r); const dos = totalDem>0 ? (stock/totalDem).toFixed(2) : '';
     const statusSaldo = outletStatus(r[IDX.salAmt]);
     const key = META.brands[r[IDX.brandIdx]]+'|'+r[IDX.outletId];
     const s = sellinIdx.get(key);
     const statusSellin = s ? sellinStatusFlags(s).join('; ') : '-';
+    const gaVal = s ? s[IDX_S.rguGa] : 0;
+    const statusGa = gaSlabLabel(gaVal);
+    const totalSellin = s ? (s[IDX_S.sellinSp]+s[IDX_S.sellinVou]+s[IDX_S.sellinSaldo]) : '';
 
     const row = [
       META.brands[r[IDX.brandIdx]], META.areas[r[IDX.areaIdx]], META.branches[r[IDX.branchIdx]], META.micros[r[IDX.microIdx]],
       r[IDX.outletId], JSON.stringify(r[IDX.outletName]||''), catName(r[IDX.catIdx]),
       r[IDX.spoQty], r[IDX.spoAmt], r[IDX.spiQty], r[IDX.spiAmt], r[IDX.voQty], r[IDX.voAmt], r[IDX.viQty], r[IDX.viAmt],
-      r[IDX.salAmt], r[IDX.demandAmt], dos, statusSaldo,
-      s ? s[IDX_S.rguGa] : '', s ? s[IDX_S.sellinSp] : '', s ? s[IDX_S.sellinVou] : '', s ? s[IDX_S.sellinSaldo] : '',
+      r[IDX.salAmt], totalDem, dos, statusSaldo,
+      s ? s[IDX_S.rguGa] : '', statusGa, s ? s[IDX_S.sellinSp] : '', s ? s[IDX_S.sellinVou] : '', s ? s[IDX_S.sellinSaldo] : '', totalSellin,
       s ? s[IDX_S.tertiary] : '', s ? s[IDX_S.secondary] : '', JSON.stringify(statusSellin)
     ];
     lines.push(row.join(','));
@@ -1678,13 +1777,17 @@ function renderCombinedTable(){
 
   tbody.innerHTML = pageRows.map(r=>{
     const stock = stockAmt(r);
-    const dos = r[IDX.demandAmt]>0 ? (stock/r[IDX.demandAmt]).toFixed(2) : '–';
+    const totalDem = totalDemandAmt(r); const dos = totalDem>0 ? (stock/totalDem).toFixed(2) : '–';
     const statusSaldo = outletStatus(r[IDX.salAmt]);
     const statusLabel = statusSaldo==='zero'?'Saldo 0':(statusSaldo==='low'?'Low Balance':'≥ 100K');
     const key = META.brands[r[IDX.brandIdx]]+'|'+r[IDX.outletId];
     const s = sellinIdx.get(key);
     const sellinFlags = s ? sellinStatusFlags(s) : ['–'];
     const sellinHtml = s ? sellinFlags.map(f=>`<span class="badge ${f==='Sell In Lengkap'?'ok':'low'}" style="margin-right:3px;">${f}</span>`).join('') : '<span style="color:var(--muted);">–</span>';
+    const gaVal = s ? s[IDX_S.rguGa] : 0;
+    const statusGa = gaSlabClass(gaVal);
+    const statusGaLabel = gaSlabLabel(gaVal);
+    const totalSellin = s ? (s[IDX_S.sellinSp]+s[IDX_S.sellinVou]+s[IDX_S.sellinSaldo]) : null;
     return `<tr>
       <td>${META.brands[r[IDX.brandIdx]]}</td>
       <td>${META.branches[r[IDX.branchIdx]]}</td>
@@ -1697,13 +1800,15 @@ function renderCombinedTable(){
       <td>${fmtN(r[IDX.voAmt])}</td>
       <td>${fmtN(r[IDX.viAmt])}</td>
       <td>${fmtN(r[IDX.salAmt])}</td>
-      <td>${fmtN(r[IDX.demandAmt])}</td>
+      <td>${fmtN(totalDem)}</td>
       <td>${dos}</td>
       <td><span class="badge ${statusSaldo}">${statusLabel}</span></td>
       <td>${s ? fmtN(s[IDX_S.rguGa]) : '–'}</td>
+      <td><span class="badge ${statusGa}">${statusGaLabel}</span></td>
       <td>${s ? fmtN(s[IDX_S.sellinSp]) : '–'}</td>
       <td>${s ? fmtN(s[IDX_S.sellinVou]) : '–'}</td>
       <td>${s ? fmtN(s[IDX_S.sellinSaldo]) : '–'}</td>
+      <td>${totalSellin!==null ? fmtN(totalSellin) : '–'}</td>
       <td>${s ? fmtN(s[IDX_S.tertiary]) : '–'}</td>
       <td>${s ? fmtN(s[IDX_S.secondary]) : '–'}</td>
       <td style="white-space:normal;">${sellinHtml}</td>
@@ -1784,7 +1889,7 @@ async function finishStockProcessing(data, progressEl){
     const [brand, oid] = key.split('|');
     const mm = MASTER[key];
     const e = data[key];
-    let spoQ=0,spoA=0,spiQ=0,spiA=0,voQ=0,voA=0,viQ=0,viA=0,salQ=0,salA=0,demA=0;
+    let spoQ=0,spoA=0,spiQ=0,spiA=0,voQ=0,voA=0,viQ=0,viA=0,salQ=0,salA=0,dspA=0,dvouA=0,dsalA=0;
     if(e){
       if(!maxAsOf || e.maxDate > maxAsOf) maxAsOf = e.maxDate;
       const dag = e.agg[e.maxDate] || {};
@@ -1799,7 +1904,9 @@ async function finishStockProcessing(data, progressEl){
           else if(flag==='salmo'){ salQ+=qty; salA+=amt; }
           // sp_0 / vou_0 ignored intentionally
         } else if(pos==='demand_30'){
-          demA += amt;
+          if(flag==='sp_ori' || flag==='sp_inj') dspA += amt;
+          else if(flag==='vou_ori' || flag==='vou_inj') dvouA += amt;
+          else if(flag==='salmo') dsalA += amt;
         }
       });
     }
@@ -1809,7 +1916,7 @@ async function finishStockProcessing(data, progressEl){
       bI[brand], aI[mm.area], brI[mm.branch], mI[mm.micro], oid, mm.name||'', cats.indexOf(cat),
       Math.round(spoQ), Math.round(spoA), Math.round(spiQ), Math.round(spiA),
       Math.round(voQ), Math.round(voA), Math.round(viQ), Math.round(viA),
-      Math.round(salQ), Math.round(salA), Math.round(demA)
+      Math.round(salQ), Math.round(salA), Math.round(dspA), Math.round(dvouA), Math.round(dsalA)
     ]);
   });
 
@@ -1919,7 +2026,7 @@ function handleMasterFile(file){
           old ? old[IDX.voQty] : 0, old ? old[IDX.voAmt] : 0,
           old ? old[IDX.viQty] : 0, old ? old[IDX.viAmt] : 0,
           old ? old[IDX.salQty] : 0, old ? old[IDX.salAmt] : 0,
-          old ? old[IDX.demandAmt] : 0
+          old ? old[IDX.dspAmt] : 0, old ? old[IDX.dvouAmt] : 0, old ? old[IDX.dsalAmt] : 0
         ];
       });
 
@@ -2084,7 +2191,7 @@ async function finishSellinProcessing(brand, byKey, progressEl){
 // ---------- misc UI ----------
 function refreshHeaderMeta(){
   document.getElementById('metaAsOf').textContent = META.asOf || '–';
-  document.getElementById('metaMasterDate').textContent = META.masterUpdated ? new Date(META.masterUpdated).toLocaleDateString('id-ID') : '–';
+  document.getElementById('metaMasterDate').textContent = META.masterUpdated ? new Date(META.masterUpdated).toISOString().slice(0,10) : '–';
   // (last-updated timestamp intentionally not shown in the header anymore — it was
   // confusing next to the per-dataset dates above; still tracked internally in
   // META.lastUpdated and visible in the "Riwayat Update" log instead)
@@ -2634,6 +2741,7 @@ function bindEvents(){
   });
 
   document.querySelectorAll('#tabLowBalance table.data thead th').forEach(th=>{
+    if(!th.dataset.k) return; // group header cells (e.g. "Stock Outlet", "DOS") aren't sortable
     th.addEventListener('click', ()=>{
       const k = th.dataset.k;
       if(sortKey===k) sortDir *= -1; else { sortKey=k; sortDir = -1; }
