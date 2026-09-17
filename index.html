@@ -308,22 +308,15 @@
         <th>Outlet ID</th>
         <th>Nama Outlet</th>
         <th>Kategori</th>
-        <th>SP Ori Amt</th>
-        <th>SP Inj Amt</th>
-        <th>Vou Ori Amt</th>
-        <th>Vou Inj Amt</th>
-        <th>Salmo Amt</th>
-        <th>Demand 30D</th>
-        <th>DOS</th>
-        <th>Status Saldo</th>
+        <th>Stock Amount (Saldo)</th>
+        <th>Stock Amount (All)</th>
+        <th>Status Stock Saldo</th>
+        <th>Status Stock All</th>
+        <th>DOS Saldo</th>
+        <th>DOS All Product</th>
         <th>GA (MTD)</th>
         <th>Status GA</th>
-        <th>Sell In SP</th>
-        <th>Sell In Voucher</th>
-        <th>Sell In Saldo</th>
-        <th>Total Sell In</th>
-        <th>Tertiary</th>
-        <th>Secondary</th>
+        <th>Sell In (All)</th>
         <th>Status Sell In</th>
       </tr>
     </thead>
@@ -1371,7 +1364,6 @@ function renderSellinSummaryTable(){
 
 function sellinStatusFlags(r){
   const flags = [];
-  if(r[IDX_S.rguGa]<=0) flags.push('No GA');
   if(r[IDX_S.sellinSp]<=0) flags.push('No SP');
   if(r[IDX_S.sellinVou]<=0) flags.push('No Voucher');
   if(r[IDX_S.sellinSaldo]<=0) flags.push('No Sell In Saldo');
@@ -1761,32 +1753,29 @@ function exportCombinedCsv(){
 
   const headers = [
     'brand','area','branch','micro_cluster','outlet_id','outlet_name','kategori',
-    // stock / low balance
-    'sp_ori_qty','sp_ori_amt','sp_inj_qty','sp_inj_amt','vou_ori_qty','vou_ori_amt','vou_inj_qty','vou_inj_amt',
-    'salmo_amt','demand_30_amt','dos','status_saldo',
-    // GA + sell in
-    'ga_mtd','status_ga','sellin_sp','sellin_voucher','sellin_saldo','total_sellin','tertiary','secondary','status_sellin'
+    'stock_amount_saldo','stock_amount_all','status_stock_saldo','status_stock_all','dos_saldo','dos_all_product',
+    'ga_mtd','status_ga','sellin_all','status_sellin'
   ];
   const lines = [headers.join(',')];
 
   filtered.forEach(r=>{
     const stock = stockAmt(r);
-    const totalDem = totalDemandAmt(r); const dos = totalDem>0 ? (stock/totalDem).toFixed(2) : '';
+    const dosSal = dosOf(r[IDX.salAmt], r[IDX.dsalAmt]);
+    const dosAll = dosOf(stock, totalDemandAmt(r));
     const statusSaldo = outletStatus(r[IDX.salAmt]);
+    const statusStockAll = outletStatus(stock);
     const key = META.brands[r[IDX.brandIdx]]+'|'+r[IDX.outletId];
     const s = sellinIdx.get(key);
     const statusSellin = s ? sellinStatusFlags(s).join('; ') : '-';
     const gaVal = s ? s[IDX_S.rguGa] : 0;
-    const statusGa = gaSlabLabel(gaVal);
     const totalSellin = s ? (s[IDX_S.sellinSp]+s[IDX_S.sellinVou]+s[IDX_S.sellinSaldo]) : '';
 
     const row = [
       META.brands[r[IDX.brandIdx]], META.areas[r[IDX.areaIdx]], META.branches[r[IDX.branchIdx]], META.micros[r[IDX.microIdx]],
       r[IDX.outletId], JSON.stringify(r[IDX.outletName]||''), catDisplayLabel(catName(r[IDX.catIdx])),
-      r[IDX.spoQty], r[IDX.spoAmt], r[IDX.spiQty], r[IDX.spiAmt], r[IDX.voQty], r[IDX.voAmt], r[IDX.viQty], r[IDX.viAmt],
-      r[IDX.salAmt], totalDem, dos, statusSaldo,
-      s ? s[IDX_S.rguGa] : '', statusGa, s ? s[IDX_S.sellinSp] : '', s ? s[IDX_S.sellinVou] : '', s ? s[IDX_S.sellinSaldo] : '', totalSellin,
-      s ? s[IDX_S.tertiary] : '', s ? s[IDX_S.secondary] : '', JSON.stringify(statusSellin)
+      r[IDX.salAmt], Math.round(stock), statusSaldo, statusStockAll,
+      dosSal!==null?dosSal.toFixed(2):'', dosAll!==null?dosAll.toFixed(2):'',
+      s ? s[IDX_S.rguGa] : '', gaSlabLabel(gaVal), totalSellin, JSON.stringify(statusSellin)
     ];
     lines.push(row.join(','));
   });
@@ -1811,16 +1800,18 @@ function renderCombinedTable(){
 
   tbody.innerHTML = pageRows.map(r=>{
     const stock = stockAmt(r);
-    const totalDem = totalDemandAmt(r); const dos = totalDem>0 ? (stock/totalDem).toFixed(2) : '–';
+    const totalDem = totalDemandAmt(r);
+    const dosSal = dosOf(r[IDX.salAmt], r[IDX.dsalAmt]);
+    const dosAll = dosOf(stock, totalDem);
     const statusSaldo = outletStatus(r[IDX.salAmt]);
-    const statusLabel = statusSaldo==='zero'?'Saldo 0':(statusSaldo==='low'?'Low Balance':'≥ 100K');
+    const statusSaldoLabel = statusSaldo==='zero'?'Saldo 0':(statusSaldo==='low'?'Saldo <100K':'Saldo ≥100K');
+    const statusStockAll = outletStatus(stock);
+    const statusStockAllLabel = statusStockAll==='zero'?'Stock 0':(statusStockAll==='low'?'Stock <100K':'Stock ≥100K');
     const key = META.brands[r[IDX.brandIdx]]+'|'+r[IDX.outletId];
     const s = sellinIdx.get(key);
     const sellinFlags = s ? sellinStatusFlags(s) : ['–'];
     const sellinHtml = s ? sellinFlags.map(f=>`<span class="badge ${f==='Sell In Lengkap'?'ok':'low'}" style="margin-right:3px;">${f}</span>`).join('') : '<span style="color:var(--muted);">–</span>';
     const gaVal = s ? s[IDX_S.rguGa] : 0;
-    const statusGa = gaSlabClass(gaVal);
-    const statusGaLabel = gaSlabLabel(gaVal);
     const totalSellin = s ? (s[IDX_S.sellinSp]+s[IDX_S.sellinVou]+s[IDX_S.sellinSaldo]) : null;
     return `<tr>
       <td>${META.brands[r[IDX.brandIdx]]}</td>
@@ -1829,22 +1820,15 @@ function renderCombinedTable(){
       <td>${r[IDX.outletId]}</td>
       <td class="name-cell">${r[IDX.outletName]||'-'}</td>
       <td><span class="badge ${catName(r[IDX.catIdx])}">${catDisplayLabel(catName(r[IDX.catIdx]))}</span></td>
-      <td>${fmtN(r[IDX.spoAmt])}</td>
-      <td>${fmtN(r[IDX.spiAmt])}</td>
-      <td>${fmtN(r[IDX.voAmt])}</td>
-      <td>${fmtN(r[IDX.viAmt])}</td>
       <td>${fmtN(r[IDX.salAmt])}</td>
-      <td>${fmtN(totalDem)}</td>
-      <td>${dos}</td>
-      <td><span class="badge ${statusSaldo}">${statusLabel}</span></td>
+      <td>${fmtN(stock)}</td>
+      <td><span class="badge ${statusSaldo}">${statusSaldoLabel}</span></td>
+      <td><span class="badge ${statusStockAll}">${statusStockAllLabel}</span></td>
+      <td>${dosSal!==null ? dosSal.toFixed(2) : '–'}</td>
+      <td>${dosAll!==null ? dosAll.toFixed(2) : '–'}</td>
       <td>${s ? fmtN(s[IDX_S.rguGa]) : '–'}</td>
-      <td><span class="badge ${statusGa}">${statusGaLabel}</span></td>
-      <td>${s ? fmtN(s[IDX_S.sellinSp]) : '–'}</td>
-      <td>${s ? fmtN(s[IDX_S.sellinVou]) : '–'}</td>
-      <td>${s ? fmtN(s[IDX_S.sellinSaldo]) : '–'}</td>
+      <td><span class="badge ${gaSlabClass(gaVal)}">${gaSlabLabel(gaVal)}</span></td>
       <td>${totalSellin!==null ? fmtN(totalSellin) : '–'}</td>
-      <td>${s ? fmtN(s[IDX_S.tertiary]) : '–'}</td>
-      <td>${s ? fmtN(s[IDX_S.secondary]) : '–'}</td>
       <td style="white-space:normal;">${sellinHtml}</td>
     </tr>`;
   }).join('');
