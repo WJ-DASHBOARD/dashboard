@@ -163,7 +163,7 @@
   table.data td.name-cell{font-family:'IBM Plex Sans',sans-serif;white-space:normal;max-width:180px;}
   table.data tbody tr:hover{background:#FBFAF8;}
   table.summary{width:100%;border-collapse:collapse;font-size:11px;border:1px solid var(--border);}
-  table.summary th{text-align:right;padding:5px 6px;color:var(--muted);font-weight:600;font-size:9px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:normal;word-break:break-word;line-height:1.2;}
+  table.summary th{text-align:right;padding:5px 6px;color:var(--muted);font-weight:600;font-size:9px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:normal;word-break:normal;overflow-wrap:normal;line-height:1.2;}
   table.summary th:last-child{border-right:none;}
   table.summary th:first-child{text-align:left;}
   table.summary td{text-align:right;padding:6px 7px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-family:'IBM Plex Mono',monospace;white-space:nowrap;}
@@ -416,6 +416,7 @@
             <th colspan="2" style="text-align:center;">Voucher Qty</th>
             <th colspan="2" style="text-align:center;">Voucher Amount (Bn)</th>
             <th rowspan="2">Salmo Amount (Bn)</th>
+            <th colspan="4" style="text-align:center;">DOS</th>
             <th colspan="3" style="text-align:center;">Slab Saldo (Salmo)</th>
           </tr>
           <tr>
@@ -427,6 +428,10 @@
             <th style="font-weight:500;">Inj</th>
             <th style="font-weight:500;">Ori</th>
             <th style="font-weight:500;">Inj</th>
+            <th style="font-weight:500;">SP</th>
+            <th style="font-weight:500;">Voucher</th>
+            <th style="font-weight:500;">Salmo</th>
+            <th style="font-weight:500;">All Product</th>
             <th style="font-weight:500;white-space:nowrap;">Saldo 0</th>
             <th style="font-weight:500;">&lt;100K</th>
             <th style="font-weight:500;">&ge;100K</th>
@@ -846,6 +851,11 @@ function fmtBn(n){
 }
 function stockAmt(r){ return r[IDX.spoAmt]+r[IDX.spiAmt]+r[IDX.voAmt]+r[IDX.viAmt]+r[IDX.salAmt]; }
 function catName(i){ return META.cats[i]; }
+// Every "KRO" outlet in this dataset already has PJP='YES' underneath (that's
+// the only way it passed inclusion in the first place) — this just makes that
+// visible in the label. The underlying key stays 'KRO' everywhere else (CSS
+// classes, filters, chips) so nothing else needs to change.
+function catDisplayLabel(cat){ return cat==='KRO' ? 'KRO + PJP' : cat; }
 function gaSlabLabel(gaVal){
   if(gaVal<=0) return 'No GA';
   if(gaVal<25) return '<25';
@@ -1385,7 +1395,7 @@ function renderSellinTable(){
       <td>${META.micros[r[IDX_S.microIdx]]}</td>
       <td>${r[IDX_S.outletId]}</td>
       <td class="name-cell">${r[IDX_S.outletName]||'-'}</td>
-      <td><span class="badge ${catName(r[IDX_S.catIdx])}">${catName(r[IDX_S.catIdx])}</span></td>
+      <td><span class="badge ${catName(r[IDX_S.catIdx])}">${catDisplayLabel(catName(r[IDX_S.catIdx]))}</span></td>
       <td>${fmtN(r[IDX_S.rguGa])}</td>
       <td><span class="badge ${statusGa}">${statusGaLabel}</span></td>
       <td>${fmtN(r[IDX_S.sellinSp])}</td>
@@ -1409,7 +1419,7 @@ function exportSellinCsv(){
     const statusGa = gaSlabLabel(r[IDX_S.rguGa]);
     lines.push([
       META.brands[r[IDX_S.brandIdx]], META.areas[r[IDX_S.areaIdx]], META.branches[r[IDX_S.branchIdx]], META.micros[r[IDX_S.microIdx]],
-      r[IDX_S.outletId], JSON.stringify(r[IDX_S.outletName]||''), catName(r[IDX_S.catIdx]),
+      r[IDX_S.outletId], JSON.stringify(r[IDX_S.outletName]||''), catDisplayLabel(catName(r[IDX_S.catIdx])),
       r[IDX_S.rguGa], statusGa, r[IDX_S.sellinSp], r[IDX_S.sellinVou], r[IDX_S.sellinSaldo], r[IDX_S.tertiary], r[IDX_S.secondary],
       JSON.stringify(sellinStatusFlags(r).join('; '))
     ].join(','));
@@ -1519,7 +1529,8 @@ function renderSummaryTable(){
   const agg = {};
   filtered.forEach(r=>{
     const g = r[ctx.key];
-    if(!agg[g]) agg[g] = {outlet:0, stock:0, spoQ:0, spiQ:0, spoA:0, spiA:0, voQ:0, viQ:0, voA:0, viA:0, salA:0, zero:0, low:0, ok:0};
+    if(!agg[g]) agg[g] = {outlet:0, stock:0, spoQ:0, spiQ:0, spoA:0, spiA:0, voQ:0, viQ:0, voA:0, viA:0, salA:0,
+      dspA:0, dvouA:0, dsalA:0, zero:0, low:0, ok:0};
     const a = agg[g];
     a.outlet++;
     a.stock += stockAmt(r);
@@ -1528,10 +1539,19 @@ function renderSummaryTable(){
     a.voQ += r[IDX.voQty]; a.viQ += r[IDX.viQty];
     a.voA += r[IDX.voAmt]; a.viA += r[IDX.viAmt];
     a.salA += r[IDX.salAmt];
+    a.dspA += r[IDX.dspAmt]; a.dvouA += r[IDX.dvouAmt]; a.dsalA += r[IDX.dsalAmt];
     const st = outletStatus(r[IDX.salAmt]);
     a[st]++;
   });
   const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.stock-a.stock);
+
+  const dosCells = a => {
+    const dSp = dosOf(a.spoA+a.spiA, a.dspA);
+    const dVou = dosOf(a.voA+a.viA, a.dvouA);
+    const dSal = dosOf(a.salA, a.dsalA);
+    const dAll = dosOf(a.spoA+a.spiA+a.voA+a.viA+a.salA, a.dspA+a.dvouA+a.dsalA);
+    return `<td>${dSp!==null?dSp.toFixed(2):'–'}</td><td>${dVou!==null?dVou.toFixed(2):'–'}</td><td>${dSal!==null?dSal.toFixed(2):'–'}</td><td>${dAll!==null?dAll.toFixed(2):'–'}</td>`;
+  };
 
   document.getElementById('summaryTbody').innerHTML = rows.map(r=>`
     <tr>
@@ -1547,18 +1567,20 @@ function renderSummaryTable(){
       <td>${fmtBn(r.voA)}</td>
       <td>${fmtBn(r.viA)}</td>
       <td>${fmtBn(r.salA)}</td>
+      ${dosCells(r)}
       <td>${fmtN(r.zero)}</td>
       <td>${fmtN(r.low)}</td>
       <td>${fmtN(r.ok)}</td>
-    </tr>`).join('') || '<tr><td colspan="15" style="color:var(--muted);">Tidak ada data.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="19" style="color:var(--muted);">Tidak ada data.</td></tr>';
 
   const grand = rows.reduce((acc,r)=>{
     acc.outlet+=r.outlet; acc.stock+=r.stock; acc.spoQ+=r.spoQ; acc.spiQ+=r.spiQ;
     acc.spoA+=r.spoA; acc.spiA+=r.spiA; acc.voQ+=r.voQ; acc.viQ+=r.viQ;
     acc.voA+=r.voA; acc.viA+=r.viA; acc.salA+=r.salA;
+    acc.dspA+=r.dspA; acc.dvouA+=r.dvouA; acc.dsalA+=r.dsalA;
     acc.zero+=r.zero; acc.low+=r.low; acc.ok+=r.ok;
     return acc;
-  }, {outlet:0,stock:0,spoQ:0,spiQ:0,spoA:0,spiA:0,voQ:0,viQ:0,voA:0,viA:0,salA:0,zero:0,low:0,ok:0});
+  }, {outlet:0,stock:0,spoQ:0,spiQ:0,spoA:0,spiA:0,voQ:0,viQ:0,voA:0,viA:0,salA:0,dspA:0,dvouA:0,dsalA:0,zero:0,low:0,ok:0});
   document.getElementById('summaryTfoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
       <td>Total West Java</td>
@@ -1573,6 +1595,7 @@ function renderSummaryTable(){
       <td>${fmtBn(grand.voA)}</td>
       <td>${fmtBn(grand.viA)}</td>
       <td>${fmtBn(grand.salA)}</td>
+      ${dosCells(grand)}
       <td>${fmtN(grand.zero)}</td>
       <td>${fmtN(grand.low)}</td>
       <td>${fmtN(grand.ok)}</td>
@@ -1584,7 +1607,8 @@ function exportSummaryTableCsv(){
   const agg = {};
   filtered.forEach(r=>{
     const g = r[ctx.key];
-    if(!agg[g]) agg[g] = {outlet:0, stock:0, spoQ:0, spiQ:0, spoA:0, spiA:0, voQ:0, viQ:0, voA:0, viA:0, salA:0, zero:0, low:0, ok:0};
+    if(!agg[g]) agg[g] = {outlet:0, stock:0, spoQ:0, spiQ:0, spoA:0, spiA:0, voQ:0, viQ:0, voA:0, viA:0, salA:0,
+      dspA:0, dvouA:0, dsalA:0, zero:0, low:0, ok:0};
     const a = agg[g];
     a.outlet++;
     a.stock += stockAmt(r);
@@ -1593,29 +1617,39 @@ function exportSummaryTableCsv(){
     a.voQ += r[IDX.voQty]; a.viQ += r[IDX.viQty];
     a.voA += r[IDX.voAmt]; a.viA += r[IDX.viAmt];
     a.salA += r[IDX.salAmt];
+    a.dspA += r[IDX.dspAmt]; a.dvouA += r[IDX.dvouAmt]; a.dsalA += r[IDX.dsalAmt];
     const st = outletStatus(r[IDX.salAmt]);
     a[st]++;
   });
   const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.stock-a.stock);
 
+  const dosVals = a => {
+    const dSp = dosOf(a.spoA+a.spiA, a.dspA);
+    const dVou = dosOf(a.voA+a.viA, a.dvouA);
+    const dSal = dosOf(a.salA, a.dsalA);
+    const dAll = dosOf(a.spoA+a.spiA+a.voA+a.viA+a.salA, a.dspA+a.dvouA+a.dsalA);
+    return [dSp!==null?dSp.toFixed(2):'', dVou!==null?dVou.toFixed(2):'', dSal!==null?dSal.toFixed(2):'', dAll!==null?dAll.toFixed(2):''];
+  };
+
   const headers = [ctx.label==='branch'?'Branch':'Micro Cluster','Outlet','Total Stock Amount',
     'SP Qty Ori','SP Qty Inj','SP Amount Ori','SP Amount Inj','Voucher Qty Ori','Voucher Qty Inj',
-    'Voucher Amount Ori','Voucher Amount Inj','Salmo Amount','Saldo 0','<100K','>=100K'];
+    'Voucher Amount Ori','Voucher Amount Inj','Salmo Amount','DOS SP','DOS Voucher','DOS Salmo','DOS All Product','Saldo 0','<100K','>=100K'];
   const lines = [headers.join(',')];
   rows.forEach(r=>{
     lines.push([r.name, r.outlet, Math.round(r.stock), r.spoQ, r.spiQ, Math.round(r.spoA), Math.round(r.spiA),
-      r.voQ, r.viQ, Math.round(r.voA), Math.round(r.viA), Math.round(r.salA), r.zero, r.low, r.ok].join(','));
+      r.voQ, r.viQ, Math.round(r.voA), Math.round(r.viA), Math.round(r.salA), ...dosVals(r), r.zero, r.low, r.ok].join(','));
   });
   const grand = rows.reduce((acc,r)=>{
     acc.outlet+=r.outlet; acc.stock+=r.stock; acc.spoQ+=r.spoQ; acc.spiQ+=r.spiQ;
     acc.spoA+=r.spoA; acc.spiA+=r.spiA; acc.voQ+=r.voQ; acc.viQ+=r.viQ;
     acc.voA+=r.voA; acc.viA+=r.viA; acc.salA+=r.salA;
+    acc.dspA+=r.dspA; acc.dvouA+=r.dvouA; acc.dsalA+=r.dsalA;
     acc.zero+=r.zero; acc.low+=r.low; acc.ok+=r.ok;
     return acc;
-  }, {outlet:0,stock:0,spoQ:0,spiQ:0,spoA:0,spiA:0,voQ:0,viQ:0,voA:0,viA:0,salA:0,zero:0,low:0,ok:0});
+  }, {outlet:0,stock:0,spoQ:0,spiQ:0,spoA:0,spiA:0,voQ:0,viQ:0,voA:0,viA:0,salA:0,dspA:0,dvouA:0,dsalA:0,zero:0,low:0,ok:0});
   lines.push(['Total West Java', grand.outlet, Math.round(grand.stock), grand.spoQ, grand.spiQ, Math.round(grand.spoA),
     Math.round(grand.spiA), grand.voQ, grand.viQ, Math.round(grand.voA), Math.round(grand.viA), Math.round(grand.salA),
-    grand.zero, grand.low, grand.ok].join(','));
+    ...dosVals(grand), grand.zero, grand.low, grand.ok].join(','));
 
   const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
@@ -1652,7 +1686,7 @@ function renderTable(){
       <td>${META.micros[r[IDX.microIdx]]}</td>
       <td>${r[IDX.outletId]}</td>
       <td class="name-cell">${r[IDX.outletName]||'-'}</td>
-      <td><span class="badge ${catName(r[IDX.catIdx])}">${catName(r[IDX.catIdx])}</span></td>
+      <td><span class="badge ${catName(r[IDX.catIdx])}">${catDisplayLabel(catName(r[IDX.catIdx]))}</span></td>
       <td>${fmtN(r[IDX.spoQty])}</td>
       <td>${fmtN(r[IDX.spoAmt])}</td>
       <td>${fmtN(r[IDX.spiQty])}</td>
@@ -1703,7 +1737,7 @@ function exportCsv(){
     const totalSellin = s ? (s[IDX_S.sellinSp]+s[IDX_S.sellinVou]+s[IDX_S.sellinSaldo]) : '';
     const row = [
       META.brands[r[IDX.brandIdx]], META.areas[r[IDX.areaIdx]], META.branches[r[IDX.branchIdx]], META.micros[r[IDX.microIdx]],
-      r[IDX.outletId], JSON.stringify(r[IDX.outletName]||''), catName(r[IDX.catIdx]),
+      r[IDX.outletId], JSON.stringify(r[IDX.outletName]||''), catDisplayLabel(catName(r[IDX.catIdx])),
       r[IDX.spoQty], r[IDX.spoAmt], r[IDX.spiQty], r[IDX.spiAmt], r[IDX.voQty], r[IDX.voAmt], r[IDX.viQty], r[IDX.viAmt],
       r[IDX.salAmt],
       dosSp!==null?dosSp.toFixed(2):'', dosVou!==null?dosVou.toFixed(2):'', dosSal!==null?dosSal.toFixed(2):'', dosAll!==null?dosAll.toFixed(2):'', status,
@@ -1748,7 +1782,7 @@ function exportCombinedCsv(){
 
     const row = [
       META.brands[r[IDX.brandIdx]], META.areas[r[IDX.areaIdx]], META.branches[r[IDX.branchIdx]], META.micros[r[IDX.microIdx]],
-      r[IDX.outletId], JSON.stringify(r[IDX.outletName]||''), catName(r[IDX.catIdx]),
+      r[IDX.outletId], JSON.stringify(r[IDX.outletName]||''), catDisplayLabel(catName(r[IDX.catIdx])),
       r[IDX.spoQty], r[IDX.spoAmt], r[IDX.spiQty], r[IDX.spiAmt], r[IDX.voQty], r[IDX.voAmt], r[IDX.viQty], r[IDX.viAmt],
       r[IDX.salAmt], totalDem, dos, statusSaldo,
       s ? s[IDX_S.rguGa] : '', statusGa, s ? s[IDX_S.sellinSp] : '', s ? s[IDX_S.sellinVou] : '', s ? s[IDX_S.sellinSaldo] : '', totalSellin,
@@ -1794,7 +1828,7 @@ function renderCombinedTable(){
       <td>${META.micros[r[IDX.microIdx]]}</td>
       <td>${r[IDX.outletId]}</td>
       <td class="name-cell">${r[IDX.outletName]||'-'}</td>
-      <td><span class="badge ${catName(r[IDX.catIdx])}">${catName(r[IDX.catIdx])}</span></td>
+      <td><span class="badge ${catName(r[IDX.catIdx])}">${catDisplayLabel(catName(r[IDX.catIdx]))}</span></td>
       <td>${fmtN(r[IDX.spoAmt])}</td>
       <td>${fmtN(r[IDX.spiAmt])}</td>
       <td>${fmtN(r[IDX.voAmt])}</td>
