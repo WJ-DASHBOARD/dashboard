@@ -1842,6 +1842,19 @@ function renderCombinedTable(){
 // ---------- update: stock CSV ----------
 function normId(x){
   x = String(x).trim();
+  if(x === '') return x;
+  // Excel commonly mangles long numeric IDs (especially ones typed with
+  // leading zeros, like outlet codes) when a sheet is saved/re-saved as CSV:
+  // it can turn "00282028" into scientific notation ("2.82028E+7") or add a
+  // trailing ".0". Undo both before normalizing, so the same physical outlet
+  // ID matches consistently everywhere it appears (stock file, demand rows,
+  // pairing file) regardless of which of these forms Excel happened to save.
+  if(/^[0-9]*\.?[0-9]+[eE][+-]?[0-9]+$/.test(x)){
+    const n = Number(x);
+    if(Number.isFinite(n)) x = n.toFixed(0);
+  } else if(/^[0-9]+\.0+$/.test(x)){
+    x = x.split('.')[0];
+  }
   return /^[0-9]+$/.test(x) ? String(parseInt(x,10)) : x.toUpperCase();
 }
 
