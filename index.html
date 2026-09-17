@@ -218,7 +218,7 @@
       <h1 class="h1">Outlet Performance
         <small>Monitoring GA, Sell In &amp; Stock per Outlet</small>
       </h1>
-      <div class="meta-line">Periode data stok: <b id="metaAsOf">–</b> &nbsp;·&nbsp; Sell In per: <b id="metaSellinDate">–</b> &nbsp;·&nbsp; GA per: <b id="metaGaDate">–</b> &nbsp;·&nbsp; Data outlet (pairing) per: <b id="metaMasterDate">–</b> &nbsp;·&nbsp; Diperbarui terakhir: <b id="metaUpdated">–</b></div>
+      <div class="meta-line">Periode data stok: <b id="metaAsOf">–</b> &nbsp;·&nbsp; Sell In per: <b id="metaSellinDate">–</b> &nbsp;·&nbsp; GA per: <b id="metaGaDate">–</b> &nbsp;·&nbsp; Data outlet (pairing) per: <b id="metaMasterDate">–</b></div>
     </div>
     <div style="display:flex;gap:10px;">
       <button class="btn" id="btnRefresh"><span class="refresh-dot"></span>Cek update</button>
@@ -2006,8 +2006,14 @@ function handleSellinFile(file){
 
 async function handleSellinFiles(fileList){
   const files = Array.from(fileList);
+  const progressEl = document.getElementById('sellinProgress');
+  const results = [];
   for(let i=0;i<files.length;i++){
     await handleSellinFile(files[i]);
+    results.push(progressEl.textContent); // capture each file's own final message
+  }
+  if(files.length > 1){
+    progressEl.innerHTML = `<b>Semua ${files.length} file selesai diproses:</b><br>` + results.map(r=>'• '+r).join('<br>');
   }
 }
 
@@ -2079,7 +2085,9 @@ async function finishSellinProcessing(brand, byKey, progressEl){
 function refreshHeaderMeta(){
   document.getElementById('metaAsOf').textContent = META.asOf || '–';
   document.getElementById('metaMasterDate').textContent = META.masterUpdated ? new Date(META.masterUpdated).toLocaleDateString('id-ID') : '–';
-  document.getElementById('metaUpdated').textContent = META.lastUpdated ? new Date(META.lastUpdated).toLocaleString('id-ID') : '–';
+  // (last-updated timestamp intentionally not shown in the header anymore — it was
+  // confusing next to the per-dataset dates above; still tracked internally in
+  // META.lastUpdated and visible in the "Riwayat Update" log instead)
   // Sell In and GA come from the same source file (DSE_PROD per brand), so they
   // share the same "as of" date — shown separately anyway since they're
   // conceptually different metrics people ask about individually.
