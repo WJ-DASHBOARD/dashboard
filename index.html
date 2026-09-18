@@ -255,6 +255,7 @@
     <button class="tab-btn active" data-tab="peta">Peta &amp; Summary</button>
     <button class="tab-btn" data-tab="lowbalance">Low Balance</button>
     <button class="tab-btn" data-tab="sellin">Sell In &amp; GA</button>
+    <button class="tab-btn" data-tab="supply">Supply</button>
   </div>
 </div>
 
@@ -661,6 +662,168 @@
 
 </div>
 
+<div id="tabSupply" class="tab-panel hidden">
+
+  <div class="section-title">Summary Supply <div class="line"></div></div>
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Total Outlet</div>
+      <div class="kpi-value" id="supKpiTotal">–</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total Revenue Supply (Bn)</div>
+      <div class="kpi-value" id="supKpiRevAll">–</div>
+      <div class="kpi-sub">SP + Rebuy + Voucher + Voucher ORI</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total Hit Supply</div>
+      <div class="kpi-value" id="supKpiHitAll">–</div>
+      <div class="kpi-sub" id="supKpiHitAllSub">–</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Outlet Tanpa Supply Sama Sekali</div>
+      <div class="kpi-value" id="supKpiNoSupply">–</div>
+      <div class="kpi-sub" id="supKpiNoSupplyPct">–</div>
+    </div>
+  </div>
+
+  <div class="cov-grid" id="supCovGrid"></div>
+
+  <div class="slab-row">
+    <div class="slab-card zero">
+      <div class="slab-top"><span class="kpi-label">SP Inject Revenue (Bn)</span></div>
+      <div class="slab-top"><span class="slab-num" id="supSlabSp">–</span><span class="slab-pct" id="supSlabSpPct">–</span></div>
+      <div class="slab-bar"><div id="supSlabSpBar" style="width:0%;background:#9B98A8;"></div></div>
+    </div>
+    <div class="slab-card low">
+      <div class="slab-top"><span class="kpi-label">Rebuy Revenue (Bn)</span></div>
+      <div class="slab-top"><span class="slab-num" id="supSlabRebuy">–</span><span class="slab-pct" id="supSlabRebuyPct">–</span></div>
+      <div class="slab-bar"><div id="supSlabRebuyBar" style="width:0%;background:var(--amber);"></div></div>
+    </div>
+    <div class="slab-card ok">
+      <div class="slab-top"><span class="kpi-label">Voucher Inject Revenue (Bn)</span></div>
+      <div class="slab-top"><span class="slab-num" id="supSlabVou">–</span><span class="slab-pct" id="supSlabVouPct">–</span></div>
+      <div class="slab-bar"><div id="supSlabVouBar" style="width:0%;background:var(--green);"></div></div>
+    </div>
+    <div class="slab-card" style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;">
+      <div class="slab-top"><span class="kpi-label">Voucher ORI Revenue (Bn)</span></div>
+      <div class="slab-top"><span class="slab-num" id="supSlabVouOri">–</span><span class="slab-pct" id="supSlabVouOriPct">–</span></div>
+      <div class="slab-bar"><div id="supSlabVouOriBar" style="width:0%;background:#7A2E8C;"></div></div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="panel">
+      <h3 style="margin:0 0 8px;">Top 4 Product — SP Inject</h3>
+      <table class="summary" style="width:100%;">
+        <thead><tr><th style="text-align:left;">Product</th><th>Hit</th><th>Revenue (Bn)</th><th># Outlet</th></tr></thead>
+        <tbody id="supTopSpBody"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3 style="margin:0 0 8px;">Top 4 Product — Rebuy</h3>
+      <table class="summary" style="width:100%;">
+        <thead><tr><th style="text-align:left;">Product</th><th>Hit</th><th>Revenue (Bn)</th><th># Outlet</th></tr></thead>
+        <tbody id="supTopRebuyBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="panel">
+      <h3 style="margin:0 0 8px;">Top 4 Product — Voucher Inject</h3>
+      <table class="summary" style="width:100%;">
+        <thead><tr><th style="text-align:left;">Product</th><th>Hit</th><th>Revenue (Bn)</th><th># Outlet</th></tr></thead>
+        <tbody id="supTopVouBody"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3 style="margin:0 0 8px;">Top 4 Product — Voucher ORI</h3>
+      <table class="summary" style="width:100%;">
+        <thead><tr><th style="text-align:left;">Product</th><th>Hit</th><th>Revenue (Bn)</th><th># Outlet</th></tr></thead>
+        <tbody id="supTopVouOriBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+      <h3 style="margin:0;">Summary Supply per Branch</h3>
+      <button class="btn btn-ghost btn-sm" id="supBtnDownloadSummary">Unduh CSV</button>
+    </div>
+    <div style="overflow:auto;max-height:360px;">
+      <table class="summary" id="supSummaryTable">
+        <thead>
+          <tr>
+            <th style="text-align:left;" rowspan="2">Branch</th>
+            <th rowspan="2">Outlet</th>
+            <th colspan="3" style="text-align:center;">SP Inject (Outlet / Hit / Rev Bn)</th>
+            <th colspan="3" style="text-align:center;">Rebuy (Outlet / Hit / Rev Bn)</th>
+            <th colspan="3" style="text-align:center;">Voucher Inject (Outlet / Hit / Rev Bn)</th>
+            <th colspan="3" style="text-align:center;">Voucher ORI (Outlet / Hit / Rev Bn)</th>
+          </tr>
+          <tr>
+            <th style="font-weight:500;">Outlet</th><th style="font-weight:500;">Hit</th><th style="font-weight:500;">Rev (Bn)</th>
+            <th style="font-weight:500;">Outlet</th><th style="font-weight:500;">Hit</th><th style="font-weight:500;">Rev (Bn)</th>
+            <th style="font-weight:500;">Outlet</th><th style="font-weight:500;">Hit</th><th style="font-weight:500;">Rev (Bn)</th>
+            <th style="font-weight:500;">Outlet</th><th style="font-weight:500;">Hit</th><th style="font-weight:500;">Rev (Bn)</th>
+          </tr>
+        </thead>
+        <tbody id="supSummaryBody"></tbody>
+        <tfoot id="supSummaryFoot"></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <details class="detail-outlet">
+  <summary class="section-title" style="cursor:pointer;">Detail Outlet — Supply <span class="detail-hint">(klik untuk buka/tutup)</span><div class="line"></div></summary>
+  <div class="table-toolbar">
+    <div class="table-count" id="supTableCount">–</div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-ghost btn-sm" id="supBtnDownloadTable">Unduh CSV (data terfilter)</button>
+    </div>
+  </div>
+  <div style="overflow:auto;">
+    <table class="data">
+      <thead>
+        <tr>
+          <th rowspan="2">Brand</th>
+          <th rowspan="2">Branch</th>
+          <th rowspan="2">Micro Cluster</th>
+          <th rowspan="2">Outlet ID</th>
+          <th rowspan="2">Nama Outlet</th>
+          <th rowspan="2">Kategori</th>
+          <th colspan="2" style="text-align:center;">SP Inject</th>
+          <th colspan="8" style="text-align:center;">Rebuy</th>
+          <th colspan="2" style="text-align:center;">Voucher Inject</th>
+          <th colspan="2" style="text-align:center;">Voucher ORI</th>
+          <th rowspan="2">Status Supply</th>
+        </tr>
+        <tr>
+          <th style="font-weight:500;">SP Hit</th><th style="font-weight:500;">SP Rev</th>
+          <th style="font-weight:500;">CVM Hit</th><th style="font-weight:500;">CVM Rev</th>
+          <th style="font-weight:500;">ATL Hit</th><th style="font-weight:500;">ATL Rev</th>
+          <th style="font-weight:500;">Pulsa Hit</th><th style="font-weight:500;">Pulsa Rev</th>
+          <th style="font-weight:500;">Total Hit</th><th style="font-weight:500;">Total Rev</th>
+          <th style="font-weight:500;">Voucher Hit</th><th style="font-weight:500;">Voucher Rev</th>
+          <th style="font-weight:500;">SPV ORI Hit</th><th style="font-weight:500;">SPV ORI Rev</th>
+        </tr>
+      </thead>
+      <tbody id="supTbody"></tbody>
+    </table>
+  </div>
+  <div class="pagination">
+    <span id="supPageInfo">–</span>
+    <button id="supPrevPage">‹ Sebelumnya</button>
+    <button id="supNextPage">Berikutnya ›</button>
+  </div>
+  </details>
+
+  <footer class="note">
+    Data Supply bersumber dari file SUPPLY_PROD bulan berjalan (kolom category dikelompokkan jadi SP: SIM/SIM Zero/SIM Ori, Rebuy: CVM/ATL/Pulsa, Voucher: eVoucher/SPV/SPV Ori), dicocokkan ke outlet pairing yang sama dengan tab lain via ret_qr_cd. "Hit" = jumlah transaksi, "Rev" = nilai revenue.
+  </footer>
+
+</div>
+
 </div>
 
 <div class="overlay" id="usersOverlay">
@@ -770,6 +933,13 @@
     </div>
 
     <div class="upload-block">
+      <h4>4. Data Supply — SUPPLY_PROD (CSV, per brand)</h4>
+      <p class="hint">Upload file SUPPLY_PROD bulan berjalan (kolom brand, dt_id, sales_area, ret_qr_cd atau outlet_id, category, product_name, hit, rev — nama kolom Outlet ID boleh beda antara IM3/3ID). Brand dibaca langsung dari kolom "brand" di file. Bisa pilih 2 file (IM3 + 3ID) sekaligus.</p>
+      <input type="file" id="supplyFile" accept=".csv" multiple>
+      <div class="progress-line" id="supplyProgress"></div>
+    </div>
+
+    <div class="upload-block">
       <h4>Riwayat Update</h4>
       <p class="hint">Catatan update terakhir (jenis data, detail, jumlah baris, waktu).</p>
       <div style="max-height:200px;overflow:auto;">
@@ -784,6 +954,9 @@
 
 <div class="toast" id="toast"></div>
 
+<script>
+
+</script>
 <script>
 
 </script>
@@ -817,6 +990,21 @@ let MASTER = {};
 let SMETA = null;
 let SELLIN_OUTLETS = [];
 let filteredSellin = [];
+
+const SUP_CAT_FIELDS = ['sp_inject','rebuy_cvm','rebuy_atl','rebuy_pulsa','vou_inject','vouori_spvori'];
+const FIELDS_SUP = (() => {
+  const f = ['brandIdx','areaIdx','branchIdx','microIdx','outletId','outletName','catIdx'];
+  SUP_CAT_FIELDS.forEach(c => { f.push(c+'Hit'); f.push(c+'Rev'); });
+  return f;
+})();
+const IDX_SUP = Object.fromEntries(FIELDS_SUP.map((k,i)=>[k,i]));
+let SUPMETA = null;
+let SUPPLY_OUTLETS = [];
+const PROD_FIELDS_SUP = ['group','product','brandIdx','areaIdx','branchIdx','microIdx','catIdx','hit','rev','nOutlet'];
+const IDX_PROD = Object.fromEntries(PROD_FIELDS_SUP.map((k,i)=>[k,i]));
+let SUPPLY_PRODUCT_ROWS = []; // dimension-tagged rows, filtered the same way as SUPPLY_OUTLETS
+let filteredSupply = [];
+let supPage = 1;
 
 let GEO_POINTS = [];
 let GIDX = {};
@@ -963,15 +1151,25 @@ async function persistAll(){
   OUTLETS.forEach(row=>{ byBranch[row[IDX.branchIdx]].push(row); });
 
   // write branch chunks sequentially (avoids concurrent-write/rate-limit issues that
-  // can silently drop some chunks if fired all at once)
+  // can silently drop some chunks if fired all at once). Metadata is only written
+  // if EVERY chunk is confirmed saved — otherwise a reader could see "complete"
+  // metadata pointing at chunks that were never actually updated, and silently
+  // show stale/incomplete data with no indication anything is wrong.
+  let allOk = true;
   for(let i=0;i<META.branches.length;i++){
     let ok = await storageSet('outlets_b'+i, byBranch[i]);
     if(!ok){ await new Promise(r=>setTimeout(r,300)); ok = await storageSet('outlets_b'+i, byBranch[i]); }
+    if(!ok){ await new Promise(r=>setTimeout(r,800)); ok = await storageSet('outlets_b'+i, byBranch[i]); }
+    if(!ok) allOk = false;
   }
-  await storageSet('master', MASTER);
-  // meta is written last, once all chunks are confirmed present, so a reader never
-  // sees a "complete" meta pointing at incomplete chunks
-  await storageSet('meta', META);
+  const masterOk = await storageSet('master', MASTER);
+  if(!masterOk) allOk = false;
+  if(allOk){
+    await storageSet('meta', META);
+  } else {
+    showToast('Sebagian data stok gagal tersimpan online (koneksi tidak stabil) — coba upload ulang. Data lama yang masih konsisten tetap dipakai untuk sekarang.');
+  }
+  return allOk;
 }
 
 async function loadSellinFromStorageOrSeed(){
@@ -990,6 +1188,12 @@ async function loadSellinFromStorageOrSeed(){
     chunks.forEach(c=>{ if(c) outlets = outlets.concat(c); });
     loadedOk = outlets.length > 0 && (!smeta.totalOutlets || outlets.length >= smeta.totalOutlets * 0.98);
     if(loadedOk){ SMETA = smeta; SELLIN_OUTLETS = outlets; }
+    else if(outlets.length > 0){
+      // meta claims more rows than the chunks actually contain — a previous save
+      // was interrupted partway through. Don't silently show this partial data;
+      // fall through to the seed/empty branch below instead.
+      setTimeout(()=>showToast('Data Sell In & GA online tidak lengkap (kemungkinan tersimpan sebagian saat koneksi terputus) — silakan upload ulang filenya lewat "Perbarui data".'), 800);
+    }
   }
   if(!loadedOk && hasEmbedded){
     SMETA = window.__SEED_SELLIN__.meta;
@@ -1006,11 +1210,80 @@ async function persistSellin(){
   const byBranch = {};
   META.branches.forEach((b,i)=>byBranch[i]=[]);
   SELLIN_OUTLETS.forEach(row=>{ byBranch[row[IDX_S.branchIdx]].push(row); });
+  let allOk = true;
   for(let i=0;i<META.branches.length;i++){
     let ok = await storageSet('sellin_b'+i, byBranch[i]);
     if(!ok){ await new Promise(r=>setTimeout(r,300)); ok = await storageSet('sellin_b'+i, byBranch[i]); }
+    if(!ok){ await new Promise(r=>setTimeout(r,800)); ok = await storageSet('sellin_b'+i, byBranch[i]); }
+    if(!ok) allOk = false;
   }
-  await storageSet('sellin_meta', SMETA);
+  if(allOk){
+    await storageSet('sellin_meta', SMETA);
+  } else {
+    showToast('Sebagian data Sell In & GA gagal tersimpan online (koneksi tidak stabil) — coba upload ulang. Data lama yang masih konsisten tetap dipakai untuk sekarang.');
+  }
+  return allOk;
+}
+
+async function loadSupplyFromStorageOrSeed(){
+  const supmeta = await storageGet('supply_meta');
+  const hasEmbedded = !!window.__SEED_SUPPLY__;
+  const embeddedFields = hasEmbedded ? JSON.stringify(window.__SEED_SUPPLY__.meta.fields_supply) : null;
+  const schemaOk = hasEmbedded ? (supmeta && supmeta.fields_supply && JSON.stringify(supmeta.fields_supply) === embeddedFields) : !!(supmeta && supmeta.fields_supply);
+
+  let loadedOk = false;
+  if(supmeta && schemaOk){
+    const chunks = await Promise.all(META.branches.map((b,i)=>storageGet('supply_b'+i)));
+    let outlets = [];
+    chunks.forEach(c=>{ if(c) outlets = outlets.concat(c); });
+    loadedOk = outlets.length > 0 && (!supmeta.totalOutlets || outlets.length >= supmeta.totalOutlets * 0.98);
+    if(loadedOk){ SUPMETA = supmeta; SUPPLY_OUTLETS = outlets; }
+    else if(outlets.length > 0){
+      setTimeout(()=>showToast('Data Supply online tidak lengkap (kemungkinan tersimpan sebagian saat koneksi terputus) — silakan upload ulang filenya lewat "Perbarui data".'), 800);
+    }
+  }
+  if(loadedOk){
+    const prodChunks = await Promise.all(META.branches.map((b,i)=>storageGet('supply_prod_b'+i)));
+    let prodRows = [];
+    prodChunks.forEach(c=>{ if(c) prodRows = prodRows.concat(c); });
+    SUPPLY_PRODUCT_ROWS = prodRows;
+  }
+  if(!loadedOk && hasEmbedded){
+    SUPMETA = window.__SEED_SUPPLY__.meta;
+    SUPPLY_OUTLETS = window.__SEED_SUPPLY__.outlets;
+    SUPPLY_PRODUCT_ROWS = window.__SEED_SUPPLY__.productRows || [];
+    SUPMETA.totalOutlets = SUPPLY_OUTLETS.length;
+    persistSupply();
+  } else if(!loadedOk){
+    SUPMETA = { fields_supply: FIELDS_SUP, totalOutlets: 0, imDate: null, tidDate: null };
+    SUPPLY_OUTLETS = [];
+    SUPPLY_PRODUCT_ROWS = [];
+  }
+}
+
+async function persistSupply(){
+  const byBranch = {};
+  const prodByBranch = {};
+  META.branches.forEach((b,i)=>{ byBranch[i]=[]; prodByBranch[i]=[]; });
+  SUPPLY_OUTLETS.forEach(row=>{ byBranch[row[IDX_SUP.branchIdx]].push(row); });
+  SUPPLY_PRODUCT_ROWS.forEach(row=>{ prodByBranch[row[IDX_PROD.branchIdx]].push(row); });
+  let allOk = true;
+  for(let i=0;i<META.branches.length;i++){
+    let ok = await storageSet('supply_b'+i, byBranch[i]);
+    if(!ok){ await new Promise(r=>setTimeout(r,300)); ok = await storageSet('supply_b'+i, byBranch[i]); }
+    if(!ok){ await new Promise(r=>setTimeout(r,800)); ok = await storageSet('supply_b'+i, byBranch[i]); }
+    if(!ok) allOk = false;
+    let ok2 = await storageSet('supply_prod_b'+i, prodByBranch[i]);
+    if(!ok2){ await new Promise(r=>setTimeout(r,300)); ok2 = await storageSet('supply_prod_b'+i, prodByBranch[i]); }
+    if(!ok2){ await new Promise(r=>setTimeout(r,800)); ok2 = await storageSet('supply_prod_b'+i, prodByBranch[i]); }
+    if(!ok2) allOk = false;
+  }
+  if(allOk){
+    await storageSet('supply_meta', SUPMETA);
+  } else {
+    showToast('Sebagian data Supply gagal tersimpan online (koneksi tidak stabil) — coba upload ulang. Data lama yang masih konsisten tetap dipakai untuk sekarang.');
+  }
+  return allOk;
 }
 
 // ---------- polling for near-real-time updates ----------
@@ -1124,14 +1397,17 @@ function applyFilters(){
 
   filtered = OUTLETS.filter(passes);
   filteredSellin = SELLIN_OUTLETS.filter(passes);
+  filteredSupply = SUPPLY_OUTLETS.filter(passes);
 
   sortFiltered();
   sortFilteredSellin();
   page = 1;
   siPage = 1;
   combinedPage = 1;
+  supPage = 1;
   renderAll();
   renderSellinAll();
+  if(activeTab==='supply') renderSupplyAll();
   if(GEO_POINTS.length) renderPetaAll();
 
   // let the person know clearly when their search text doesn't match anything at all,
@@ -1195,6 +1471,261 @@ function renderSellinAll(){
   renderSellinSummaryTable();
   renderSellinCatSummary();
   renderSellinTable();
+}
+
+function renderSupplyAll(){
+  if(!SUPMETA) return;
+  renderSupplyKpis();
+  renderSupplyCoverageCards();
+  renderTopProducts();
+  renderSupplySummaryTable();
+  renderSupplyTable();
+}
+
+function renderSupplyKpis(){
+  const n = filteredSupply.length;
+  document.getElementById('supKpiTotal').textContent = fmtN(n);
+  let spHit=0, spRev=0, rebuyHit=0, rebuyRev=0, vouHit=0, vouRev=0, vouOriHit=0, vouOriRev=0, noSupply=0;
+  filteredSupply.forEach(r=>{
+    spHit += r[IDX_SUP.sp_injectHit];
+    spRev += r[IDX_SUP.sp_injectRev];
+    rebuyHit += r[IDX_SUP.rebuy_cvmHit]+r[IDX_SUP.rebuy_atlHit]+r[IDX_SUP.rebuy_pulsaHit];
+    rebuyRev += r[IDX_SUP.rebuy_cvmRev]+r[IDX_SUP.rebuy_atlRev]+r[IDX_SUP.rebuy_pulsaRev];
+    vouHit += r[IDX_SUP.vou_injectHit];
+    vouRev += r[IDX_SUP.vou_injectRev];
+    vouOriHit += r[IDX_SUP.vouori_spvoriHit];
+    vouOriRev += r[IDX_SUP.vouori_spvoriRev];
+    const totalHitThisOutlet = r[IDX_SUP.sp_injectHit]
+      +r[IDX_SUP.rebuy_cvmHit]+r[IDX_SUP.rebuy_atlHit]+r[IDX_SUP.rebuy_pulsaHit]
+      +r[IDX_SUP.vou_injectHit]+r[IDX_SUP.vouori_spvoriHit];
+    if(totalHitThisOutlet<=0) noSupply++;
+  });
+  const totalRev = spRev+rebuyRev+vouRev+vouOriRev;
+  const totalHit = spHit+rebuyHit+vouHit+vouOriHit;
+  document.getElementById('supKpiRevAll').innerHTML = fmtBn(totalRev);
+  document.getElementById('supKpiHitAll').textContent = fmtN(totalHit);
+  document.getElementById('supKpiHitAllSub').textContent = n? (totalHit/n).toFixed(2)+' per outlet' : '–';
+  document.getElementById('supKpiNoSupply').textContent = fmtN(noSupply);
+  document.getElementById('supKpiNoSupplyPct').textContent = n? (noSupply/n*100).toFixed(1)+'% dari outlet terfilter' : '–';
+
+  // slab bars — share of total revenue per group
+  const slabs = [
+    ['supSlabSp', spRev], ['supSlabRebuy', rebuyRev], ['supSlabVou', vouRev], ['supSlabVouOri', vouOriRev]
+  ];
+  slabs.forEach(([id, val])=>{
+    document.getElementById(id).innerHTML = fmtBn(val);
+    document.getElementById(id+'Pct').textContent = totalRev? (val/totalRev*100).toFixed(0)+'%' : '–';
+    document.getElementById(id+'Bar').style.width = totalRev? (val/totalRev*100)+'%' : '0%';
+  });
+}
+
+function renderSupplyCoverageCards(){
+  const n = filteredSupply.length;
+  function coverage(fields, label){
+    let withIt=0, zero=0;
+    filteredSupply.forEach(r=>{
+      const total = fields.reduce((s,f)=>s+r[IDX_SUP[f]],0);
+      if(total>0) withIt++; else zero++;
+    });
+    const pct = n? (withIt/n*100).toFixed(0)+'%' : '–';
+    return `<div class="cov-card">
+      <div class="cov-title">${label}</div>
+      <table class="cov-table">
+        <thead><tr><th>#OUTLET with ${label}</th><th>#OUTLET 0 ${label}</th><th>%OUTLET with ${label}</th></tr></thead>
+        <tbody><tr><td>${fmtN(withIt)}</td><td>${fmtN(zero)}</td><td>${pct}</td></tr></tbody>
+      </table>
+    </div>`;
+  }
+  document.getElementById('supCovGrid').innerHTML =
+    coverage(['sp_injectHit'], 'SP INJECT') +
+    coverage(['rebuy_cvmHit','rebuy_atlHit','rebuy_pulsaHit'], 'REBUY') +
+    coverage(['rebuy_cvmHit'], 'REBUY CVM') +
+    coverage(['vou_injectHit'], 'VOUCHER INJECT') +
+    coverage(['vouori_spvoriHit'], 'VOUCHER ORI');
+}
+
+function renderTopProducts(){
+  const brand = document.getElementById('fBrand').value;
+  const area = document.getElementById('fArea').value;
+  const branch = document.getElementById('fBranch').value;
+  const micro = document.getElementById('fMicro').value;
+  const brandI = brand ? META.brands.indexOf(brand) : -1;
+  const areaI = area ? META.areas.indexOf(area) : -1;
+  const branchI = branch ? META.branches.indexOf(branch) : -1;
+  const microI = micro ? META.micros.indexOf(micro) : -1;
+  const catI = activeCat ? META.cats.indexOf(activeCat) : -1;
+
+  const matching = SUPPLY_PRODUCT_ROWS.filter(r=>{
+    if(brandI>=0 && r[IDX_PROD.brandIdx]!==brandI) return false;
+    if(areaI>=0 && r[IDX_PROD.areaIdx]!==areaI) return false;
+    if(branchI>=0 && r[IDX_PROD.branchIdx]!==branchI) return false;
+    if(microI>=0 && r[IDX_PROD.microIdx]!==microI) return false;
+    if(catI>=0 && r[IDX_PROD.catIdx]!==catI) return false;
+    return true;
+  });
+
+  const renderGroup = (group, elId) => {
+    // rows are already a partition per outlet for a given product (one row per
+    // brand/area/branch/micro/cat combo), so summing hit/rev/nOutlet across
+    // matching rows for the same product is safe — no outlet is double-counted
+    const agg = {};
+    matching.forEach(r=>{
+      if(r[IDX_PROD.group]!==group) return;
+      const name = r[IDX_PROD.product];
+      if(!agg[name]) agg[name] = {hit:0, rev:0, nOutlet:0};
+      agg[name].hit += r[IDX_PROD.hit];
+      agg[name].rev += r[IDX_PROD.rev];
+      agg[name].nOutlet += r[IDX_PROD.nOutlet];
+    });
+    const items = Object.keys(agg).map(name=>({name, ...agg[name]})).sort((a,b)=>b.rev-a.rev).slice(0,4);
+    document.getElementById(elId).innerHTML = items.map(it=>`
+      <tr><td>${it.name}</td><td>${fmtN(it.hit)}</td><td>${fmtBn(it.rev)}</td><td>${fmtN(it.nOutlet)}</td></tr>
+    `).join('') || '<tr><td colspan="4" style="color:var(--muted);">Belum ada data.</td></tr>';
+  };
+  renderGroup('SP', 'supTopSpBody');
+  renderGroup('Rebuy', 'supTopRebuyBody');
+  renderGroup('Voucher', 'supTopVouBody');
+  renderGroup('VoucherORI', 'supTopVouOriBody');
+}
+
+function renderSupplySummaryTable(){
+  const agg = {};
+  filteredSupply.forEach(r=>{
+    const g = r[IDX_SUP.branchIdx];
+    if(!agg[g]) agg[g] = { outlet:0, spOutlet:0, spHit:0, spRev:0, rebuyOutlet:0, rebuyHit:0, rebuyRev:0, vouOutlet:0, vouHit:0, vouRev:0, vouOriOutlet:0, vouOriHit:0, vouOriRev:0 };
+    const a = agg[g];
+    a.outlet++;
+    const spHit = r[IDX_SUP.sp_injectHit];
+    const rebuyHit = r[IDX_SUP.rebuy_cvmHit]+r[IDX_SUP.rebuy_atlHit]+r[IDX_SUP.rebuy_pulsaHit];
+    const vouHit = r[IDX_SUP.vou_injectHit];
+    const vouOriHit = r[IDX_SUP.vouori_spvoriHit];
+    if(spHit>0) a.spOutlet++;
+    if(rebuyHit>0) a.rebuyOutlet++;
+    if(vouHit>0) a.vouOutlet++;
+    if(vouOriHit>0) a.vouOriOutlet++;
+    a.spHit += spHit;
+    a.spRev += r[IDX_SUP.sp_injectRev];
+    a.rebuyHit += rebuyHit;
+    a.rebuyRev += r[IDX_SUP.rebuy_cvmRev]+r[IDX_SUP.rebuy_atlRev]+r[IDX_SUP.rebuy_pulsaRev];
+    a.vouHit += vouHit;
+    a.vouRev += r[IDX_SUP.vou_injectRev];
+    a.vouOriHit += vouOriHit;
+    a.vouOriRev += r[IDX_SUP.vouori_spvoriRev];
+  });
+  const rows = Object.keys(agg).map(g=>({name: META.branches[g], ...agg[g]})).sort((a,b)=>(b.spRev+b.rebuyRev+b.vouRev+b.vouOriRev)-(a.spRev+a.rebuyRev+a.vouRev+a.vouOriRev));
+  document.getElementById('supSummaryBody').innerHTML = rows.map(r=>`
+    <tr>
+      <td>${r.name}</td><td>${fmtN(r.outlet)}</td>
+      <td>${fmtN(r.spOutlet)}</td><td>${fmtN(r.spHit)}</td><td>${fmtBn(r.spRev)}</td>
+      <td>${fmtN(r.rebuyOutlet)}</td><td>${fmtN(r.rebuyHit)}</td><td>${fmtBn(r.rebuyRev)}</td>
+      <td>${fmtN(r.vouOutlet)}</td><td>${fmtN(r.vouHit)}</td><td>${fmtBn(r.vouRev)}</td>
+      <td>${fmtN(r.vouOriOutlet)}</td><td>${fmtN(r.vouOriHit)}</td><td>${fmtBn(r.vouOriRev)}</td>
+    </tr>`).join('') || '<tr><td colspan="14" style="color:var(--muted);">Tidak ada data.</td></tr>';
+  const grand = rows.reduce((acc,r)=>{
+    acc.outlet+=r.outlet; acc.spOutlet+=r.spOutlet; acc.spHit+=r.spHit; acc.spRev+=r.spRev;
+    acc.rebuyOutlet+=r.rebuyOutlet; acc.rebuyHit+=r.rebuyHit; acc.rebuyRev+=r.rebuyRev;
+    acc.vouOutlet+=r.vouOutlet; acc.vouHit+=r.vouHit; acc.vouRev+=r.vouRev;
+    acc.vouOriOutlet+=r.vouOriOutlet; acc.vouOriHit+=r.vouOriHit; acc.vouOriRev+=r.vouOriRev;
+    return acc;
+  }, {outlet:0,spOutlet:0,spHit:0,spRev:0,rebuyOutlet:0,rebuyHit:0,rebuyRev:0,vouOutlet:0,vouHit:0,vouRev:0,vouOriOutlet:0,vouOriHit:0,vouOriRev:0});
+  document.getElementById('supSummaryFoot').innerHTML = rows.length ? `
+    <tr style="font-weight:700;background:#FAF9F7;">
+      <td>Total West Java</td><td>${fmtN(grand.outlet)}</td>
+      <td>${fmtN(grand.spOutlet)}</td><td>${fmtN(grand.spHit)}</td><td>${fmtBn(grand.spRev)}</td>
+      <td>${fmtN(grand.rebuyOutlet)}</td><td>${fmtN(grand.rebuyHit)}</td><td>${fmtBn(grand.rebuyRev)}</td>
+      <td>${fmtN(grand.vouOutlet)}</td><td>${fmtN(grand.vouHit)}</td><td>${fmtBn(grand.vouRev)}</td>
+      <td>${fmtN(grand.vouOriOutlet)}</td><td>${fmtN(grand.vouOriHit)}</td><td>${fmtBn(grand.vouOriRev)}</td>
+    </tr>` : '';
+}
+
+function renderSupplyTable(){
+  const tbody = document.getElementById('supTbody');
+  document.getElementById('supTableCount').textContent = `${fmtN(filteredSupply.length)} outlet cocok dengan filter`;
+  const start = (supPage-1)*PAGE_SIZE;
+  const pageRows = filteredSupply.slice(start, start+PAGE_SIZE);
+  tbody.innerHTML = pageRows.map(r=>{
+    // SP now has just one figure (SIM only — SIM Ori/Zero excluded), so no separate Total needed
+    const rebuyTotalHit = r[IDX_SUP.rebuy_cvmHit]+r[IDX_SUP.rebuy_atlHit]+r[IDX_SUP.rebuy_pulsaHit];
+    const rebuyTotalRev = r[IDX_SUP.rebuy_cvmRev]+r[IDX_SUP.rebuy_atlRev]+r[IDX_SUP.rebuy_pulsaRev];
+    const vouTotalHit = r[IDX_SUP.vou_injectHit];
+    const vouTotalRev = r[IDX_SUP.vou_injectRev];
+    return `<tr>
+      <td>${META.brands[r[IDX_SUP.brandIdx]]}</td>
+      <td>${META.branches[r[IDX_SUP.branchIdx]]}</td>
+      <td>${META.micros[r[IDX_SUP.microIdx]]}</td>
+      <td>${r[IDX_SUP.outletId]}</td>
+      <td class="name-cell">${r[IDX_SUP.outletName]||'-'}</td>
+      <td><span class="badge ${catName(r[IDX_SUP.catIdx])}">${catDisplayLabel(catName(r[IDX_SUP.catIdx]))}</span></td>
+      <td>${fmtN(r[IDX_SUP.sp_injectHit])}</td><td>${fmtN(r[IDX_SUP.sp_injectRev])}</td>
+      <td>${fmtN(r[IDX_SUP.rebuy_cvmHit])}</td><td>${fmtN(r[IDX_SUP.rebuy_cvmRev])}</td>
+      <td>${fmtN(r[IDX_SUP.rebuy_atlHit])}</td><td>${fmtN(r[IDX_SUP.rebuy_atlRev])}</td>
+      <td>${fmtN(r[IDX_SUP.rebuy_pulsaHit])}</td><td>${fmtN(r[IDX_SUP.rebuy_pulsaRev])}</td>
+      <td>${fmtN(rebuyTotalHit)}</td><td>${fmtN(rebuyTotalRev)}</td>
+      <td>${fmtN(r[IDX_SUP.vou_injectHit])}</td><td>${fmtN(r[IDX_SUP.vou_injectRev])}</td>
+      <td>${fmtN(r[IDX_SUP.vouori_spvoriHit])}</td><td>${fmtN(r[IDX_SUP.vouori_spvoriRev])}</td>
+      <td style="white-space:normal;">${supplyStatusFlags(r).map(f=>`<span class="badge ${f==='Supply Lengkap'?'ok':'low'}" style="margin-right:3px;">${f}</span>`).join('')}</td>
+    </tr>`;
+  }).join('');
+  const totalPages = Math.max(1, Math.ceil(filteredSupply.length/PAGE_SIZE));
+  document.getElementById('supPageInfo').textContent = `Halaman ${supPage} / ${totalPages}`;
+  document.getElementById('supPrevPage').disabled = supPage<=1;
+  document.getElementById('supNextPage').disabled = supPage>=totalPages;
+}
+
+function exportSupplySummaryCsv(){
+  const agg = {};
+  filteredSupply.forEach(r=>{
+    const g = r[IDX_SUP.branchIdx];
+    if(!agg[g]) agg[g] = { outlet:0, spOutlet:0, spHit:0, spRev:0, rebuyOutlet:0, rebuyHit:0, rebuyRev:0, vouOutlet:0, vouHit:0, vouRev:0, vouOriOutlet:0, vouOriHit:0, vouOriRev:0 };
+    const a = agg[g];
+    a.outlet++;
+    const spHit = r[IDX_SUP.sp_injectHit];
+    const rebuyHit = r[IDX_SUP.rebuy_cvmHit]+r[IDX_SUP.rebuy_atlHit]+r[IDX_SUP.rebuy_pulsaHit];
+    const vouHit = r[IDX_SUP.vou_injectHit];
+    const vouOriHit = r[IDX_SUP.vouori_spvoriHit];
+    if(spHit>0) a.spOutlet++;
+    if(rebuyHit>0) a.rebuyOutlet++;
+    if(vouHit>0) a.vouOutlet++;
+    if(vouOriHit>0) a.vouOriOutlet++;
+    a.spHit += spHit; a.spRev += r[IDX_SUP.sp_injectRev];
+    a.rebuyHit += rebuyHit; a.rebuyRev += r[IDX_SUP.rebuy_cvmRev]+r[IDX_SUP.rebuy_atlRev]+r[IDX_SUP.rebuy_pulsaRev];
+    a.vouHit += vouHit; a.vouRev += r[IDX_SUP.vou_injectRev];
+    a.vouOriHit += vouOriHit; a.vouOriRev += r[IDX_SUP.vouori_spvoriRev];
+  });
+  const rows = Object.keys(agg).map(g=>({name: META.branches[g], ...agg[g]}));
+  const headers = ['Branch','Outlet','SP Inject #Outlet','SP Inject Hit','SP Inject Revenue','Rebuy #Outlet','Rebuy Hit','Rebuy Revenue',
+    'Voucher Inject #Outlet','Voucher Inject Hit','Voucher Inject Revenue','Voucher ORI #Outlet','Voucher ORI Hit','Voucher ORI Revenue'];
+  const lines = [headers.join(',')];
+  rows.forEach(r=>lines.push([r.name,r.outlet,r.spOutlet,r.spHit,Math.round(r.spRev),r.rebuyOutlet,r.rebuyHit,Math.round(r.rebuyRev),
+    r.vouOutlet,r.vouHit,Math.round(r.vouRev),r.vouOriOutlet,r.vouOriHit,Math.round(r.vouOriRev)].join(',')));
+  const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'summary_supply_per_branch.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportSupplyCsv(){
+  const headers = ['brand','branch','micro_cluster','outlet_id','outlet_name','kategori'];
+  SUP_CAT_FIELDS.forEach(f=>{ headers.push(f+'_hit'); headers.push(f+'_rev'); });
+  headers.push('status_supply');
+  const lines = [headers.join(',')];
+  filteredSupply.forEach(r=>{
+    const row = [
+      META.brands[r[IDX_SUP.brandIdx]], META.branches[r[IDX_SUP.branchIdx]], META.micros[r[IDX_SUP.microIdx]],
+      r[IDX_SUP.outletId], JSON.stringify(r[IDX_SUP.outletName]||''), catDisplayLabel(catName(r[IDX_SUP.catIdx]))
+    ];
+    SUP_CAT_FIELDS.forEach(f=>{ row.push(r[IDX_SUP[f+'Hit']]); row.push(r[IDX_SUP[f+'Rev']]); });
+    row.push(JSON.stringify(supplyStatusFlags(r).join('; ')));
+    lines.push(row.join(','));
+  });
+  const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'detail_outlet_supply.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function renderSellinKpis(){
@@ -1360,6 +1891,17 @@ function renderSellinSummaryTable(){
       <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td>
       <td>${fmtN(grand.wGa)}</td><td>${pct(grand.wGa,grand.outlet)}</td>
     </tr>` : '';
+}
+
+function supplyStatusFlags(r){
+  const flags = [];
+  if(r[IDX_SUP.sp_injectHit]<=0) flags.push('No SP Inject');
+  const rebuyTotal = r[IDX_SUP.rebuy_cvmHit]+r[IDX_SUP.rebuy_atlHit]+r[IDX_SUP.rebuy_pulsaHit];
+  if(rebuyTotal<=0) flags.push('No Rebuy');
+  if(r[IDX_SUP.rebuy_cvmHit]<=0) flags.push('No Rebuy CVM');
+  if(r[IDX_SUP.vou_injectHit]<=0) flags.push('No Voucher Inject');
+  if(r[IDX_SUP.vouori_spvoriHit]<=0) flags.push('No Voucher ORI');
+  return flags.length ? flags : ['Supply Lengkap'];
 }
 
 function sellinStatusFlags(r){
@@ -2219,6 +2761,151 @@ async function finishSellinProcessing(brand, byKey, progressEl){
   applyFilters();
 }
 
+// ---------- update: Supply CSV (SUPPLY_PROD) ----------
+// category text formatting differs between IM3's and 3ID's exports (e.g.
+// "Rebuy Pulsa" vs "REBUY-PULSA") — normalize before lookup so both match
+function normSupplyCategory(cat){
+  return String(cat||'').trim().toUpperCase().replace(/[\s-]+/g, ' ');
+}
+// SIM ZERO is excluded from IM3's SP Inject figure (per request) but still
+// counts normally for other brands — so this is a function, not a flat map
+function supCatFieldFor(brand, normalizedCat){
+  const base = {
+    'SIM': 'sp_inject',
+    // SIM ORI is excluded entirely (for both brands)
+    'REBUY CVM': 'rebuy_cvm', 'REBUY ATL': 'rebuy_atl', 'REBUY PULSA': 'rebuy_pulsa',
+    'EVOUCHER': 'vou_inject', 'SPV': 'vou_inject',
+    'SPV ORI': 'vouori_spvori',
+  };
+  if(normalizedCat === 'SIM ZERO') return brand === 'IM3' ? null : 'sp_inject';
+  return base[normalizedCat] || null;
+}
+
+function handleSupplyFile(file){
+  return new Promise((resolve) => {
+    const progressEl = document.getElementById('supplyProgress');
+    progressEl.textContent = `Membaca file (${file.name})…`;
+    parseSupplyBody(file, progressEl).then(resolve);
+  });
+}
+
+async function handleSupplyFiles(fileList){
+  const files = Array.from(fileList);
+  const progressEl = document.getElementById('supplyProgress');
+  const results = [];
+  for(let i=0;i<files.length;i++){
+    await handleSupplyFile(files[i]);
+    results.push(progressEl.textContent);
+  }
+  if(files.length > 1){
+    progressEl.innerHTML = `<b>Semua ${files.length} file selesai diproses:</b><br>` + results.map(r=>'• '+r).join('<br>');
+  }
+}
+
+function parseSupplyBody(file, progressEl){
+  return new Promise((resolve) => {
+    const outletAgg = {}; // "brand|outletId" -> field -> [hit, rev]
+    const productAgg = {}; // "SP|Product Name" -> [hit, rev]
+    let rowCount = 0, matched = 0, brand = null, maxDate = null;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      worker: true,
+      step: function(res){
+        rowCount++;
+        const row = res.data;
+        if(!brand) brand = row.brand;
+        if(row.dt_id && (!maxDate || row.dt_id > maxDate)) maxDate = row.dt_id;
+        const oid = normId(row.ret_qr_cd || row.outlet_id);
+        const key = row.brand+'|'+oid;
+        const mm = MASTER[key];
+        if(!mm) return; // only outlets in the current pairing universe
+        matched++;
+        const field = supCatFieldFor(row.brand, normSupplyCategory(row.category));
+        const hit = parseFloat(row.hit)||0, rev = parseFloat(row.rev)||0;
+        if(field){
+          if(!outletAgg[key]) outletAgg[key] = {};
+          if(!outletAgg[key][field]) outletAgg[key][field] = [0,0];
+          outletAgg[key][field][0] += hit;
+          outletAgg[key][field][1] += rev;
+
+          let group = null;
+          if(field.startsWith('sp_')) group = 'SP';
+          else if(field.startsWith('rebuy_')) group = 'Rebuy';
+          else if(field.startsWith('vouori_')) group = 'VoucherORI';
+          else if(field.startsWith('vou_')) group = 'Voucher';
+          if(group){
+            // dimension-tagged key so Top Products can be filtered by Area/Branch/
+            // Micro/Kategori later, the same way the outlet-level tables are
+            const pname = (row.product_name && row.product_name.trim()) ? row.product_name : row.category;
+            const pkey = [group, pname, mm.area, mm.branch, mm.micro, mm.cat].join('\u0001');
+            if(!productAgg[pkey]) productAgg[pkey] = [0,0,new Set()];
+            productAgg[pkey][0] += hit;
+            productAgg[pkey][1] += rev;
+            productAgg[pkey][2].add(oid);
+          }
+        }
+        if(rowCount % 20000 === 0) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris…`;
+      },
+      complete: function(){
+        progressEl.textContent = `Menggabungkan data Supply ${brand} (${matched.toLocaleString('id-ID')} baris cocok)…`;
+        setTimeout(()=>finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, progressEl).then(resolve), 30);
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, progressEl){
+  const brandI = META.brands.indexOf(brand);
+  // keep the OTHER brand's rows untouched; rebuild this brand's rows from MASTER + new supply data
+  const keptOther = SUPPLY_OUTLETS.filter(r=>r[IDX_SUP.brandIdx]!==brandI);
+  const rebuilt = [];
+  Object.keys(MASTER).forEach(key=>{
+    if(!key.startsWith(brand+'|')) return;
+    const mm = MASTER[key];
+    const oid = key.split('|')[1];
+    const agg = outletAgg[key] || {};
+    const row = [
+      brandI, META.areas.indexOf(mm.area), META.branches.indexOf(mm.branch), META.micros.indexOf(mm.micro),
+      oid, mm.name||'', META.cats.indexOf(mm.cat)
+    ];
+    SUP_CAT_FIELDS.forEach(f=>{
+      const v = agg[f] || [0,0];
+      row.push(Math.round(v[0]));
+      row.push(Math.round(v[1]));
+    });
+    rebuilt.push(row);
+  });
+  SUPPLY_OUTLETS = keptOther.concat(rebuilt);
+
+  // this brand's product rows are fully rebuilt from the new upload; the OTHER
+  // brand's rows are kept untouched (matching how outlet rows are handled above)
+  const keptOtherProd = SUPPLY_PRODUCT_ROWS.filter(r=>r[IDX_PROD.brandIdx]!==brandI);
+  const rebuiltProd = [];
+  Object.keys(productAgg).forEach(pkey=>{
+    const [group, product, area, branch, micro, cat] = pkey.split('\u0001');
+    const v = productAgg[pkey];
+    rebuiltProd.push([
+      group, product, brandI, META.areas.indexOf(area), META.branches.indexOf(branch), META.micros.indexOf(micro), META.cats.indexOf(cat),
+      v[0], Math.round(v[1]*100)/100, v[2] instanceof Set ? v[2].size : v[2]
+    ]);
+  });
+  SUPPLY_PRODUCT_ROWS = keptOtherProd.concat(rebuiltProd);
+
+  const oldImDate = SUPMETA ? SUPMETA.imDate : null;
+  const oldTidDate = SUPMETA ? SUPMETA.tidDate : null;
+  SUPMETA = { fields_supply: FIELDS_SUP, totalOutlets: SUPPLY_OUTLETS.length, lastUpdated: new Date().toISOString(),
+    imDate: brand==='IM3' ? maxDate : oldImDate, tidDate: brand==='3ID' ? maxDate : oldTidDate };
+
+  progressEl.textContent = `Menyimpan data Supply online (${SUPPLY_OUTLETS.length.toLocaleString('id-ID')} outlet)…`;
+  await persistSupply();
+  progressEl.textContent = `Selesai. Data Supply ${brand} diperbarui (${rebuilt.length.toLocaleString('id-ID')} outlet).`;
+  await logUpdate('Supply', brand, rebuilt.length);
+  applyFilters();
+}
+
 // ---------- misc UI ----------
 function refreshHeaderMeta(){
   document.getElementById('metaAsOf').textContent = META.asOf || '–';
@@ -2499,7 +3186,36 @@ function renderMapPoints(){
 // protect the data from a determined person. For real access control this would need a
 // proper backend.
 const DEFAULT_PASSWORD = 'wj2026';
-let USERS = [{ username: 'admin', password: DEFAULT_PASSWORD, role: 'admin', mustChangePassword: true }];
+
+// Passwords are stored as a salted SHA-256 hash — even someone who reads the raw
+// backend data directly only ever sees the hash + a random salt, never the actual
+// password text. A per-user random salt means two users with the same password
+// still get completely different stored hashes (defeats simple rainbow-table lookups).
+async function hashPassword(password, salt){
+  const enc = new TextEncoder().encode(salt + '|' + password);
+  const digest = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function randomSalt(){
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function makeCredential(plainPassword){
+  const salt = randomSalt();
+  const passwordHash = await hashPassword(plainPassword, salt);
+  return { salt, passwordHash };
+}
+// same salt+hash as the initial admin account — reused everywhere the DEFAULT
+// password needs to be set (reset, new user, bulk import) instead of hashing
+// the same well-known string over and over
+const DEFAULT_CREDENTIAL = { salt: 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6', passwordHash: '899c054d676fbc75714f5fc3fe08c116cf0e4c9c5489e7d7bc20f969413efde3' };
+
+// precomputed SHA-256(salt + '|' + 'wj2026') so the very first admin account
+// doesn't need an async hash call before USERS can be initialized
+let USERS = [{ username: 'admin', salt: 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6',
+  passwordHash: '899c054d676fbc75714f5fc3fe08c116cf0e4c9c5489e7d7bc20f969413efde3',
+  role: 'admin', mustChangePassword: true }];
 let UPDATE_LOG = [];
 
 async function loadUpdateLog(){
@@ -2569,11 +3285,27 @@ function finishLogin(username, role){
   showToast('Berhasil login sebagai ' + username + '.');
 }
 
-function doLogin(){
+async function doLogin(){
   const u = document.getElementById('loginUser').value.trim();
   const p = document.getElementById('loginPass').value;
   const errEl = document.getElementById('loginError');
-  const match = USERS.find(x=>x.username===u && x.password===p);
+  const byName = USERS.find(x=>x.username===u);
+  let match = null;
+  if(byName){
+    if(byName.passwordHash){
+      // current hashed format
+      const attemptHash = await hashPassword(p, byName.salt);
+      if(attemptHash === byName.passwordHash) match = byName;
+    } else if(byName.password === p){
+      // legacy plain-text record from before hashing was added — accept it once,
+      // then silently upgrade it to a hash so it's never stored in plain text again
+      const cred = await makeCredential(p);
+      byName.salt = cred.salt; byName.passwordHash = cred.passwordHash;
+      delete byName.password;
+      await saveUsers();
+      match = byName;
+    }
+  }
   if(match){
     document.getElementById('loginUser').value = '';
     document.getElementById('loginPass').value = '';
@@ -2602,7 +3334,9 @@ async function doForceChangePassword(){
   const user = USERS.find(x=>x.username===pendingLoginUser);
   if(!user){ errEl.textContent = 'User tidak ditemukan, coba login ulang.'; return; }
   errEl.textContent = 'Menyimpan...';
-  user.password = p1;
+  const cred = await makeCredential(p1);
+  user.salt = cred.salt; user.passwordHash = cred.passwordHash;
+  delete user.password;
   user.mustChangePassword = false;
   await saveUsers();
   document.getElementById('forceNewPass').value = '';
@@ -2620,11 +3354,16 @@ async function doChangePassword(){
   const username = localStorage.getItem('wj_user');
   const user = USERS.find(x=>x.username===username);
   if(!user){ errEl.textContent = 'Sesi tidak valid, silakan login ulang.'; return; }
-  if(user.password !== oldP){ errEl.textContent = 'Password saat ini salah.'; return; }
+  const oldOk = user.passwordHash
+    ? (await hashPassword(oldP, user.salt)) === user.passwordHash
+    : user.password === oldP;
+  if(!oldOk){ errEl.textContent = 'Password saat ini salah.'; return; }
   if(!p1 || p1.length < 4){ errEl.textContent = 'Password baru minimal 4 karakter.'; return; }
   if(p1 !== p2){ errEl.textContent = 'Password baru tidak sama.'; return; }
   errEl.textContent = 'Menyimpan...';
-  user.password = p1;
+  const cred = await makeCredential(p1);
+  user.salt = cred.salt; user.passwordHash = cred.passwordHash;
+  delete user.password;
   user.mustChangePassword = false;
   await saveUsers();
   document.getElementById('cpOldPass').value = '';
@@ -2665,7 +3404,8 @@ async function resetUserPassword(name){
   const u = USERS.find(x=>x.username===name);
   if(!u) return;
   if(!confirm(`Reset password "${name}" ke default (${DEFAULT_PASSWORD})? User ini akan diminta membuat password baru saat login berikutnya.`)) return;
-  u.password = DEFAULT_PASSWORD;
+  u.salt = DEFAULT_CREDENTIAL.salt; u.passwordHash = DEFAULT_CREDENTIAL.passwordHash;
+  delete u.password;
   u.mustChangePassword = true;
   await saveUsers();
   showToast(`Password "${name}" direset ke default.`);
@@ -2677,7 +3417,7 @@ async function resetAllPasswords(){
   const msg = document.getElementById('resetAllMsg');
   if(!confirm(`Reset password SEMUA ${USERS.length} user ke default (${DEFAULT_PASSWORD})? Semua user (termasuk kamu sendiri) akan diminta membuat password baru saat login berikutnya. Tindakan ini tidak bisa dibatalkan.`)) return;
   msg.textContent = 'Mereset semua password...';
-  USERS.forEach(u=>{ u.password = DEFAULT_PASSWORD; u.mustChangePassword = true; });
+  USERS.forEach(u=>{ u.salt = DEFAULT_CREDENTIAL.salt; u.passwordHash = DEFAULT_CREDENTIAL.passwordHash; delete u.password; u.mustChangePassword = true; });
   await saveUsers();
   msg.textContent = `Selesai. Password ${USERS.length} user direset ke default (${DEFAULT_PASSWORD}).`;
   showToast('Semua password berhasil direset ke default.');
@@ -2695,7 +3435,7 @@ async function addUser(){
   if(!name){ msg.textContent = 'Isi username dulu.'; return; }
   if(USERS.find(u=>u.username.toLowerCase()===name.toLowerCase())){ msg.textContent = 'Username sudah ada.'; return; }
   // new users default to viewer (view + download only) — promote to admin manually if needed
-  USERS.push({ username: name, password: DEFAULT_PASSWORD, role: 'viewer', mustChangePassword: true });
+  USERS.push({ username: name, salt: DEFAULT_CREDENTIAL.salt, passwordHash: DEFAULT_CREDENTIAL.passwordHash, role: 'viewer', mustChangePassword: true });
   msg.textContent = 'Menyimpan...';
   await saveUsers();
   msg.textContent = `User "${name}" ditambahkan sebagai Viewer dengan password default.`;
@@ -2719,7 +3459,7 @@ function handleBulkUserFile(file){
         const key = name.toLowerCase();
         if(existing.has(key) || seenThisBatch.has(key)){ skipped++; return; }
         seenThisBatch.add(key);
-        USERS.push({ username: name, password: DEFAULT_PASSWORD, role: 'viewer', mustChangePassword: true });
+        USERS.push({ username: name, salt: DEFAULT_CREDENTIAL.salt, passwordHash: DEFAULT_CREDENTIAL.passwordHash, role: 'viewer', mustChangePassword: true });
         added++;
       });
       msg.textContent = `Menyimpan ${added} user baru...`;
@@ -2791,6 +3531,8 @@ function bindEvents(){
   document.getElementById('nextPage').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)); if(page<tp){page++; renderTable();} });
   document.getElementById('siPrevPage').addEventListener('click', ()=>{ if(siPage>1){siPage--; renderSellinTable();} });
   document.getElementById('siNextPage').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filteredSellin.length/PAGE_SIZE)); if(siPage<tp){siPage++; renderSellinTable();} });
+  document.getElementById('supPrevPage').addEventListener('click', ()=>{ if(supPage>1){supPage--; renderSupplyTable();} });
+  document.getElementById('supNextPage').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filteredSupply.length/PAGE_SIZE)); if(supPage<tp){supPage++; renderSupplyTable();} });
 
   document.getElementById('btnDownloadAll').addEventListener('click', exportCsv);
   document.getElementById('btnDownloadCombined').addEventListener('click', exportCombinedCsv);
@@ -2800,6 +3542,8 @@ function bindEvents(){
   document.getElementById('combinedNextPage').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)); if(combinedPage<tp){combinedPage++; renderCombinedTable();} });
   document.getElementById('btnDownloadTable').addEventListener('click', exportCsv);
   document.getElementById('siBtnDownloadTable').addEventListener('click', exportSellinCsv);
+  document.getElementById('supBtnDownloadTable').addEventListener('click', exportSupplyCsv);
+  document.getElementById('supBtnDownloadSummary').addEventListener('click', exportSupplySummaryCsv);
   document.getElementById('btnRefresh').addEventListener('click', ()=>checkForRemoteUpdate(false));
 
   document.getElementById('btnOpenUpdate').addEventListener('click', ()=>{ renderUpdateLog(); document.getElementById('updateOverlay').classList.add('show'); });
@@ -2826,6 +3570,7 @@ function bindEvents(){
   document.getElementById('stockFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleStockFile(e.target.files[0]); });
   document.getElementById('masterFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleMasterFile(e.target.files[0]); });
   document.getElementById('sellinFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleSellinFiles(e.target.files); });
+  document.getElementById('supplyFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleSupplyFiles(e.target.files); });
 
   document.querySelectorAll('.tab-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -2835,7 +3580,9 @@ function bindEvents(){
       document.getElementById('tabPeta').classList.toggle('hidden', activeTab!=='peta');
       document.getElementById('tabLowBalance').classList.toggle('hidden', activeTab!=='lowbalance');
       document.getElementById('tabSellin').classList.toggle('hidden', activeTab!=='sellin');
+      document.getElementById('tabSupply').classList.toggle('hidden', activeTab!=='supply');
       if(activeTab==='sellin') renderSellinAll();
+      if(activeTab==='supply') renderSupplyAll();
       if(activeTab==='peta'){ renderPetaAll(); setTimeout(()=>{ if(mapInstance) mapInstance.invalidateSize(); }, 50); }
     });
   });
@@ -2872,6 +3619,7 @@ async function init(){
     await loadSellinFromStorageOrSeed();
     await loadUsers();
     await loadUpdateLog();
+    await loadSupplyFromStorageOrSeed();
     await loadGeoFromStorageOrSeed();
   }catch(e){
     // even if something above failed unexpectedly, make sure the login form and
