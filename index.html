@@ -2527,9 +2527,13 @@ async function finishStockProcessing(data, progressEl){
   OUTLETS = outlets;
 
   progressEl.textContent = `Menyimpan data online (${outlets.length.toLocaleString('id-ID')} outlet)…`;
-  await persistAll();
-  progressEl.textContent = `Selesai. ${outlets.length.toLocaleString('id-ID')} outlet diperbarui, per ${maxAsOf||'-'}.`;
-  await logUpdate('Stock Outlet', maxAsOf||'-', outlets.length);
+  const saveOk = await persistAll();
+  if(saveOk){
+    progressEl.textContent = `Selesai. ${outlets.length.toLocaleString('id-ID')} outlet diperbarui, per ${maxAsOf||'-'}.`;
+    await logUpdate('Stock Outlet', maxAsOf||'-', outlets.length);
+  } else {
+    progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data tidak berhasil disimpan online (koneksi tidak stabil). Data yang tampil di layar mungkin benar, tapi BELUM tentu tersimpan untuk orang lain. Coba upload ulang file ini.`;
+  }
 
   refreshHeaderMeta();
   populateAreaBranch();
@@ -2655,10 +2659,14 @@ function handleMasterFile(file){
       if(SMETA) SMETA = {...SMETA, totalOutlets: SELLIN_OUTLETS.length};
 
       progressEl.textContent = `Menyimpan pairing online (${n1+n2} baris, IM3: ${n1}, 3ID: ${n2})…`;
-      await persistAll();
-      if(SMETA) await persistSellin();
-      progressEl.textContent = `Selesai. Total ${newOutlets.length.toLocaleString('id-ID')} outlet (IM3: ${n1}, 3ID: ${n2}). Angka stok/sell-in memakai data terakhir; upload ulang file stok/sell-in bila perlu menyegarkan.`;
-      await logUpdate('Pairing Outlet', `IM3: ${n1}, 3ID: ${n2}`, newOutlets.length);
+      const saveOk1 = await persistAll();
+      const saveOk2 = SMETA ? await persistSellin() : true;
+      if(saveOk1 && saveOk2){
+        progressEl.textContent = `Selesai. Total ${newOutlets.length.toLocaleString('id-ID')} outlet (IM3: ${n1}, 3ID: ${n2}). Angka stok/sell-in memakai data terakhir; upload ulang file stok/sell-in bila perlu menyegarkan.`;
+        await logUpdate('Pairing Outlet', `IM3: ${n1}, 3ID: ${n2}`, newOutlets.length);
+      } else {
+        progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data tidak berhasil disimpan online. Coba upload ulang file ini.`;
+      }
       refreshHeaderMeta();
       populateAreaBranch();
       applyFilters();
@@ -2765,9 +2773,13 @@ async function finishSellinProcessing(brand, byKey, progressEl){
   SMETA = { fields_sellin: FIELDS_S, asOf: SMETA.asOf, mth: SMETA.mth, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString() };
 
   progressEl.textContent = `Menyimpan data Sell In & GA online (${SELLIN_OUTLETS.length.toLocaleString('id-ID')} outlet)…`;
-  await persistSellin();
-  progressEl.textContent = `Selesai. Data Sell In & GA ${brand} diperbarui (${rebuilt.length.toLocaleString('id-ID')} outlet).`;
-  await logUpdate('Sell In & GA', brand, rebuilt.length);
+  const saveOk = await persistSellin();
+  if(saveOk){
+    progressEl.textContent = `Selesai. Data Sell In & GA ${brand} diperbarui (${rebuilt.length.toLocaleString('id-ID')} outlet).`;
+    await logUpdate('Sell In & GA', brand, rebuilt.length);
+  } else {
+    progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data ${brand} tidak berhasil disimpan online. Coba upload ulang file ini.`;
+  }
   refreshHeaderMeta();
   applyFilters();
 }
@@ -2911,9 +2923,13 @@ async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, pro
     imDate: brand==='IM3' ? maxDate : oldImDate, tidDate: brand==='3ID' ? maxDate : oldTidDate };
 
   progressEl.textContent = `Menyimpan data Supply online (${SUPPLY_OUTLETS.length.toLocaleString('id-ID')} outlet)…`;
-  await persistSupply();
-  progressEl.textContent = `Selesai. Data Supply ${brand} diperbarui (${rebuilt.length.toLocaleString('id-ID')} outlet).`;
-  await logUpdate('Supply', brand, rebuilt.length);
+  const saveOk = await persistSupply();
+  if(saveOk){
+    progressEl.textContent = `Selesai. Data Supply ${brand} diperbarui (${rebuilt.length.toLocaleString('id-ID')} outlet).`;
+    await logUpdate('Supply', brand, rebuilt.length);
+  } else {
+    progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data Supply ${brand} tidak berhasil disimpan online. Coba upload ulang file ini.`;
+  }
   applyFilters();
 }
 
