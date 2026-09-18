@@ -2420,14 +2420,26 @@ function handleStockFile(file){
 
       let entry = data[key];
       if(!entry){
-        entry = {maxDate:d, agg:{}};
+        entry = { stockMaxDate:null, stockAgg:{}, demandMaxDate:null, demandAgg:{} };
         data[key] = entry;
-      } else if(d > entry.maxDate){
-        entry.maxDate = d;
       }
-      const dag = entry.agg[d] || (entry.agg[d]={});
-      const k2 = pos+'|'+flag;
-      if(dag[k2]) { dag[k2][0]+=qty; dag[k2][1]+=amt; } else { dag[k2] = [qty, amt]; }
+      // stock_outlet and demand_30 are tracked with their OWN separate "latest
+      // date" per outlet — real files often report them on different dates for
+      // the same outlet (demand isn't necessarily refreshed as often as stock),
+      // so forcing both onto one shared date silently threw away whichever one
+      // was "older" for a given outlet.
+      if(pos === 'stock_outlet' || pos === 'demand_30'){
+        const maxKey = pos === 'stock_outlet' ? 'stockMaxDate' : 'demandMaxDate';
+        const aggKey = pos === 'stock_outlet' ? 'stockAgg' : 'demandAgg';
+        if(!entry[maxKey] || d > entry[maxKey]){
+          entry[maxKey] = d;
+          entry[aggKey] = {}; // newer date found — start this position's totals fresh
+        }
+        if(d === entry[maxKey]){
+          const agg = entry[aggKey];
+          if(agg[flag]) { agg[flag][0]+=qty; agg[flag][1]+=amt; } else { agg[flag] = [qty, amt]; }
+        }
+      }
 
       if(rowCount % 100000 === 0) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris…`;
     },
@@ -2464,23 +2476,22 @@ async function finishStockProcessing(data, progressEl){
     const e = data[key];
     let spoQ=0,spoA=0,spiQ=0,spiA=0,voQ=0,voA=0,viQ=0,viA=0,salQ=0,salA=0,dspA=0,dvouA=0,dsalA=0;
     if(e){
-      if(!maxAsOf || e.maxDate > maxAsOf) maxAsOf = e.maxDate;
-      const dag = e.agg[e.maxDate] || {};
-      Object.keys(dag).forEach(k2=>{
-        const [pos, flag] = k2.split('|');
-        const [qty, amt] = dag[k2];
-        if(pos==='stock_outlet'){
-          if(flag==='sp_ori'){ spoQ+=qty; spoA+=amt; }
-          else if(flag==='sp_inj'){ spiQ+=qty; spiA+=amt; }
-          else if(flag==='vou_ori'){ voQ+=qty; voA+=amt; }
-          else if(flag==='vou_inj'){ viQ+=qty; viA+=amt; }
-          else if(flag==='salmo'){ salQ+=qty; salA+=amt; }
-          // sp_0 / vou_0 ignored intentionally
-        } else if(pos==='demand_30'){
-          if(flag==='sp_ori' || flag==='sp_inj') dspA += amt;
-          else if(flag==='vou_ori' || flag==='vou_inj') dvouA += amt;
-          else if(flag==='salmo') dsalA += amt;
-        }
+      if(e.stockMaxDate && (!maxAsOf || e.stockMaxDate > maxAsOf)) maxAsOf = e.stockMaxDate;
+      if(e.demandMaxDate && (!maxAsOf || e.demandMaxDate > maxAsOf)) maxAsOf = e.demandMaxDate;
+      Object.keys(e.stockAgg).forEach(flag=>{
+        const [qty, amt] = e.stockAgg[flag];
+        if(flag==='sp_ori'){ spoQ+=qty; spoA+=amt; }
+        else if(flag==='sp_inj'){ spiQ+=qty; spiA+=amt; }
+        else if(flag==='vou_ori'){ voQ+=qty; voA+=amt; }
+        else if(flag==='vou_inj'){ viQ+=qty; viA+=amt; }
+        else if(flag==='salmo'){ salQ+=qty; salA+=amt; }
+        // sp_0 / vou_0 ignored intentionally
+      });
+      Object.keys(e.demandAgg).forEach(flag=>{
+        const [, amt] = e.demandAgg[flag];
+        if(flag==='sp_ori' || flag==='sp_inj') dspA += amt;
+        else if(flag==='vou_ori' || flag==='vou_inj') dvouA += amt;
+        else if(flag==='salmo') dsalA += amt;
       });
     }
     const cat = mm.cat;
