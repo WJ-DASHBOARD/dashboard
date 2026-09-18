@@ -2585,32 +2585,50 @@ function handleMasterFile(file){
     try{
       const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
       const newMaster = {};
-      function extract(sheetName, headerRow, brand){
+      // read by HEADER NAME rather than fixed column position — the source file's
+      // column order/count has changed between exports before (IM3 and 3ID sheets
+      // have even had different layouts from each other in the same file), so
+      // pinning to header text is far more robust than pinning to a column index
+      function extract(sheetName, brand){
         const ws = wb.Sheets[sheetName];
         if(!ws) return 0;
-        const rows = XLSX.utils.sheet_to_json(ws, {header:1, range: headerRow});
+        const allRows = XLSX.utils.sheet_to_json(ws, {header:1});
+        // header row is the first row that actually contains 'Outlet Code' — search
+        // rather than assume a fixed row number, since that has also varied by sheet
+        let headerRowIdx = -1, header = null;
+        for(let i=0;i<Math.min(allRows.length,10);i++){
+          if(allRows[i] && allRows[i].includes('Outlet Code')){ headerRowIdx = i; header = allRows[i]; break; }
+        }
+        if(headerRowIdx===-1) return 0;
+        const col = (name)=>header.indexOf(name);
+        const iArea = col('Sub Area Name'), iBranch = col('Branch Name'), iMicro = col('Micro Cluster Name'),
+          iOutletCode = col('Outlet Code'), iOutletName = col('Outlet Name'), iPjp = col('PJP'),
+          iFlag = col('Flag'), iFlagKam = col('Flag KAM');
+        if(iOutletCode===-1) return 0; // essential column missing — nothing usable in this sheet
         let n=0;
-        rows.forEach(r=>{
-          const outletCode = r[20];
-          if(outletCode===undefined || outletCode===null || outletCode==='') return;
-          const pjp = r[22];
-          const flag = r[24];
-          const flagKam = r[25];
+        for(let ri=headerRowIdx+1; ri<allRows.length; ri++){
+          const r = allRows[ri];
+          if(!r) continue;
+          const outletCode = r[iOutletCode];
+          if(outletCode===undefined || outletCode===null || outletCode==='') continue;
+          const pjp = iPjp>=0 ? r[iPjp] : null;
+          const flag = iFlag>=0 ? r[iFlag] : null;
+          const flagKam = iFlagKam>=0 ? r[iFlagKam] : null;
           const isKam = flagKam === 'KAM';
-          if(pjp !== 'YES' && !isKam) return; // keep: active PJP outlets, plus KAM outlets regardless of PJP status
-          const area = r[3] || 'TANPA AREA';
-          const branch = r[6] || 'TANPA BRANCH';
-          const micro = r[13] || 'TANPA MICRO CLUSTER';
-          const outletName = r[21];
+          if(pjp !== 'YES' && !isKam) continue; // keep: active PJP outlets, plus KAM outlets regardless of PJP status
+          const area = (iArea>=0 && r[iArea]) || 'TANPA AREA';
+          const branch = (iBranch>=0 && r[iBranch]) || 'TANPA BRANCH';
+          const micro = (iMicro>=0 && r[iMicro]) || 'TANPA MICRO CLUSTER';
+          const outletName = iOutletName>=0 ? r[iOutletName] : '';
           const cat = isKam ? 'KAM' : (flag==='KRO' ? 'KRO' : 'PJP');
           const oid = normId(outletCode);
           newMaster[brand+'|'+oid] = {area, branch, micro, name: outletName || '', cat};
           n++;
-        });
+        }
         return n;
       }
-      const n1 = extract('IM3', 2, 'IM3');
-      const n2 = extract('3ID', 3, '3ID');
+      const n1 = extract('IM3', 'IM3');
+      const n2 = extract('3ID', '3ID');
 
       const oldStockByKey = {};
       OUTLETS.forEach(row=>{
