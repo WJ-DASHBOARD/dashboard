@@ -1118,10 +1118,25 @@ async function loadFromStorageOrSeed(){
     const chunks = await Promise.all(meta.branches.map((b,i)=>storageGet('outlets_b'+i)));
     OUTLETS = [];
     chunks.forEach(c=>{ if(c) OUTLETS = OUTLETS.concat(c); });
-    MASTER = (await storageGet('master')) || {};
+    // MASTER is critical for every future upload (stock/sellin/supply all match
+    // outlet_id against it) — a failed/empty load here doesn't just affect THIS
+    // page view, it silently breaks any upload the person does in this session
+    // ("0 outlet diperbarui"), so it gets its own retries and is included in the
+    // overall completeness check below.
+    MASTER = await storageGet('master');
+    if(!MASTER || Object.keys(MASTER).length === 0){
+      await new Promise(r=>setTimeout(r,400));
+      MASTER = await storageGet('master');
+    }
+    if(!MASTER || Object.keys(MASTER).length === 0){
+      await new Promise(r=>setTimeout(r,1000));
+      MASTER = await storageGet('master');
+    }
+    MASTER = MASTER || {};
     // sanity check: stored chunk count should match what meta claims — otherwise a
     // previous save was interrupted/partial and we should not serve incomplete data
-    loadedOk = OUTLETS.length > 0 && (!meta.totalOutlets || OUTLETS.length >= meta.totalOutlets * 0.98);
+    loadedOk = OUTLETS.length > 0 && (!meta.totalOutlets || OUTLETS.length >= meta.totalOutlets * 0.98)
+      && Object.keys(MASTER).length > 0;
   }
 
   if(!loadedOk){
@@ -1141,6 +1156,15 @@ async function loadFromStorageOrSeed(){
       META = { brands:[], areas:[], branches:[], micros:[], cats:['KAM','KRO','PJP'], branchByArea:{}, microByBranch:{}, brandCounts:{}, totalOutlets:0, fields_outlet: [] };
       OUTLETS = [];
       MASTER = {};
+    } else {
+      // meta existed and looked fine, but chunks and/or MASTER didn't load
+      // completely even after retries (persistent connection issue this load) —
+      // no embedded fallback to fall back to, so make this loudly visible rather
+      // than silently leaving MASTER empty (which breaks every future upload with
+      // no error at all, exactly the "0 outlet diperbarui" bug this is fixing)
+      setTimeout(()=>showToast('Gagal memuat data pairing/outlet secara lengkap (koneksi tidak stabil) — refresh halaman ini sebelum upload data apa pun.'), 800);
+      META = meta;
+      MASTER = MASTER || {};
     }
   }
 }
@@ -1305,7 +1329,15 @@ async function checkForRemoteUpdate(silent){
         const complete = newOutlets.length > 0 && (!remoteMeta.totalOutlets || newOutlets.length >= remoteMeta.totalOutlets * 0.98);
         if(complete){
           META = remoteMeta; OUTLETS = newOutlets;
-          MASTER = (await storageGet('master')) || {};
+          let newMaster = await storageGet('master');
+          if(!newMaster || Object.keys(newMaster).length === 0){
+            await new Promise(r=>setTimeout(r,400));
+            newMaster = await storageGet('master');
+          }
+          // only replace MASTER if the fresh load actually succeeded — never
+          // overwrite an already-working MASTER with an empty one just because
+          // this particular background check hit a network hiccup
+          if(newMaster && Object.keys(newMaster).length > 0) MASTER = newMaster;
           changed = true;
         }
       }
@@ -2402,6 +2434,10 @@ function normId(x){
 
 function handleStockFile(file){
   const progressEl = document.getElementById('stockProgress');
+  if(!MASTER || Object.keys(MASTER).length === 0){
+    progressEl.innerHTML = '<b style="color:var(--red);">Data pairing outlet belum termuat</b> — refresh halaman ini dulu (Ctrl+Shift+R), tunggu sampai selesai loading, baru coba upload lagi. Tanpa data pairing, sistem tidak tahu outlet mana yang harus diproses.';
+    return;
+  }
   progressEl.textContent = 'Memproses 0 baris…';
   const data = {};
   let rowCount = 0;
@@ -2684,6 +2720,11 @@ const TID_SI_COLS = {region:'region', branch:'branch', micro:'mc_ts', id_outlet:
 function handleSellinFile(file){
   return new Promise((resolve) => {
     const progressEl = document.getElementById('sellinProgress');
+    if(!MASTER || Object.keys(MASTER).length === 0){
+      progressEl.innerHTML = '<b style="color:var(--red);">Data pairing outlet belum termuat</b> — refresh halaman ini dulu (Ctrl+Shift+R), tunggu sampai selesai loading, baru coba upload lagi.';
+      resolve();
+      return;
+    }
     progressEl.textContent = `Membaca header file (${file.name})…`;
 
     Papa.parse(file, {
@@ -2827,6 +2868,11 @@ async function handleSupplyFiles(fileList){
 
 function parseSupplyBody(file, progressEl){
   return new Promise((resolve) => {
+    if(!MASTER || Object.keys(MASTER).length === 0){
+      progressEl.innerHTML = '<b style="color:var(--red);">Data pairing outlet belum termuat</b> — refresh halaman ini dulu (Ctrl+Shift+R), tunggu sampai selesai loading, baru coba upload lagi.';
+      resolve();
+      return;
+    }
     const outletAgg = {}; // "brand|outletId" -> field -> [hit, rev]
     const productAgg = {}; // "SP|Product Name" -> [hit, rev]
     let rowCount = 0, matched = 0, brand = null, maxDate = null;
