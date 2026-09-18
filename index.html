@@ -3283,7 +3283,10 @@ async function loadUsers(){
   }catch(e){}
 }
 async function saveUsers(){
-  await storageSet('users', USERS);
+  let ok = await storageSet('users', USERS);
+  if(!ok){ await new Promise(r=>setTimeout(r,300)); ok = await storageSet('users', USERS); }
+  if(!ok){ await new Promise(r=>setTimeout(r,800)); ok = await storageSet('users', USERS); }
+  return ok;
 }
 
 function currentRole(){ return localStorage.getItem('wj_user_role') || ''; }
@@ -3362,10 +3365,18 @@ async function doForceChangePassword(){
   if(!user){ errEl.textContent = 'User tidak ditemukan, coba login ulang.'; return; }
   errEl.textContent = 'Menyimpan...';
   const cred = await makeCredential(p1);
+  const oldSalt = user.salt, oldHash = user.passwordHash, oldMustChange = user.mustChangePassword;
   user.salt = cred.salt; user.passwordHash = cred.passwordHash;
   delete user.password;
   user.mustChangePassword = false;
-  await saveUsers();
+  const saveOk = await saveUsers();
+  if(!saveOk){
+    // roll back the in-memory change so a failed save doesn't leave this
+    // browser thinking the new password works when it was never actually stored
+    user.salt = oldSalt; user.passwordHash = oldHash; user.mustChangePassword = oldMustChange;
+    errEl.textContent = 'Gagal menyimpan ke server (koneksi tidak stabil) — coba lagi.';
+    return;
+  }
   document.getElementById('forceNewPass').value = '';
   document.getElementById('forceNewPass2').value = '';
   errEl.textContent = '';
@@ -3389,10 +3400,16 @@ async function doChangePassword(){
   if(p1 !== p2){ errEl.textContent = 'Password baru tidak sama.'; return; }
   errEl.textContent = 'Menyimpan...';
   const cred = await makeCredential(p1);
+  const oldSalt = user.salt, oldHash = user.passwordHash, oldMustChange = user.mustChangePassword;
   user.salt = cred.salt; user.passwordHash = cred.passwordHash;
   delete user.password;
   user.mustChangePassword = false;
-  await saveUsers();
+  const saveOk = await saveUsers();
+  if(!saveOk){
+    user.salt = oldSalt; user.passwordHash = oldHash; user.mustChangePassword = oldMustChange;
+    errEl.textContent = 'Gagal menyimpan ke server (koneksi tidak stabil) — coba lagi.';
+    return;
+  }
   document.getElementById('cpOldPass').value = '';
   document.getElementById('cpNewPass').value = '';
   document.getElementById('cpNewPass2').value = '';
@@ -3431,10 +3448,16 @@ async function resetUserPassword(name){
   const u = USERS.find(x=>x.username===name);
   if(!u) return;
   if(!confirm(`Reset password "${name}" ke default (${DEFAULT_PASSWORD})? User ini akan diminta membuat password baru saat login berikutnya.`)) return;
+  const oldSalt = u.salt, oldHash = u.passwordHash, oldMustChange = u.mustChangePassword;
   u.salt = DEFAULT_CREDENTIAL.salt; u.passwordHash = DEFAULT_CREDENTIAL.passwordHash;
   delete u.password;
   u.mustChangePassword = true;
-  await saveUsers();
+  const saveOk = await saveUsers();
+  if(!saveOk){
+    u.salt = oldSalt; u.passwordHash = oldHash; u.mustChangePassword = oldMustChange;
+    showToast(`Gagal reset password "${name}" — koneksi ke server tidak stabil, coba lagi.`);
+    return;
+  }
   showToast(`Password "${name}" direset ke default.`);
   renderUserList();
 }
@@ -3444,8 +3467,14 @@ async function resetAllPasswords(){
   const msg = document.getElementById('resetAllMsg');
   if(!confirm(`Reset password SEMUA ${USERS.length} user ke default (${DEFAULT_PASSWORD})? Semua user (termasuk kamu sendiri) akan diminta membuat password baru saat login berikutnya. Tindakan ini tidak bisa dibatalkan.`)) return;
   msg.textContent = 'Mereset semua password...';
+  const backup = USERS.map(u=>({ salt: u.salt, passwordHash: u.passwordHash, mustChangePassword: u.mustChangePassword }));
   USERS.forEach(u=>{ u.salt = DEFAULT_CREDENTIAL.salt; u.passwordHash = DEFAULT_CREDENTIAL.passwordHash; delete u.password; u.mustChangePassword = true; });
-  await saveUsers();
+  const saveOk = await saveUsers();
+  if(!saveOk){
+    USERS.forEach((u,i)=>{ u.salt = backup[i].salt; u.passwordHash = backup[i].passwordHash; u.mustChangePassword = backup[i].mustChangePassword; });
+    msg.textContent = 'Gagal tersimpan ke server (koneksi tidak stabil) — tidak ada yang direset, coba lagi.';
+    return;
+  }
   msg.textContent = `Selesai. Password ${USERS.length} user direset ke default (${DEFAULT_PASSWORD}).`;
   showToast('Semua password berhasil direset ke default.');
   renderUserList();
@@ -3464,7 +3493,12 @@ async function addUser(){
   // new users default to viewer (view + download only) — promote to admin manually if needed
   USERS.push({ username: name, salt: DEFAULT_CREDENTIAL.salt, passwordHash: DEFAULT_CREDENTIAL.passwordHash, role: 'viewer', mustChangePassword: true });
   msg.textContent = 'Menyimpan...';
-  await saveUsers();
+  const saveOk = await saveUsers();
+  if(!saveOk){
+    USERS = USERS.filter(u=>u.username!==name);
+    msg.textContent = 'Gagal menyimpan ke server (koneksi tidak stabil) — coba lagi.';
+    return;
+  }
   msg.textContent = `User "${name}" ditambahkan sebagai Viewer dengan password default.`;
   input.value = '';
   renderUserList();
@@ -3482,15 +3516,22 @@ function handleBulkUserFile(file){
       const existing = new Set(USERS.map(u=>u.username.toLowerCase()));
       let added = 0, skipped = 0;
       const seenThisBatch = new Set();
+      const addedNames = [];
       names.forEach(name=>{
         const key = name.toLowerCase();
         if(existing.has(key) || seenThisBatch.has(key)){ skipped++; return; }
         seenThisBatch.add(key);
         USERS.push({ username: name, salt: DEFAULT_CREDENTIAL.salt, passwordHash: DEFAULT_CREDENTIAL.passwordHash, role: 'viewer', mustChangePassword: true });
+        addedNames.push(name);
         added++;
       });
       msg.textContent = `Menyimpan ${added} user baru...`;
-      await saveUsers();
+      const saveOk = await saveUsers();
+      if(!saveOk){
+        USERS = USERS.filter(u=>!addedNames.includes(u.username));
+        msg.textContent = 'Gagal menyimpan ke server (koneksi tidak stabil) — tidak ada user yang ditambahkan, coba lagi.';
+        return;
+      }
       msg.textContent = `Selesai. ${added} user baru ditambahkan sebagai Viewer (password default)${skipped? `, ${skipped} dilewati karena sudah ada/duplikat`:''}.`;
       renderUserList();
     }catch(err){
@@ -3503,8 +3544,15 @@ function handleBulkUserFile(file){
 async function setUserRole(name, role){
   const u = USERS.find(x=>x.username===name);
   if(!u) return;
+  const oldRole = u.role;
   u.role = role;
-  await saveUsers();
+  const saveOk = await saveUsers();
+  if(!saveOk){
+    u.role = oldRole;
+    showToast(`Gagal ubah role "${name}" — koneksi ke server tidak stabil, coba lagi.`);
+    renderUserList();
+    return;
+  }
   showToast(`Role "${name}" diubah ke ${role==='admin'?'Admin':'Viewer'}.`);
   if(name === localStorage.getItem('wj_user')){
     localStorage.setItem('wj_user_role', role);
@@ -3516,8 +3564,13 @@ window.setUserRole = setUserRole;
 async function removeUserByName(name){
   if(USERS.length<=1){ showToast('Tidak bisa menghapus user terakhir.'); return; }
   if(!confirm(`Hapus user "${name}"?`)) return;
+  const removed = USERS.find(u=>u.username===name);
   USERS = USERS.filter(u=>u.username!==name);
-  await saveUsers();
+  const saveOk = await saveUsers();
+  if(!saveOk){
+    if(removed) USERS.push(removed);
+    showToast(`Gagal hapus user "${name}" — koneksi ke server tidak stabil, coba lagi.`);
+  }
   renderUserList();
 }
 window.removeUserByName = removeUserByName;
