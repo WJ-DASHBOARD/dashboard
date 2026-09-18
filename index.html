@@ -979,6 +979,30 @@ const IDX = Object.fromEntries(FIELDS_O.map((k,i)=>[k,i]));
 function totalDemandAmt(r){ return r[IDX.dspAmt]+r[IDX.dvouAmt]+r[IDX.dsalAmt]; }
 function dosOf(stockA, demandA){ return demandA>0 ? (stockA/demandA) : null; }
 
+// MASTER (area/branch/micro/name/kategori per outlet) is deliberately NEVER stored
+// as its own key — for 22,335 outlets it serializes to ~2.7M characters, and Google
+// Sheets hard-caps a single cell at 50,000 characters. Storing it directly meant it
+// silently failed (or got truncated into unparseable JSON) on every single save.
+// Every field MASTER needs already lives in the (properly branch-chunked) OUTLETS
+// array via META's index tables, so it's cheaper and more reliable to just derive
+// it in memory whenever OUTLETS changes, rather than storing/loading it at all.
+function rebuildMasterFromOutlets(){
+  const m = {};
+  OUTLETS.forEach(row=>{
+    const brand = META.brands[row[IDX.brandIdx]];
+    const key = brand+'|'+row[IDX.outletId];
+    m[key] = {
+      area: META.areas[row[IDX.areaIdx]],
+      branch: META.branches[row[IDX.branchIdx]],
+      micro: META.micros[row[IDX.microIdx]],
+      name: row[IDX.outletName],
+      cat: META.cats[row[IDX.catIdx]] || 'PJP'
+    };
+  });
+  return m;
+}
+
+
 const FIELDS_S = ['brandIdx','areaIdx','branchIdx','microIdx','outletId','outletName','catIdx',
   'rguGa','qsso','sellinSp','sellinVou','sellinSaldo','tertiary','secondary'];
 const IDX_S = Object.fromEntries(FIELDS_S.map((k,i)=>[k,i]));
@@ -1118,25 +1142,10 @@ async function loadFromStorageOrSeed(){
     const chunks = await Promise.all(meta.branches.map((b,i)=>storageGet('outlets_b'+i)));
     OUTLETS = [];
     chunks.forEach(c=>{ if(c) OUTLETS = OUTLETS.concat(c); });
-    // MASTER is critical for every future upload (stock/sellin/supply all match
-    // outlet_id against it) — a failed/empty load here doesn't just affect THIS
-    // page view, it silently breaks any upload the person does in this session
-    // ("0 outlet diperbarui"), so it gets its own retries and is included in the
-    // overall completeness check below.
-    MASTER = await storageGet('master');
-    if(!MASTER || Object.keys(MASTER).length === 0){
-      await new Promise(r=>setTimeout(r,400));
-      MASTER = await storageGet('master');
-    }
-    if(!MASTER || Object.keys(MASTER).length === 0){
-      await new Promise(r=>setTimeout(r,1000));
-      MASTER = await storageGet('master');
-    }
-    MASTER = MASTER || {};
     // sanity check: stored chunk count should match what meta claims — otherwise a
     // previous save was interrupted/partial and we should not serve incomplete data
-    loadedOk = OUTLETS.length > 0 && (!meta.totalOutlets || OUTLETS.length >= meta.totalOutlets * 0.98)
-      && Object.keys(MASTER).length > 0;
+    loadedOk = OUTLETS.length > 0 && (!meta.totalOutlets || OUTLETS.length >= meta.totalOutlets * 0.98);
+    if(loadedOk) MASTER = rebuildMasterFromOutlets();
   }
 
   if(!loadedOk){
@@ -1148,7 +1157,7 @@ async function loadFromStorageOrSeed(){
     if(hasEmbedded){
       META = window.__SEED__.meta;
       OUTLETS = window.__SEED__.outlets;
-      MASTER = window.__SEED__.master || {};
+      MASTER = rebuildMasterFromOutlets();
       persistAll();
     } else if(!meta){
       // no embedded fallback (slim/hosted build) and nothing in the sheet yet either
@@ -1157,14 +1166,13 @@ async function loadFromStorageOrSeed(){
       OUTLETS = [];
       MASTER = {};
     } else {
-      // meta existed and looked fine, but chunks and/or MASTER didn't load
-      // completely even after retries (persistent connection issue this load) —
-      // no embedded fallback to fall back to, so make this loudly visible rather
-      // than silently leaving MASTER empty (which breaks every future upload with
-      // no error at all, exactly the "0 outlet diperbarui" bug this is fixing)
-      setTimeout(()=>showToast('Gagal memuat data pairing/outlet secara lengkap (koneksi tidak stabil) — refresh halaman ini sebelum upload data apa pun.'), 800);
+      // meta existed and looked fine, but chunks didn't load completely even after
+      // Promise.all (persistent connection issue this load) — no embedded fallback
+      // to fall back to, so make this loudly visible rather than silently leaving
+      // MASTER empty (which used to break every future upload with no error at all)
+      setTimeout(()=>showToast('Gagal memuat data outlet secara lengkap (koneksi tidak stabil) — refresh halaman ini sebelum upload data apa pun.'), 800);
       META = meta;
-      MASTER = MASTER || {};
+      MASTER = {};
     }
   }
 }
@@ -1186,8 +1194,8 @@ async function persistAll(){
     if(!ok){ await new Promise(r=>setTimeout(r,800)); ok = await storageSet('outlets_b'+i, byBranch[i]); }
     if(!ok) allOk = false;
   }
-  const masterOk = await storageSet('master', MASTER);
-  if(!masterOk) allOk = false;
+  // MASTER is never stored separately (see rebuildMasterFromOutlets) — it's derived
+  // fresh from OUTLETS every time, so there's nothing extra to persist for it here
   if(allOk){
     await storageSet('meta', META);
   } else {
@@ -1329,15 +1337,7 @@ async function checkForRemoteUpdate(silent){
         const complete = newOutlets.length > 0 && (!remoteMeta.totalOutlets || newOutlets.length >= remoteMeta.totalOutlets * 0.98);
         if(complete){
           META = remoteMeta; OUTLETS = newOutlets;
-          let newMaster = await storageGet('master');
-          if(!newMaster || Object.keys(newMaster).length === 0){
-            await new Promise(r=>setTimeout(r,400));
-            newMaster = await storageGet('master');
-          }
-          // only replace MASTER if the fresh load actually succeeded — never
-          // overwrite an already-working MASTER with an empty one just because
-          // this particular background check hit a network hiccup
-          if(newMaster && Object.keys(newMaster).length > 0) MASTER = newMaster;
+          MASTER = rebuildMasterFromOutlets();
           changed = true;
         }
       }
