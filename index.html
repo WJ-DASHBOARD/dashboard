@@ -116,7 +116,7 @@
   }
 
   .stat-list{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:2px 12px;margin-top:12px;}
-  .stat-row{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px dashed var(--border);gap:10px;}
+  .stat-row{display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;border-bottom:1px dashed var(--border);gap:10px;}
   .stat-row:last-child{border-bottom:none;}
   .stat-row .lbl{font-size:10px;color:var(--ink-soft);}
   .stat-row .val{font-size:11.5px;font-weight:700;color:var(--ink);font-family:'IBM Plex Mono',monospace;white-space:nowrap;}
@@ -139,11 +139,18 @@
   .panel h3{margin:0 0 14px;font-size:13px;font-weight:600;}
   .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:11px;font-size:12.5px;}
   .bar-label{width:150px;flex-shrink:0;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px;}
-  .bar-track{flex:1;min-width:0;height:16px;background:var(--grey-soft);border-radius:4px;overflow:hidden;display:flex;}
-  .bar-seg-zero{background:#9B98A8;}
-  .bar-seg-low{background:var(--amber);}
-  .bar-seg-ok{background:var(--green);}
+  .bar-track{flex:1;min-width:0;height:16px;background:var(--grey-soft);border-radius:4px;overflow:hidden;display:flex;align-items:stretch;position:relative;}
+  .bar-track-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.55);pointer-events:none;white-space:nowrap;}
+  .bar-seg-zero{background:#9B98A8;height:100%;flex-shrink:0;}
+  .bar-seg-low{background:var(--amber);height:100%;flex-shrink:0;}
+  .bar-seg-ok{background:var(--green);height:100%;flex-shrink:0;}
+  .bar-seg-ga0{background:#9B98A8;height:100%;flex-shrink:0;}
+  .bar-seg-ga1{background:var(--amber);height:100%;flex-shrink:0;}
+  .bar-seg-ga2{background:#6E8FD9;height:100%;flex-shrink:0;}
+  .bar-seg-ga3{background:#4E9E72;height:100%;flex-shrink:0;}
+  .bar-seg-ga4{background:var(--green);height:100%;flex-shrink:0;}
   .bar-total{width:44px;text-align:right;color:var(--muted);font-size:11.5px;}
+  .bar-pct{width:110px;flex-shrink:0;text-align:right;color:var(--muted);font-size:10px;white-space:nowrap;}
 
   .legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:12px;}
   .legend span{display:inline-flex;align-items:center;gap:5px;}
@@ -218,7 +225,7 @@
       <h1 class="h1">Outlet Performance
         <small>Monitoring GA, Sell In &amp; Stock per Outlet</small>
       </h1>
-      <div class="meta-line">Periode data stok: <b id="metaAsOf">–</b> &nbsp;·&nbsp; Sell In per: <b id="metaSellinDate">–</b> &nbsp;·&nbsp; GA per: <b id="metaGaDate">–</b> &nbsp;·&nbsp; Data outlet (pairing) per: <b id="metaMasterDate">–</b></div>
+      <div class="meta-line">Data outlet (pairing) per: <b id="metaMasterDate">–</b> &nbsp;·&nbsp; Periode data stok: <b id="metaAsOf">–</b> &nbsp;·&nbsp; Sell In per: <b id="metaSellinDate">–</b> &nbsp;·&nbsp; GA per: <b id="metaGaDate">–</b> &nbsp;·&nbsp; Data Supply per: <b id="metaSupplyDate">–</b></div>
     </div>
     <div style="display:flex;gap:10px;">
       <button class="btn" id="btnRefresh"><span class="refresh-dot"></span>Cek update</button>
@@ -265,7 +272,7 @@
 
   <div class="section-title">Peta Outlet <div class="line"></div></div>
   <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">
-    Titik <b style="color:var(--red);">merah</b> = outlet dengan minimal satu masalah (tidak ada GA, tidak ada Sell In SP, tidak ada Sell In Saldo, atau tidak ada stock sama sekali). Titik <b style="color:var(--green);">hijau</b> = semuanya terpenuhi. Klik titik untuk detail outlet. Klik area kabupaten untuk drill-down ke Branch-nya. Filter Area/Branch/Micro Cluster/Kategori di atas ikut membatasi titik yang tampil.
+    Titik <b style="color:var(--red);">merah</b> = Outlet Alert — outlet dengan stock kosong, Sell In kosong, DAN GA kosong sekaligus (tidak ada satu pun dari ketiganya). Titik <b style="color:var(--green);">hijau</b> = outlet lainnya. Klik titik untuk detail outlet. Klik area kabupaten untuk drill-down ke Branch-nya. Filter Area/Branch/Micro Cluster/Kategori di atas ikut membatasi titik yang tampil.
   </p>
   <div class="peta-layout">
     <div class="peta-top">
@@ -542,6 +549,47 @@
     </div>
   </div>
 
+  <div class="section-title" style="margin-top:14px;">Slab GA <div class="line"></div></div>
+  <div class="slab-row" id="gaSlabRow" style="flex-wrap:wrap;">
+    <div class="slab-card zero">
+      <div class="slab-top"><span class="kpi-label">No GA</span></div>
+      <div class="slab-top"><span class="slab-num" id="gaSlab0">–</span><span class="slab-pct" id="gaSlab0Pct">–</span></div>
+      <div class="slab-bar"><div id="gaSlab0Bar" style="width:0%;background:#9B98A8;"></div></div>
+    </div>
+    <div class="slab-card low">
+      <div class="slab-top"><span class="kpi-label">GA &lt; 25</span></div>
+      <div class="slab-top"><span class="slab-num" id="gaSlab1">–</span><span class="slab-pct" id="gaSlab1Pct">–</span></div>
+      <div class="slab-bar"><div id="gaSlab1Bar" style="width:0%;background:var(--amber);"></div></div>
+    </div>
+    <div class="slab-card" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;flex:1;">
+      <div class="slab-top"><span class="kpi-label">GA 25-50</span></div>
+      <div class="slab-top"><span class="slab-num" id="gaSlab2">–</span><span class="slab-pct" id="gaSlab2Pct">–</span></div>
+      <div class="slab-bar"><div id="gaSlab2Bar" style="width:0%;background:#6E8FD9;"></div></div>
+    </div>
+    <div class="slab-card" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;flex:1;">
+      <div class="slab-top"><span class="kpi-label">GA 50-100</span></div>
+      <div class="slab-top"><span class="slab-num" id="gaSlab3">–</span><span class="slab-pct" id="gaSlab3Pct">–</span></div>
+      <div class="slab-bar"><div id="gaSlab3Bar" style="width:0%;background:#4E9E72;"></div></div>
+    </div>
+    <div class="slab-card ok">
+      <div class="slab-top"><span class="kpi-label">GA &gt; 100</span></div>
+      <div class="slab-top"><span class="slab-num" id="gaSlab4">–</span><span class="slab-pct" id="gaSlab4Pct">–</span></div>
+      <div class="slab-bar"><div id="gaSlab4Bar" style="width:0%;background:var(--green);"></div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3 id="gaSlabBreakdownTitle">Slab GA per Branch</h3>
+    <div id="gaSlabBreakdownChart"></div>
+    <div class="legend">
+      <span><i class="dot" style="background:#9B98A8"></i>No GA</span>
+      <span><i class="dot" style="background:var(--amber)"></i>&lt;25</span>
+      <span><i class="dot" style="background:#6E8FD9"></i>25-50</span>
+      <span><i class="dot" style="background:#4E9E72"></i>50-100</span>
+      <span><i class="dot" style="background:var(--green)"></i>&gt;100</span>
+    </div>
+  </div>
+
   <div class="two-col">
     <div class="panel">
       <h3 id="siBreakdownTitle">Total GA per Branch</h3>
@@ -676,9 +724,8 @@
       <div class="kpi-sub">SP + Rebuy + Voucher + Voucher ORI</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">Total Hit Supply</div>
-      <div class="kpi-value" id="supKpiHitAll">–</div>
-      <div class="kpi-sub" id="supKpiHitAllSub">–</div>
+      <div class="kpi-label">Kontribusi Revenue per Jenis</div>
+      <div class="kpi-value" id="supKpiRevMix" style="font-size:14px;line-height:1.6;">–</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Outlet Tanpa Supply Sama Sekali</div>
@@ -978,6 +1025,26 @@ const FIELDS_O = ['brandIdx','areaIdx','branchIdx','microIdx','outletId','outlet
 const IDX = Object.fromEntries(FIELDS_O.map((k,i)=>[k,i]));
 function totalDemandAmt(r){ return r[IDX.dspAmt]+r[IDX.dvouAmt]+r[IDX.dsalAmt]; }
 function dosOf(stockA, demandA){ return demandA>0 ? (stockA/demandA) : null; }
+
+// "Outlet Alert" = zero stock of every kind AND zero sell-in of every kind AND zero
+// GA, all at once — computed live from the current stock/sell-in rows rather than a
+// flag baked into GEO_POINTS at seed-build time (which goes stale the moment new
+// stock/sell-in data is uploaded, since GEO_POINTS itself is never re-derived).
+function computeOutletFlags(stockRow, sellinRow, supplyRow){
+  const totalStock = stockRow ? (stockRow[IDX.spoAmt]+stockRow[IDX.spiAmt]+stockRow[IDX.voAmt]+stockRow[IDX.viAmt]+stockRow[IDX.salAmt]) : 0;
+  const noStockAll = !stockRow || totalStock <= 0;
+  const lowStockAll = !stockRow || totalStock < 100000;
+  const noSellInAll = !sellinRow || (sellinRow[IDX_S.sellinSp]+sellinRow[IDX_S.sellinVou]+sellinRow[IDX_S.sellinSaldo]) <= 0;
+  const noGaAll = !sellinRow || sellinRow[IDX_S.rguGa] <= 0;
+  const noSellInSp = !sellinRow || sellinRow[IDX_S.sellinSp] <= 0;
+  const noSellInVou = !sellinRow || sellinRow[IDX_S.sellinVou] <= 0;
+  const noSellInSalmo = !sellinRow || sellinRow[IDX_S.sellinSaldo] <= 0;
+  const noSpInject = !supplyRow || supplyRow[IDX_SUP.sp_injectHit] <= 0;
+  const noVouInject = !supplyRow || supplyRow[IDX_SUP.vou_injectHit] <= 0;
+  const noRebuyCvm = !supplyRow || supplyRow[IDX_SUP.rebuy_cvmHit] <= 0;
+  return { noStockAll, lowStockAll, noSellInAll, noGaAll, noSellInSp, noSellInVou, noSellInSalmo,
+    noSpInject, noVouInject, noRebuyCvm, isAlert: noStockAll && noSellInAll && noGaAll };
+}
 
 // MASTER (area/branch/micro/name/kategori per outlet) is deliberately NEVER stored
 // as its own key — for 22,335 outlets it serializes to ~2.7M characters, and Google
@@ -1526,10 +1593,58 @@ function renderSellinAll(){
   if(!SMETA) return;
   renderSellinKpis();
   renderCoverageCards();
+  renderGaSlab();
   renderSellinBreakdown();
   renderSellinSummaryTable();
   renderSellinCatSummary();
   renderSellinTable();
+}
+
+function renderGaSlab(){
+  const n = filteredSellin.length;
+  const counts = [0,0,0,0,0]; // No GA, <25, 25-50, 50-100, >100
+  filteredSellin.forEach(r=>{
+    const ga = r[IDX_S.rguGa];
+    if(ga<=0) counts[0]++;
+    else if(ga<25) counts[1]++;
+    else if(ga<50) counts[2]++;
+    else if(ga<100) counts[3]++;
+    else counts[4]++;
+  });
+  counts.forEach((c,i)=>{
+    document.getElementById('gaSlab'+i).textContent = fmtN(c);
+    const pct = n? (c/n*100).toFixed(0)+'%' : '–';
+    document.getElementById('gaSlab'+i+'Pct').textContent = pct;
+    document.getElementById('gaSlab'+i+'Bar').style.width = n? (c/n*100)+'%' : '0%';
+  });
+  renderGaSlabBreakdown();
+}
+
+function renderGaSlabBreakdown(){
+  const ctx = groupContext();
+  document.getElementById('gaSlabBreakdownTitle').textContent = 'Slab GA ' + ctx.title;
+  const agg = {};
+  filteredSellin.forEach(r=>{
+    const g = r[ctx.key===IDX.branchIdx ? IDX_S.branchIdx : IDX_S.microIdx];
+    if(!agg[g]) agg[g] = {s0:0,s1:0,s2:0,s3:0,s4:0,total:0};
+    const ga = r[IDX_S.rguGa];
+    const slab = ga<=0?'s0' : ga<25?'s1' : ga<50?'s2' : ga<100?'s3' : 's4';
+    agg[g][slab]++; agg[g].total++;
+  });
+  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.total-a.total).slice(0,14);
+  const segs = [
+    {key:'s0',color:'#9B98A8'}, {key:'s1',color:'var(--amber)'}, {key:'s2',color:'#6E8FD9'},
+    {key:'s3',color:'#4E9E72'}, {key:'s4',color:'var(--green)'}
+  ];
+  const html = rows.map(r=>{
+    const tooltip = `No GA: ${r.s0} · <25: ${r.s1} · 25-50: ${r.s2} · 50-100: ${r.s3} · >100: ${r.s4}`;
+    return `<div class="bar-row">
+      <div class="bar-label" title="${r.name}">${r.name}</div>
+      ${stackedBarSvg(r, segs, tooltip)}
+      <div class="bar-total">${r.total}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('gaSlabBreakdownChart').innerHTML = html || '<p style="color:var(--muted);font-size:13px;">Tidak ada data.</p>';
 }
 
 function renderSupplyAll(){
@@ -1560,10 +1675,13 @@ function renderSupplyKpis(){
     if(totalHitThisOutlet<=0) noSupply++;
   });
   const totalRev = spRev+rebuyRev+vouRev+vouOriRev;
-  const totalHit = spHit+rebuyHit+vouHit+vouOriHit;
   document.getElementById('supKpiRevAll').innerHTML = fmtBn(totalRev);
-  document.getElementById('supKpiHitAll').textContent = fmtN(totalHit);
-  document.getElementById('supKpiHitAllSub').textContent = n? (totalHit/n).toFixed(2)+' per outlet' : '–';
+  document.getElementById('supKpiRevMix').innerHTML = totalRev ? [
+    `SP Inject ${(spRev/totalRev*100).toFixed(1).replace('.',',')}%`,
+    `Rebuy ${(rebuyRev/totalRev*100).toFixed(1).replace('.',',')}%`,
+    `Voucher Inject ${(vouRev/totalRev*100).toFixed(1).replace('.',',')}%`,
+    `Voucher ORI ${(vouOriRev/totalRev*100).toFixed(1).replace('.',',')}%`
+  ].join('<br>') : '–';
   document.getElementById('supKpiNoSupply').textContent = fmtN(noSupply);
   document.getElementById('supKpiNoSupplyPct').textContent = n? (noSupply/n*100).toFixed(1)+'% dari outlet terfilter' : '–';
 
@@ -1844,12 +1962,16 @@ function renderSellinBreakdown(){
   });
   const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ga: agg[g]})).sort((a,b)=>b.ga-a.ga).slice(0,14);
   const maxGa = Math.max(1, ...rows.map(r=>r.ga));
-  document.getElementById('siBreakdownChart').innerHTML = rows.map(r=>`
-    <div class="bar-row">
+  document.getElementById('siBreakdownChart').innerHTML = rows.map(r=>{
+    const w = r.ga/maxGa*300;
+    return `<div class="bar-row">
       <div class="bar-label">${r.name}</div>
-      <div class="bar-track"><div class="bar-seg-ok" style="width:${r.ga/maxGa*100}%"></div></div>
+      <svg viewBox="0 0 300 16" preserveAspectRatio="none" style="flex:1;min-width:0;height:16px;border-radius:4px;overflow:hidden;background:var(--grey-soft);display:block;">
+        <rect x="0" y="0" width="${w.toFixed(2)}" height="16" fill="var(--green)"/>
+      </svg>
       <div class="bar-total">${fmtN(r.ga)}</div>
-    </div>`).join('') || '<p style="color:var(--muted);font-size:13px;">Tidak ada data.</p>';
+    </div>`;
+  }).join('') || '<p style="color:var(--muted);font-size:13px;">Tidak ada data.</p>';
 }
 
 function renderSellinCatSummary(){
@@ -2084,6 +2206,29 @@ function groupContext(){
   return {key: IDX.microIdx, names: META.micros, label: 'micro', title: 'per Micro Cluster — ' + branch};
 }
 
+// Rendered as inline SVG rather than CSS (flex-child widths and gradient-background
+// approaches were both reported blank in at least one real browser, even though they
+// tested correctly here) — SVG <rect>/<text> layout is unambiguous and consistent
+// everywhere, and lets each segment carry its own % label centered inside itself.
+function stackedBarSvg(row, segmentDefs, tooltip){
+  const W = 300, H = 16;
+  let x = 0;
+  const parts = segmentDefs.map(seg=>{
+    const val = row[seg.key] || 0;
+    const t = row.total || 1;
+    const w = val/t*W;
+    const pct = val/t*100;
+    const showLabel = w > 16 && pct >= 4;
+    const rect = `<rect x="${x.toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${H}" fill="${seg.color}"/>`;
+    const text = showLabel ? `<text x="${(x+w/2).toFixed(2)}" y="${H/2}" text-anchor="middle" dominant-baseline="central" font-size="8.5" font-weight="600" fill="#fff" stroke="rgba(0,0,0,.45)" stroke-width="2.2" paint-order="stroke fill">${pct.toFixed(0)}%</text>` : '';
+    x += w;
+    return rect + text;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="flex:1;min-width:0;height:${H}px;border-radius:4px;overflow:hidden;background:var(--grey-soft);display:block;">
+    <title>${tooltip}</title>${parts}
+  </svg>`;
+}
+
 function renderBreakdown(){
   const ctx = groupContext();
   document.getElementById('breakdownTitle').textContent = 'Slab Saldo ' + ctx.title;
@@ -2098,16 +2243,13 @@ function renderBreakdown(){
   const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g]}))
     .sort((a,b)=>b.total-a.total).slice(0,14);
 
+  const segs = [{key:'zero',color:'#9B98A8'},{key:'low',color:'var(--amber)'},{key:'ok',color:'var(--green)'}];
   const html = rows.map(r=>{
     const t = r.total || 1;
-    const wZero = r.zero/t*100, wLow = r.low/t*100, wOk = r.ok/t*100;
+    const tooltip = `Saldo 0: ${r.zero} (${(r.zero/t*100).toFixed(0)}%) · <100K: ${r.low} (${(r.low/t*100).toFixed(0)}%) · ≥100K: ${r.ok} (${(r.ok/t*100).toFixed(0)}%)`;
     return `<div class="bar-row">
       <div class="bar-label" title="${r.name}">${r.name}</div>
-      <div class="bar-track" title="Saldo 0: ${r.zero} · <100K: ${r.low} · ≥100K: ${r.ok}">
-        <div class="bar-seg-zero" style="width:${wZero}%"></div>
-        <div class="bar-seg-low" style="width:${wLow}%"></div>
-        <div class="bar-seg-ok" style="width:${wOk}%"></div>
-      </div>
+      ${stackedBarSvg(r, segs, tooltip)}
       <div class="bar-total">${r.total}</div>
     </div>`;
   }).join('');
@@ -2787,8 +2929,8 @@ function handleMasterFile(file){
 }
 
 // ---------- update: Sell In & GA CSV (DSE_PROD) ----------
-const IM3_SI_COLS = {region:'region', branch:'branch', micro:'micro_cluster', id_outlet:'id_outlet', rgu_ga:'rgu_ga', qsso:'qsso', sp:'sellin_sp', vou:'sellin_vou', saldo:'sellin_saldo', tertiary:'tertiary', secondary:'secondary'};
-const TID_SI_COLS = {region:'region', branch:'branch', micro:'mc_ts', id_outlet:'id_outlet', rgu_ga:'rgu_ga', qsso:'qsso', sp:'osa_sp', vou:'osa_vou', saldo:'osa_saldo', tertiary:'tertiary', secondary:'secondary'};
+const IM3_SI_COLS = {region:'region', branch:'branch', micro:'micro_cluster', id_outlet:'id_outlet', rgu_ga:'rgu_ga', qsso:'qsso', sp:'sellin_sp', vou:'sellin_vou', saldo:'sellin_saldo', tertiary:'tertiary', secondary:'secondary', asOfDt:'as_of_dt'};
+const TID_SI_COLS = {region:'region', branch:'branch', micro:'mc_ts', id_outlet:'id_outlet', rgu_ga:'rgu_ga', qsso:'qsso', sp:'osa_sp', vou:'osa_vou', saldo:'osa_saldo', tertiary:'tertiary', secondary:'secondary', asOfDt:'as_of_dt'};
 
 function handleSellinFile(file){
   return new Promise((resolve) => {
@@ -2835,7 +2977,7 @@ async function handleSellinFiles(fileList){
 function parseSellinBody(file, brand, colMap, progressEl){
   return new Promise((resolve) => {
   const byKey = {};
-  let rowCount = 0, matched = 0;
+  let rowCount = 0, matched = 0, maxAsOfDt = null;
 
   Papa.parse(file, {
     header: true,
@@ -2846,6 +2988,8 @@ function parseSellinBody(file, brand, colMap, progressEl){
       rowCount++;
       const row = res.data;
       if(row[colMap.region] !== 'WEST JAVA') return;
+      const dt = colMap.asOfDt ? row[colMap.asOfDt] : null;
+      if(dt && (!maxAsOfDt || dt > maxAsOfDt)) maxAsOfDt = dt;
       const oid = normId(row[colMap.id_outlet]);
       const key = brand+'|'+oid;
       const mm = MASTER[key];
@@ -2860,14 +3004,14 @@ function parseSellinBody(file, brand, colMap, progressEl){
     },
     complete: function(){
       progressEl.textContent = `Menggabungkan data Sell In & GA ${brand} (${matched.toLocaleString('id-ID')} outlet cocok)…`;
-      setTimeout(()=>finishSellinProcessing(brand, byKey, progressEl).then(resolve), 30);
+      setTimeout(()=>finishSellinProcessing(brand, byKey, progressEl, maxAsOfDt).then(resolve), 30);
     },
     error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
   });
   });
 }
 
-async function finishSellinProcessing(brand, byKey, progressEl){
+async function finishSellinProcessing(brand, byKey, progressEl, maxAsOfDt){
   const brandI = META.brands.indexOf(brand);
   // keep existing rows for the OTHER brand untouched; rebuild rows for this brand from MASTER + new sellin data
   const keptOther = SELLIN_OUTLETS.filter(r=>r[IDX_S.brandIdx]!==brandI);
@@ -2886,7 +3030,13 @@ async function finishSellinProcessing(brand, byKey, progressEl){
     ]);
   });
   SELLIN_OUTLETS = keptOther.concat(rebuilt);
-  SMETA = { fields_sellin: FIELDS_S, asOf: SMETA.asOf, mth: SMETA.mth, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString() };
+  const oldAsOf = SMETA ? SMETA.asOf : null;
+  // asOf is the actual "as of" date found inside the file (as_of_dt column) — this is
+  // what the header should show, NOT the upload timestamp. If this brand's file had no
+  // parseable date, fall back to whichever is later between the two brands' last known
+  // dates, so the header still shows something meaningful rather than going blank.
+  const newAsOf = maxAsOfDt || oldAsOf || null;
+  SMETA = { fields_sellin: FIELDS_S, asOf: newAsOf, mth: SMETA.mth, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString() };
 
   progressEl.textContent = `Menyimpan data Sell In & GA online (${SELLIN_OUTLETS.length.toLocaleString('id-ID')} outlet)…`;
   const saveOk = await persistSellin((done,total)=>{ progressEl.textContent = `Menyimpan data Sell In & GA online — bagian ${done}/${total}…`; });
@@ -3067,11 +3217,15 @@ function refreshHeaderMeta(){
   // share the same "as of" date — shown separately anyway since they're
   // conceptually different metrics people ask about individually.
   if(SMETA){
-    const sellinDate = SMETA.lastUpdated
-      ? new Date(SMETA.lastUpdated).toLocaleDateString('id-ID')
-      : (SMETA.asOf || '–');
+    const sellinDate = SMETA.asOf || '–';
     document.getElementById('metaSellinDate').textContent = sellinDate;
     document.getElementById('metaGaDate').textContent = sellinDate;
+  }
+  if(SUPMETA){
+    // IM3 and 3ID supply files can be uploaded on different dates — show the later
+    // of the two if both exist, or whichever one exists if only one brand was uploaded
+    const dates = [SUPMETA.imDate, SUPMETA.tidDate].filter(Boolean);
+    document.getElementById('metaSupplyDate').textContent = dates.length ? dates.sort().reverse()[0] : '–';
   }
 }
 
@@ -3083,12 +3237,13 @@ function renderPetaAll(){
   renderCombinedTable();
 }
 
-function statRow(lbl, val, cls){
-  return `<div class="stat-row"><span class="lbl">${lbl}</span><span class="val${cls?(' '+cls):''}">${val}</span></div>`;
+function statRow(lbl, val, cls, sub){
+  return `<div class="stat-row"><span class="lbl">${lbl}${sub?`<br><span style="font-size:10px;color:var(--muted);font-weight:400;">${sub}</span>`:''}</span><span class="val${cls?(' '+cls):''}">${val}</span></div>`;
 }
 
 function renderPetaStatList(){
-  const brandI = document.getElementById('fBrand').value ? META.brands.indexOf(document.getElementById('fBrand').value) : -1;
+  const brandSel = document.getElementById('fBrand').value;
+  const brandI = brandSel ? META.brands.indexOf(brandSel) : -1;
   const areaSel = document.getElementById('fArea').value;
   const branchSel = document.getElementById('fBranch').value;
   const microSel = document.getElementById('fMicro').value;
@@ -3101,40 +3256,87 @@ function renderPetaStatList(){
   const microSet = new Set();
   filtered.forEach(r=>microSet.add(r[IDX.microIdx]));
 
-  let stockTotal=0, low=0, zero=0;
+  // every metric is tracked both combined AND split per brand ({im3, tid, total}) —
+  // the split is only shown as a sub-line when no specific brand filter is already
+  // active (showing it while already filtered to one brand would be redundant)
+  const showSplit = brandI < 0;
+  const mk = () => ({im3:0, tid:0, total:0});
+  const bump = (acc, brand, v) => { acc.total += v; if(brand==='IM3') acc.im3 += v; else if(brand==='3ID') acc.tid += v; };
+  const splitSub = (acc, isPct) => showSplit ? `IM3: ${isPct? acc.im3.toFixed(1)+'%' : fmtN(acc.im3)} · 3ID: ${isPct? acc.tid.toFixed(1)+'%' : fmtN(acc.tid)}` : null;
+
+  const stockTotal=mk(), demandTotal=mk(), lowBal=mk();
   filtered.forEach(r=>{
-    stockTotal += stockAmt(r);
+    const brand = META.brands[r[IDX.brandIdx]];
+    bump(stockTotal, brand, stockAmt(r));
+    bump(demandTotal, brand, totalDemandAmt(r));
     const st = outletStatus(r[IDX.salAmt]);
-    if(st==='zero') zero++; else if(st==='low') low++;
+    if(st==='zero' || st==='low') bump(lowBal, brand, 1);
   });
-  const lowTotal = low+zero;
+  const avgDos = demandTotal.total>0 ? (stockTotal.total/demandTotal.total) : null;
+  const avgDosIm3 = demandTotal.im3>0 ? (stockTotal.im3/demandTotal.im3) : null;
+  const avgDosTid = demandTotal.tid>0 ? (stockTotal.tid/demandTotal.tid) : null;
 
-  let ga=0, sellinTotal=0;
-  filteredSellin.forEach(r=>{ ga += r[IDX_S.rguGa]; sellinTotal += r[IDX_S.sellinSp]+r[IDX_S.sellinVou]+r[IDX_S.sellinSaldo]; });
+  const gaTotal=mk(), sellinTotal=mk();
+  filteredSellin.forEach(r=>{
+    const brand = META.brands[r[IDX_S.brandIdx]];
+    bump(gaTotal, brand, r[IDX_S.rguGa]);
+    bump(sellinTotal, brand, r[IDX_S.sellinSp]+r[IDX_S.sellinVou]+r[IDX_S.sellinSaldo]);
+  });
 
-  let redCount=0, noStockCount=0, geoN=0;
+  const outletIdx = new Map();
+  OUTLETS.forEach(r=>outletIdx.set(META.brands[r[IDX.brandIdx]]+'|'+r[IDX.outletId], r));
+  const sellinIdx = new Map();
+  SELLIN_OUTLETS.forEach(r=>sellinIdx.set(META.brands[r[IDX_S.brandIdx]]+'|'+r[IDX_S.outletId], r));
+  const supplyIdx = new Map();
+  SUPPLY_OUTLETS.forEach(r=>supplyIdx.set(META.brands[r[IDX_SUP.brandIdx]]+'|'+r[IDX_SUP.outletId], r));
+
+  const red=mk(), lowStock=mk(), noGa=mk(), noSellIn=mk(), noSp=mk(), noVou=mk(), noSalmo=mk(), noSpInj=mk(), noVouInj=mk(), noRebuyCvm=mk();
+  const geoTotal=mk();
   GEO_POINTS.forEach(p=>{
     if(brandI>=0 && p[GIDX.brandIdx]!==brandI) return;
     if(branchI>=0 && p[GIDX.branchIdx]!==branchI) return;
     if(microI>=0 && p[GIDX.microIdx]!==microI) return;
     if(areaI>=0 && !(META.branchByArea[areaSel]||[]).includes(META.branches[p[GIDX.branchIdx]])) return;
     if(catI>=0 && p[GIDX.catIdx]!==catI) return;
-    geoN++;
-    if(p[GIDX.red]) redCount++;
-    if(p[GIDX.noStock]) noStockCount++;
+    const brand = META.brands[p[GIDX.brandIdx]];
+    bump(geoTotal, brand, 1);
+    const key = brand+'|'+p[GIDX.outletId];
+    const flags = computeOutletFlags(outletIdx.get(key), sellinIdx.get(key), supplyIdx.get(key));
+    if(flags.isAlert) bump(red, brand, 1);
+    if(flags.lowStockAll) bump(lowStock, brand, 1);
+    if(flags.noGaAll) bump(noGa, brand, 1);
+    if(flags.noSellInAll) bump(noSellIn, brand, 1);
+    if(flags.noSellInSp) bump(noSp, brand, 1);
+    if(flags.noSellInVou) bump(noVou, brand, 1);
+    if(flags.noSellInSalmo) bump(noSalmo, brand, 1);
+    if(flags.noSpInject) bump(noSpInj, brand, 1);
+    if(flags.noVouInject) bump(noVouInj, brand, 1);
+    if(flags.noRebuyCvm) bump(noRebuyCvm, brand, 1);
   });
 
   const n = filtered.length;
+  const outletsIm3 = filtered.filter(r=>META.brands[r[IDX.brandIdx]]==='IM3').length;
+  const outletsTid = filtered.filter(r=>META.brands[r[IDX.brandIdx]]==='3ID').length;
   document.getElementById('petaStatList').innerHTML = [
-    statRow('Total Outlet (sesuai filter)', fmtN(n)),
+    statRow('Total Outlet (sesuai filter)', fmtN(n), null, showSplit ? `IM3: ${fmtN(outletsIm3)} · 3ID: ${fmtN(outletsTid)}` : null),
     statRow('Jumlah Branch tercakup', fmtN(branchesInView.length)),
     statRow('Jumlah Micro Cluster tercakup', fmtN(microSet.size)),
-    statRow('Total Stock Amount (Bn)', fmtBn(stockTotal)),
-    statRow('Total GA (MTD)', fmtN(ga)),
-    statRow('Total Sell In Amount (Bn)', fmtBn(sellinTotal)),
-    statRow('Low Balance Salmo (&lt;100K)', fmtN(lowTotal) + (n? ' · '+(lowTotal/n*100).toFixed(1)+'%':''), 'red'),
-    statRow('Outlet Tanpa Stock Sama Sekali', fmtN(noStockCount) + (geoN? ' · '+(noStockCount/geoN*100).toFixed(1)+'%':''), 'red'),
-    statRow('Outlet Bermasalah di Peta (No GA / No Sell In SP / No Sell In Saldo / No Stock)', fmtN(redCount) + (geoN? ' · '+(redCount/geoN*100).toFixed(1)+'%':''), 'red'),
+    statRow('Total Stock Amount', fmtN(stockTotal.total), null, splitSub(stockTotal)),
+    statRow('Total GA (MTD)', fmtN(gaTotal.total), null, splitSub(gaTotal)),
+    statRow('Total Sell In Amount', fmtN(sellinTotal.total), null, splitSub(sellinTotal)),
+    statRow('Rata-rata DOS All Product', avgDos!=null ? avgDos.toFixed(2) : '–', null,
+      showSplit ? `IM3: ${avgDosIm3!=null?avgDosIm3.toFixed(2):'–'} · 3ID: ${avgDosTid!=null?avgDosTid.toFixed(2):'–'}` : null),
+    statRow('Low Balance Salmo (&lt;100K)', fmtN(lowBal.total) + (n? ' · '+(lowBal.total/n*100).toFixed(1)+'%':''), 'red', splitSub(lowBal)),
+    statRow('Low Stock All (&lt;100K)', fmtN(lowStock.total) + (geoTotal.total? ' · '+(lowStock.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(lowStock)),
+    statRow('Outlet No GA', fmtN(noGa.total) + (geoTotal.total? ' · '+(noGa.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noGa)),
+    statRow('Outlet No Sell In All', fmtN(noSellIn.total) + (geoTotal.total? ' · '+(noSellIn.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noSellIn)),
+    statRow('Outlet No Sell In SP', fmtN(noSp.total) + (geoTotal.total? ' · '+(noSp.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noSp)),
+    statRow('Outlet No Sell In Voucher', fmtN(noVou.total) + (geoTotal.total? ' · '+(noVou.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noVou)),
+    statRow('Outlet No Sell In Salmo', fmtN(noSalmo.total) + (geoTotal.total? ' · '+(noSalmo.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noSalmo)),
+    statRow('Outlet No SP Inject', fmtN(noSpInj.total) + (geoTotal.total? ' · '+(noSpInj.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noSpInj)),
+    statRow('Outlet No Voucher Inject', fmtN(noVouInj.total) + (geoTotal.total? ' · '+(noVouInj.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noVouInj)),
+    statRow('Outlet No Rebuy CVM', fmtN(noRebuyCvm.total) + (geoTotal.total? ' · '+(noRebuyCvm.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noRebuyCvm)),
+    statRow('Outlet Alert (No Stock All + No Sell In All + No GA)', fmtN(red.total) + (geoTotal.total? ' · '+(red.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(red)),
   ].join('');
 }
 
@@ -3295,12 +3497,13 @@ function renderMapPoints(){
       if(!searchTokens.every(t=>hay.includes(t))) return;
     }
     shown++;
-    const isRed = p[GIDX.red];
-    const isNoStock = p[GIDX.noStock];
     const brandName = META.brands[p[GIDX.brandIdx]];
     const key = brandName+'|'+p[GIDX.outletId];
     const stockRow = outletIdx.get(key);
     const sellinRow = sellinIdx.get(key);
+    const flags = computeOutletFlags(stockRow, sellinRow);
+    const isRed = flags.isAlert;
+    const isNoStock = flags.noStockAll;
     const stockSaldo = stockRow ? stockRow[IDX.salAmt] : null;
     const sellinSp = sellinRow ? sellinRow[IDX_S.sellinSp] : null;
     const sellinSaldo = sellinRow ? sellinRow[IDX_S.sellinSaldo] : null;
