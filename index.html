@@ -1253,6 +1253,25 @@ async function loadChunked(prefix, numChunks){
   return rows;
 }
 
+// Defensive de-dup for outlet-row arrays (OUTLETS / SELLIN_OUTLETS / SUPPLY_OUTLETS
+// all share the same layout: [brandIdx, areaIdx, branchIdx, microIdx, outletId, ...]).
+// A row is uniquely identified by brand+outletId — anything stored more than once
+// under that exact key is a data bug (e.g. a leftover duplicate saved before this
+// check existed), never a legitimate distinct outlet. Keeps the first occurrence.
+// Returns {rows, removed} so callers can log/repair when removed > 0.
+function dedupeOutletRows(rows, brandNames){
+  const seen = new Set();
+  const out = [];
+  let removed = 0;
+  for(const row of rows){
+    const key = (brandNames ? brandNames[row[0]] : row[0]) + '|' + row[4];
+    if(seen.has(key)){ removed++; continue; }
+    seen.add(key);
+    out.push(row);
+  }
+  return { rows: out, removed };
+}
+
 async function loadFromStorageOrSeed(){
   const meta = await storageGet('meta');
   const hasEmbedded = !!window.__SEED__;
@@ -1275,7 +1294,17 @@ async function loadFromStorageOrSeed(){
     // sanity check: stored chunk count should match what meta claims — otherwise a
     // previous save was interrupted/partial and we should not serve incomplete data
     loadedOk = OUTLETS.length > 0 && (!meta.totalOutlets || OUTLETS.length >= meta.totalOutlets * 0.98);
-    if(loadedOk) MASTER = rebuildMasterFromOutlets();
+    if(loadedOk){
+      const dd = dedupeOutletRows(OUTLETS, META.brands);
+      if(dd.removed > 0){
+        console.warn(`[dedupe] ${dd.removed} baris outlet duplikat (key brand+outlet_id sama) ditemukan saat load — dibersihkan otomatis.`);
+        OUTLETS = dd.rows;
+        META.totalOutlets = OUTLETS.length;
+        setTimeout(()=>showToast(`Ditemukan ${dd.removed} baris outlet duplikat — dibersihkan otomatis.`), 1200);
+        setTimeout(()=>persistAll(), 1500); // fix storage permanently so it doesn't reappear next load
+      }
+      MASTER = rebuildMasterFromOutlets();
+    }
   }
 
   if(!loadedOk){
@@ -1335,7 +1364,17 @@ async function loadSellinFromStorageOrSeed(){
   if(smeta && contentOk){
     const outlets = await loadChunked('sellin_c', smeta.numChunksSellin || 0);
     loadedOk = outlets.length > 0 && (!smeta.totalOutlets || outlets.length >= smeta.totalOutlets * 0.98);
-    if(loadedOk){ SMETA = smeta; SELLIN_OUTLETS = outlets; }
+    if(loadedOk){
+      SMETA = smeta;
+      const dd = dedupeOutletRows(outlets, META.brands);
+      SELLIN_OUTLETS = dd.rows;
+      if(dd.removed > 0){
+        console.warn(`[dedupe] ${dd.removed} baris Sell In & GA duplikat ditemukan saat load — dibersihkan otomatis.`);
+        SMETA.totalOutlets = SELLIN_OUTLETS.length;
+        setTimeout(()=>showToast(`Ditemukan ${dd.removed} baris Sell In & GA duplikat — dibersihkan otomatis.`), 1200);
+        setTimeout(()=>persistSellin(), 1500);
+      }
+    }
     else if(outlets.length > 0){
       // meta claims more rows than the chunks actually contain — a previous save
       // was interrupted partway through. Don't silently show this partial data;
@@ -1377,7 +1416,17 @@ async function loadSupplyFromStorageOrSeed(){
   if(supmeta && schemaOk){
     const outlets = await loadChunked('supply_c', supmeta.numChunksSupply || 0);
     loadedOk = outlets.length > 0 && (!supmeta.totalOutlets || outlets.length >= supmeta.totalOutlets * 0.98);
-    if(loadedOk){ SUPMETA = supmeta; SUPPLY_OUTLETS = outlets; }
+    if(loadedOk){
+      SUPMETA = supmeta;
+      const dd = dedupeOutletRows(outlets, META.brands);
+      SUPPLY_OUTLETS = dd.rows;
+      if(dd.removed > 0){
+        console.warn(`[dedupe] ${dd.removed} baris Supply duplikat ditemukan saat load — dibersihkan otomatis.`);
+        SUPMETA.totalOutlets = SUPPLY_OUTLETS.length;
+        setTimeout(()=>showToast(`Ditemukan ${dd.removed} baris Supply duplikat — dibersihkan otomatis.`), 1200);
+        setTimeout(()=>persistSupply(), 1500);
+      }
+    }
     else if(outlets.length > 0){
       setTimeout(()=>showToast('Data Supply online tidak lengkap (kemungkinan tersimpan sebagian saat koneksi terputus) — silakan upload ulang filenya lewat "Perbarui data".'), 800);
     }
@@ -1432,7 +1481,14 @@ async function checkForRemoteUpdate(silent){
         const newOutlets = await loadChunked('outlets_c', remoteMeta.numChunksOutlets || 0);
         const complete = newOutlets.length > 0 && (!remoteMeta.totalOutlets || newOutlets.length >= remoteMeta.totalOutlets * 0.98);
         if(complete){
-          META = remoteMeta; OUTLETS = newOutlets;
+          META = remoteMeta;
+          const dd = dedupeOutletRows(newOutlets, META.brands);
+          OUTLETS = dd.rows;
+          if(dd.removed > 0){
+            console.warn(`[dedupe] ${dd.removed} baris outlet duplikat ditemukan saat refresh — dibersihkan otomatis.`);
+            META.totalOutlets = OUTLETS.length;
+            setTimeout(()=>persistAll(), 1500);
+          }
           MASTER = rebuildMasterFromOutlets();
           changed = true;
         }
@@ -1446,7 +1502,17 @@ async function checkForRemoteUpdate(silent){
     if(schemaOk && remoteSMeta.lastUpdated && remoteSMeta.lastUpdated !== (SMETA && SMETA.lastUpdated)){
       const newOutlets = await loadChunked('sellin_c', remoteSMeta.numChunksSellin || 0);
       const complete = newOutlets.length > 0 && (!remoteSMeta.totalOutlets || newOutlets.length >= remoteSMeta.totalOutlets * 0.98);
-      if(complete){ SMETA = remoteSMeta; SELLIN_OUTLETS = newOutlets; changed = true; }
+      if(complete){
+        SMETA = remoteSMeta;
+        const dd = dedupeOutletRows(newOutlets, META.brands);
+        SELLIN_OUTLETS = dd.rows;
+        if(dd.removed > 0){
+          console.warn(`[dedupe] ${dd.removed} baris Sell In & GA duplikat ditemukan saat refresh — dibersihkan otomatis.`);
+          SMETA.totalOutlets = SELLIN_OUTLETS.length;
+          setTimeout(()=>persistSellin(), 1500);
+        }
+        changed = true;
+      }
     }
   }
 
