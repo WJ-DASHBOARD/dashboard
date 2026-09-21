@@ -279,7 +279,12 @@
       <div id="mapContainer" class="peta-map"></div>
       <div class="peta-side">
         <h3 style="margin:0 0 6px;font-size:13px;font-weight:600;">Summary (sesuai filter)</h3>
-        <div class="stat-list" id="petaStatList"></div>
+        <div style="overflow:auto;">
+        <table class="summary" id="petaStatTable">
+          <thead><tr><th style="text-align:left;">Metrik</th><th>IM3</th><th>3ID</th></tr></thead>
+          <tbody id="petaStatList"></tbody>
+        </table>
+        </div>
       </div>
     </div>
     <div class="peta-legends-row">
@@ -3303,8 +3308,39 @@ function renderPetaAll(){
   renderCombinedTable();
 }
 
-function statRow(lbl, val, cls, sub){
-  return `<div class="stat-row"><span class="lbl">${lbl}${sub?`<br><span style="font-size:10px;color:var(--muted);font-weight:400;">${sub}</span>`:''}</span><span class="val${cls?(' '+cls):''}">${val}</span></div>`;
+// Renders one row of the Peta & Summary "Metrik | IM3 | 3ID" breakdown table.
+// mode controls how im3Val/tidVal are formatted:
+//   'share'  — count metric: show value + % this brand is of (im3Val+tidVal) — the
+//              two percentages in a row always sum to 100%, e.g. "11.377 (50.9%)"
+//   'plain'  — integer count with no percentage (branch/micro cluster counts)
+//   'rate'   — a ratio/average (e.g. DOS), shown to 2 decimals, never as a %
+//   'ownpct' — a "problem count" metric: shows value + % OF THAT BRAND'S OWN
+//              outlet universe (via extra.im3Base/tidBase) — e.g. "8.665 (76.2%)"
+//              meaning 76.2% of IM3's own outlets, not 76.2% of the combined total.
+//              Styled red since these are all alert/gap metrics.
+function statRowSplit(lbl, im3Val, tidVal, mode, extra){
+  extra = extra || {};
+  let im3Cell, tidCell, styleAttr = '';
+  if(mode==='rate'){
+    im3Cell = im3Val!=null ? im3Val.toFixed(2) : '–';
+    tidCell = tidVal!=null ? tidVal.toFixed(2) : '–';
+  } else if(mode==='plain'){
+    im3Cell = fmtN(im3Val);
+    tidCell = fmtN(tidVal);
+  } else if(mode==='ownpct'){
+    const im3Pct = extra.im3Base>0 ? (im3Val/extra.im3Base*100) : null;
+    const tidPct = extra.tidBase>0 ? (tidVal/extra.tidBase*100) : null;
+    im3Cell = fmtN(im3Val) + (im3Pct!=null ? ` (${im3Pct.toFixed(1)}%)` : '');
+    tidCell = fmtN(tidVal) + (tidPct!=null ? ` (${tidPct.toFixed(1)}%)` : '');
+    styleAttr = ' style="color:var(--red);font-weight:700;"';
+  } else { // 'share' (default)
+    const tot = im3Val + tidVal;
+    const im3Pct = tot>0 ? (im3Val/tot*100) : null;
+    const tidPct = tot>0 ? (tidVal/tot*100) : null;
+    im3Cell = fmtN(im3Val) + (im3Pct!=null ? ` (${im3Pct.toFixed(1)}%)` : '');
+    tidCell = fmtN(tidVal) + (tidPct!=null ? ` (${tidPct.toFixed(1)}%)` : '');
+  }
+  return `<tr><td>${lbl}</td><td${styleAttr}>${im3Cell}</td><td${styleAttr}>${tidCell}</td></tr>`;
 }
 
 function renderPetaStatList(){
@@ -3383,26 +3419,35 @@ function renderPetaStatList(){
   const n = filtered.length;
   const outletsIm3 = filtered.filter(r=>META.brands[r[IDX.brandIdx]]==='IM3').length;
   const outletsTid = filtered.filter(r=>META.brands[r[IDX.brandIdx]]==='3ID').length;
+
+  // per-brand distinct Branch / Micro Cluster coverage within the current filter
+  const branchSetIm3 = new Set(), branchSetTid = new Set();
+  const microSetIm3 = new Set(), microSetTid = new Set();
+  filtered.forEach(r=>{
+    const b = META.brands[r[IDX.brandIdx]];
+    if(b==='IM3'){ branchSetIm3.add(r[IDX.branchIdx]); microSetIm3.add(r[IDX.microIdx]); }
+    else if(b==='3ID'){ branchSetTid.add(r[IDX.branchIdx]); microSetTid.add(r[IDX.microIdx]); }
+  });
+
   document.getElementById('petaStatList').innerHTML = [
-    statRow('Total Outlet (sesuai filter)', fmtN(n), null, showSplit ? `IM3: ${fmtN(outletsIm3)} · 3ID: ${fmtN(outletsTid)}` : null),
-    statRow('Jumlah Branch tercakup', fmtN(branchesInView.length)),
-    statRow('Jumlah Micro Cluster tercakup', fmtN(microSet.size)),
-    statRow('Total Stock Amount', fmtN(stockTotal.total), null, splitSub(stockTotal)),
-    statRow('Total GA (MTD)', fmtN(gaTotal.total), null, splitSub(gaTotal)),
-    statRow('Total Sell In Amount', fmtN(sellinTotal.total), null, splitSub(sellinTotal)),
-    statRow('Rata-rata DOS All Product', avgDos!=null ? avgDos.toFixed(2) : '–', null,
-      showSplit ? `IM3: ${avgDosIm3!=null?avgDosIm3.toFixed(2):'–'} · 3ID: ${avgDosTid!=null?avgDosTid.toFixed(2):'–'}` : null),
-    statRow('Low Balance Salmo (&lt;100K)', fmtN(lowBal.total) + (n? ' · '+(lowBal.total/n*100).toFixed(1)+'%':''), 'red', splitSub(lowBal)),
-    statRow('Low Stock All (&lt;100K)', fmtN(lowStock.total) + (geoTotal.total? ' · '+(lowStock.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(lowStock)),
-    statRow('Outlet No GA', fmtN(noGa.total) + (geoTotal.total? ' · '+(noGa.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noGa)),
-    statRow('Outlet No Sell In All', fmtN(noSellIn.total) + (geoTotal.total? ' · '+(noSellIn.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noSellIn)),
-    statRow('Outlet No Sell In SP', fmtN(noSp.total) + (geoTotal.total? ' · '+(noSp.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noSp)),
-    statRow('Outlet No Sell In Voucher', fmtN(noVou.total) + (geoTotal.total? ' · '+(noVou.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noVou)),
-    statRow('Outlet No Sell In Salmo', fmtN(noSalmo.total) + (geoTotal.total? ' · '+(noSalmo.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noSalmo)),
-    statRow('Outlet No SP Inject', fmtN(noSpInj.total) + (geoTotal.total? ' · '+(noSpInj.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noSpInj)),
-    statRow('Outlet No Voucher Inject', fmtN(noVouInj.total) + (geoTotal.total? ' · '+(noVouInj.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noVouInj)),
-    statRow('Outlet No Rebuy CVM', fmtN(noRebuyCvm.total) + (geoTotal.total? ' · '+(noRebuyCvm.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(noRebuyCvm)),
-    statRow('Outlet Alert (No Stock All + No Sell In All + No GA)', fmtN(red.total) + (geoTotal.total? ' · '+(red.total/geoTotal.total*100).toFixed(1)+'%':''), 'red', splitSub(red)),
+    statRowSplit('Total Outlet (sesuai filter)', outletsIm3, outletsTid, 'share'),
+    statRowSplit('Jumlah Branch tercakup', branchSetIm3.size, branchSetTid.size, 'plain'),
+    statRowSplit('Jumlah Micro Cluster tercakup', microSetIm3.size, microSetTid.size, 'plain'),
+    statRowSplit('Total Stock Amount', stockTotal.im3, stockTotal.tid, 'share'),
+    statRowSplit('Total GA (MTD)', gaTotal.im3, gaTotal.tid, 'share'),
+    statRowSplit('Total Sell In Amount', sellinTotal.im3, sellinTotal.tid, 'share'),
+    statRowSplit('Rata-rata DOS All Product', avgDosIm3, avgDosTid, 'rate'),
+    statRowSplit('Low Balance Salmo (&lt;100K)', lowBal.im3, lowBal.tid, 'ownpct', {im3Base:outletsIm3, tidBase:outletsTid}),
+    statRowSplit('Low Stock All (&lt;100K)', lowStock.im3, lowStock.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
+    statRowSplit('Outlet No GA', noGa.im3, noGa.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
+    statRowSplit('Outlet No Sell In All', noSellIn.im3, noSellIn.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
+    statRowSplit('Outlet No Sell In SP', noSp.im3, noSp.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
+    statRowSplit('Outlet No Sell In Voucher', noVou.im3, noVou.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
+    statRowSplit('Outlet No Sell In Salmo', noSalmo.im3, noSalmo.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
+    statRowSplit('Outlet No SP Inject', noSpInj.im3, noSpInj.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
+    statRowSplit('Outlet No Voucher Inject', noVouInj.im3, noVouInj.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
+    statRowSplit('Outlet No Rebuy CVM', noRebuyCvm.im3, noRebuyCvm.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
+    statRowSplit('Outlet Alert (No Stock All + No Sell In All + No GA)', red.im3, red.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
   ].join('');
 }
 
