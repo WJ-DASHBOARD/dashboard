@@ -1311,11 +1311,15 @@ async function loadFromStorageOrSeed(){
     if(loadedOk){
       const dd = dedupeOutletRows(OUTLETS, META.brands);
       if(dd.removed > 0){
-        console.warn(`[dedupe] ${dd.removed} baris outlet duplikat (key brand+outlet_id sama) ditemukan saat load — dibersihkan otomatis.`);
+        // Display-only fix — we deliberately do NOT auto-save this back to Sheets here.
+        // An unattended background write on every page load is risky (e.g. if the tab
+        // is closed/refreshed mid-write, chunks can end up half-old/half-new). Cleaning
+        // the stored data permanently should be a deliberate action: re-upload the
+        // Master/Stock file, or use "Perbarui data" once, not something that fires
+        // silently on every visit.
+        console.warn(`[dedupe] ${dd.removed} baris outlet duplikat (key brand+outlet_id sama) ditemukan saat load — disembunyikan dari tampilan (tidak disimpan otomatis).`);
         OUTLETS = dd.rows;
-        META.totalOutlets = OUTLETS.length;
-        setTimeout(()=>showToast(`Ditemukan ${dd.removed} baris outlet duplikat — dibersihkan otomatis.`), 1200);
-        setTimeout(()=>persistAll(), 1500); // fix storage permanently so it doesn't reappear next load
+        setTimeout(()=>showToast(`Ditemukan ${dd.removed} baris outlet duplikat — disembunyikan dari tampilan. Upload ulang file Master/Stock untuk membersihkannya permanen di penyimpanan.`), 1200);
       }
       MASTER = rebuildMasterFromOutlets();
     }
@@ -1383,10 +1387,9 @@ async function loadSellinFromStorageOrSeed(){
       const dd = dedupeOutletRows(outlets, META.brands);
       SELLIN_OUTLETS = dd.rows;
       if(dd.removed > 0){
-        console.warn(`[dedupe] ${dd.removed} baris Sell In & GA duplikat ditemukan saat load — dibersihkan otomatis.`);
-        SMETA.totalOutlets = SELLIN_OUTLETS.length;
-        setTimeout(()=>showToast(`Ditemukan ${dd.removed} baris Sell In & GA duplikat — dibersihkan otomatis.`), 1200);
-        setTimeout(()=>persistSellin(), 1500);
+        // Display-only — see note in loadFromStorageOrSeed on why we don't auto-persist here.
+        console.warn(`[dedupe] ${dd.removed} baris Sell In & GA duplikat ditemukan saat load — disembunyikan dari tampilan (tidak disimpan otomatis).`);
+        setTimeout(()=>showToast(`Ditemukan ${dd.removed} baris Sell In & GA duplikat — disembunyikan dari tampilan. Upload ulang file DSE_PROD untuk membersihkannya permanen.`), 1200);
       }
     }
     else if(outlets.length > 0){
@@ -1435,10 +1438,8 @@ async function loadSupplyFromStorageOrSeed(){
       const dd = dedupeOutletRows(outlets, META.brands);
       SUPPLY_OUTLETS = dd.rows;
       if(dd.removed > 0){
-        console.warn(`[dedupe] ${dd.removed} baris Supply duplikat ditemukan saat load — dibersihkan otomatis.`);
-        SUPMETA.totalOutlets = SUPPLY_OUTLETS.length;
-        setTimeout(()=>showToast(`Ditemukan ${dd.removed} baris Supply duplikat — dibersihkan otomatis.`), 1200);
-        setTimeout(()=>persistSupply(), 1500);
+        console.warn(`[dedupe] ${dd.removed} baris Supply duplikat ditemukan saat load — disembunyikan dari tampilan (tidak disimpan otomatis).`);
+        setTimeout(()=>showToast(`Ditemukan ${dd.removed} baris Supply duplikat — disembunyikan dari tampilan. Upload ulang file SUPPLY_PROD untuk membersihkannya permanen.`), 1200);
       }
     }
     else if(outlets.length > 0){
@@ -1499,9 +1500,7 @@ async function checkForRemoteUpdate(silent){
           const dd = dedupeOutletRows(newOutlets, META.brands);
           OUTLETS = dd.rows;
           if(dd.removed > 0){
-            console.warn(`[dedupe] ${dd.removed} baris outlet duplikat ditemukan saat refresh — dibersihkan otomatis.`);
-            META.totalOutlets = OUTLETS.length;
-            setTimeout(()=>persistAll(), 1500);
+            console.warn(`[dedupe] ${dd.removed} baris outlet duplikat ditemukan saat refresh — disembunyikan dari tampilan (tidak disimpan otomatis).`);
           }
           MASTER = rebuildMasterFromOutlets();
           changed = true;
@@ -1521,9 +1520,7 @@ async function checkForRemoteUpdate(silent){
         const dd = dedupeOutletRows(newOutlets, META.brands);
         SELLIN_OUTLETS = dd.rows;
         if(dd.removed > 0){
-          console.warn(`[dedupe] ${dd.removed} baris Sell In & GA duplikat ditemukan saat refresh — dibersihkan otomatis.`);
-          SMETA.totalOutlets = SELLIN_OUTLETS.length;
-          setTimeout(()=>persistSellin(), 1500);
+          console.warn(`[dedupe] ${dd.removed} baris Sell In & GA duplikat ditemukan saat refresh — disembunyikan dari tampilan (tidak disimpan otomatis).`);
         }
         changed = true;
       }
@@ -2293,27 +2290,24 @@ function groupContext(){
 // approaches were both reported blank in at least one real browser, even though they
 // tested correctly here) — SVG <rect>/<text> layout is unambiguous and consistent
 // everywhere, and lets each segment carry its own % label centered inside itself.
+// Renders a horizontal stacked bar using plain flexbox + text (not SVG). We used to
+// draw this with an SVG whose viewBox was stretched non-uniformly (preserveAspectRatio
+//="none") to fill the row's width — that stretch also distorted the <text> glyphs
+// horizontally, making percentage labels look bold/warped, worse the wider the
+// container was (e.g. the Sell In & GA tab vs. the narrower Peta side panel). Plain
+// HTML text in flex children never gets stretched like that, so labels stay crisp
+// regardless of container width.
 function stackedBarSvg(row, segmentDefs, tooltip, height){
-  const W = 300, H = height || 16;
-  let x = 0;
-  const parts = segmentDefs.map(seg=>{
+  const H = height || 16;
+  const t = row.total || 1;
+  const segs = segmentDefs.map(seg=>{
     const val = row[seg.key] || 0;
-    const t = row.total || 1;
-    const w = val/t*W;
     const pct = val/t*100;
-    // show a label on every segment with a non-trivial share, even thin ones —
-    // small font + outline stroke keeps it legible even when the label text is
-    // wider than the segment itself (it'll spill slightly into neighbors, which
-    // reads fine against the stroke outline)
-    const showLabel = w > 0 && pct >= 1;
-    const rect = `<rect x="${x.toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${H}" fill="${seg.color}"/>`;
-    const text = showLabel ? `<text x="${(x+w/2).toFixed(2)}" y="${H/2}" text-anchor="middle" dominant-baseline="central" font-size="6.5" font-weight="600" fill="#fff" stroke="rgba(0,0,0,.45)" stroke-width="1.8" paint-order="stroke fill">${pct.toFixed(0)}%</text>` : '';
-    x += w;
-    return rect + text;
+    const showLabel = pct >= 1;
+    const grow = val > 0 ? val : 0;
+    return `<div style="flex:${grow} 0 0;min-width:${val>0?'2px':'0'};background:${seg.color};display:flex;align-items:center;justify-content:center;overflow:visible;position:relative;">${showLabel ? `<span style="font-size:10px;font-weight:700;color:#111;white-space:nowrap;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 0 3px #fff;">${pct.toFixed(0)}%</span>` : ''}</div>`;
   }).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="flex:1;min-width:0;height:${H}px;border-radius:4px;overflow:hidden;background:var(--grey-soft);display:block;">
-    <title>${tooltip}</title>${parts}
-  </svg>`;
+  return `<div title="${tooltip}" style="flex:1;min-width:0;height:${H}px;border-radius:4px;overflow:hidden;background:var(--grey-soft);display:flex;">${segs}</div>`;
 }
 
 function renderBreakdown(){
