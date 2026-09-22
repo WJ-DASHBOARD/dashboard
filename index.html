@@ -281,7 +281,7 @@
         <h3 style="margin:0 0 6px;font-size:13px;font-weight:600;">Summary (sesuai filter)</h3>
         <div style="overflow:auto;">
         <table class="summary" id="petaStatTable">
-          <thead><tr><th style="text-align:left;">Metrik</th><th>IM3</th><th>3ID</th></tr></thead>
+          <thead><tr><th style="text-align:left;">Metrik</th><th>IM3</th><th>3ID</th><th>Total</th></tr></thead>
           <tbody id="petaStatList"></tbody>
         </table>
         </div>
@@ -3318,20 +3318,26 @@ function renderPetaAll(){
 //              outlet universe (via extra.im3Base/tidBase) — e.g. "8.665 (76.2%)"
 //              meaning 76.2% of IM3's own outlets, not 76.2% of the combined total.
 //              Styled red since these are all alert/gap metrics.
-function statRowSplit(lbl, im3Val, tidVal, mode, extra){
+function statRowSplit(lbl, im3Val, tidVal, mode, extra, totalOverride){
   extra = extra || {};
-  let im3Cell, tidCell, styleAttr = '';
+  let im3Cell, tidCell, totalCell, styleAttr = '';
   if(mode==='rate'){
     im3Cell = im3Val!=null ? im3Val.toFixed(2) : '–';
     tidCell = tidVal!=null ? tidVal.toFixed(2) : '–';
+    totalCell = totalOverride!=null ? totalOverride.toFixed(2) : '–';
   } else if(mode==='plain'){
     im3Cell = fmtN(im3Val);
     tidCell = fmtN(tidVal);
+    totalCell = fmtN(totalOverride!=null ? totalOverride : (im3Val+tidVal));
   } else if(mode==='ownpct'){
     const im3Pct = extra.im3Base>0 ? (im3Val/extra.im3Base*100) : null;
     const tidPct = extra.tidBase>0 ? (tidVal/extra.tidBase*100) : null;
+    const totBase = (extra.im3Base||0) + (extra.tidBase||0);
+    const totVal = im3Val + tidVal;
+    const totPct = totBase>0 ? (totVal/totBase*100) : null;
     im3Cell = fmtN(im3Val) + (im3Pct!=null ? ` (${im3Pct.toFixed(1)}%)` : '');
     tidCell = fmtN(tidVal) + (tidPct!=null ? ` (${tidPct.toFixed(1)}%)` : '');
+    totalCell = fmtN(totVal) + (totPct!=null ? ` (${totPct.toFixed(1)}%)` : '');
     styleAttr = ' style="color:var(--red);font-weight:700;"';
   } else { // 'share' (default)
     const tot = im3Val + tidVal;
@@ -3339,8 +3345,9 @@ function statRowSplit(lbl, im3Val, tidVal, mode, extra){
     const tidPct = tot>0 ? (tidVal/tot*100) : null;
     im3Cell = fmtN(im3Val) + (im3Pct!=null ? ` (${im3Pct.toFixed(1)}%)` : '');
     tidCell = fmtN(tidVal) + (tidPct!=null ? ` (${tidPct.toFixed(1)}%)` : '');
+    totalCell = fmtN(tot);
   }
-  return `<tr><td>${lbl}</td><td${styleAttr}>${im3Cell}</td><td${styleAttr}>${tidCell}</td></tr>`;
+  return `<tr><td>${lbl}</td><td${styleAttr}>${im3Cell}</td><td${styleAttr}>${tidCell}</td><td${styleAttr}>${totalCell}</td></tr>`;
 }
 
 function renderPetaStatList(){
@@ -3431,12 +3438,12 @@ function renderPetaStatList(){
 
   document.getElementById('petaStatList').innerHTML = [
     statRowSplit('Total Outlet (sesuai filter)', outletsIm3, outletsTid, 'share'),
-    statRowSplit('Jumlah Branch tercakup', branchSetIm3.size, branchSetTid.size, 'plain'),
-    statRowSplit('Jumlah Micro Cluster tercakup', microSetIm3.size, microSetTid.size, 'plain'),
+    statRowSplit('Jumlah Branch tercakup', branchSetIm3.size, branchSetTid.size, 'plain', null, branchesInView.length),
+    statRowSplit('Jumlah Micro Cluster tercakup', microSetIm3.size, microSetTid.size, 'plain', null, microSet.size),
     statRowSplit('Total Stock Amount', stockTotal.im3, stockTotal.tid, 'share'),
     statRowSplit('Total GA (MTD)', gaTotal.im3, gaTotal.tid, 'share'),
     statRowSplit('Total Sell In Amount', sellinTotal.im3, sellinTotal.tid, 'share'),
-    statRowSplit('Rata-rata DOS All Product', avgDosIm3, avgDosTid, 'rate'),
+    statRowSplit('Rata-rata DOS All Product', avgDosIm3, avgDosTid, 'rate', null, avgDos),
     statRowSplit('Low Balance Salmo (&lt;100K)', lowBal.im3, lowBal.tid, 'ownpct', {im3Base:outletsIm3, tidBase:outletsTid}),
     statRowSplit('Low Stock All (&lt;100K)', lowStock.im3, lowStock.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
     statRowSplit('Outlet No GA', noGa.im3, noGa.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
