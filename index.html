@@ -149,7 +149,7 @@
   .bar-seg-ga2{background:#6E8FD9;height:100%;flex-shrink:0;}
   .bar-seg-ga3{background:#4E9E72;height:100%;flex-shrink:0;}
   .bar-seg-ga4{background:var(--green);height:100%;flex-shrink:0;}
-  .bar-total{width:44px;text-align:right;color:var(--muted);font-size:11.5px;}
+  .bar-total{width:auto;min-width:44px;text-align:right;color:var(--muted);font-size:11.5px;white-space:nowrap;}
   .bar-pct{width:110px;flex-shrink:0;text-align:right;color:var(--muted);font-size:10px;white-space:nowrap;}
 
   .legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:12px;}
@@ -991,6 +991,13 @@
       <p class="hint">Upload file SUPPLY_PROD bulan berjalan (kolom brand, dt_id, sales_area, ret_qr_cd atau outlet_id, category, product_name, hit, rev — nama kolom Outlet ID boleh beda antara IM3/3ID). Brand dibaca langsung dari kolom "brand" di file. Bisa pilih 2 file (IM3 + 3ID) sekaligus.</p>
       <input type="file" id="supplyFile" accept=".csv" multiple>
       <div class="progress-line" id="supplyProgress"></div>
+    </div>
+
+    <div class="upload-block">
+      <h4>5. Update Secondary (replace) — BigQuery export (CSV)</h4>
+      <p class="hint">Ganti kolom Secondary di data Sell In &amp; GA yang sudah ada, dari file transaksi mentah (kolom brand, region, outlet_id, parameter, rev, dst — 1 file berisi IM3+3ID sekaligus). Baris difilter otomatis ke region=WEST JAVA dan parameter=SECONDARY, lalu nilai <b>rev</b> dijumlahkan per outlet. Hanya kolom Secondary yang diganti — GA/Sell In SP/Voucher/Saldo/Tertiary tidak disentuh. Outlet yang tidak muncul di file ini akan di-set Secondary = 0 (dianggap tidak ada transaksi Secondary bulan tsb). Perlu data Sell In &amp; GA (menu #3) sudah pernah diupload dulu.</p>
+      <input type="file" id="secondaryFile" accept=".csv">
+      <div class="progress-line" id="secondaryProgress"></div>
     </div>
 
     <div class="upload-block">
@@ -2035,14 +2042,16 @@ function renderSellinBreakdown(){
   });
   const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ga: agg[g]})).sort((a,b)=>b.ga-a.ga).slice(0,14);
   const maxGa = Math.max(1, ...rows.map(r=>r.ga));
+  const grandTotalGa = Object.values(agg).reduce((a,b)=>a+b, 0) || 1;
   document.getElementById('siBreakdownChart').innerHTML = rows.map(r=>{
     const w = r.ga/maxGa*300;
+    const pct = (r.ga/grandTotalGa*100).toFixed(1);
     return `<div class="bar-row">
       <div class="bar-label">${r.name}</div>
       <svg viewBox="0 0 300 16" preserveAspectRatio="none" style="flex:1;min-width:0;height:16px;border-radius:4px;overflow:hidden;background:var(--grey-soft);display:block;">
         <rect x="0" y="0" width="${w.toFixed(2)}" height="16" fill="var(--green)"/>
       </svg>
-      <div class="bar-total">${fmtN(r.ga)}</div>
+      <div class="bar-total">${fmtN(r.ga)} <span style="color:var(--muted);font-weight:400;">(${pct}%)</span></div>
     </div>`;
   }).join('') || '<p style="color:var(--muted);font-size:13px;">Tidak ada data.</p>';
 }
@@ -2062,11 +2071,12 @@ function renderSellinCatSummary(){
   const rows = META.cats.map((c,i)=>({name:c, ...agg[i]})).filter(r=>r.outlet>0).sort((a,b)=>b.ga-a.ga);
 
   const maxGa = Math.max(1, ...rows.map(r=>r.ga));
+  const grandTotalGaCat = rows.reduce((a,r)=>a+r.ga, 0) || 1;
   document.getElementById('siCatChart').innerHTML = rows.map(r=>`
     <div class="bar-row">
       <div class="bar-label"><span class="badge ${r.name}">${r.name}</span></div>
       <div class="bar-track"><div class="bar-seg-ok" style="width:${r.ga/maxGa*100}%"></div></div>
-      <div class="bar-total">${fmtN(r.ga)}</div>
+      <div class="bar-total">${fmtN(r.ga)} <span style="color:var(--muted);font-weight:400;">(${(r.ga/grandTotalGaCat*100).toFixed(1)}%)</span></div>
     </div>`).join('') || '<p style="color:var(--muted);font-size:13px;">Tidak ada data.</p>';
 
   const pct = (w,t) => t? (w/t*100).toFixed(0)+'%' : '–';
@@ -2291,9 +2301,13 @@ function stackedBarSvg(row, segmentDefs, tooltip){
     const t = row.total || 1;
     const w = val/t*W;
     const pct = val/t*100;
-    const showLabel = w > 16 && pct >= 4;
+    // show a label on every segment with a non-trivial share, even thin ones —
+    // small font + outline stroke keeps it legible even when the label text is
+    // wider than the segment itself (it'll spill slightly into neighbors, which
+    // reads fine against the stroke outline)
+    const showLabel = w > 0 && pct >= 1;
     const rect = `<rect x="${x.toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${H}" fill="${seg.color}"/>`;
-    const text = showLabel ? `<text x="${(x+w/2).toFixed(2)}" y="${H/2}" text-anchor="middle" dominant-baseline="central" font-size="8.5" font-weight="600" fill="#fff" stroke="rgba(0,0,0,.45)" stroke-width="2.2" paint-order="stroke fill">${pct.toFixed(0)}%</text>` : '';
+    const text = showLabel ? `<text x="${(x+w/2).toFixed(2)}" y="${H/2}" text-anchor="middle" dominant-baseline="central" font-size="6.5" font-weight="600" fill="#fff" stroke="rgba(0,0,0,.45)" stroke-width="1.8" paint-order="stroke fill">${pct.toFixed(0)}%</text>` : '';
     x += w;
     return rect + text;
   }).join('');
@@ -3118,6 +3132,101 @@ async function finishSellinProcessing(brand, byKey, progressEl, maxAsOfDt){
     await logUpdate('Sell In & GA', brand, rebuilt.length);
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data ${brand} tidak berhasil disimpan online. Coba upload ulang file ini.`;
+  }
+  refreshHeaderMeta();
+  applyFilters();
+}
+
+// ---------- update: Secondary (replace-only) from BigQuery transaction export ----------
+// Unlike the DSE_PROD Sell In & GA upload, this file is transaction-level (one row per
+// sale) rather than one row per outlet, and mixes both brands together. We sum `rev`
+// per (brand, outlet_id) after filtering to region=WEST JAVA and parameter=SECONDARY,
+// then overwrite ONLY the `secondary` field on the existing SELLIN_OUTLETS rows — every
+// other field (GA, SP, Voucher, Saldo, Tertiary) is left exactly as it was.
+function handleSecondaryFile(file){
+  return new Promise((resolve) => {
+    const progressEl = document.getElementById('secondaryProgress');
+    if(!MASTER || Object.keys(MASTER).length === 0){
+      progressEl.innerHTML = '<b style="color:var(--red);">Data pairing outlet belum termuat</b> — refresh halaman ini dulu (Ctrl+Shift+R), tunggu sampai selesai loading, baru coba upload lagi.';
+      resolve();
+      return;
+    }
+    if(!SMETA || !SELLIN_OUTLETS.length){
+      progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In &amp; GA belum ada</b> — upload file DSE_PROD (menu #3) dulu sebelum mengganti data Secondary.';
+      resolve();
+      return;
+    }
+    progressEl.textContent = `Membaca file (${file.name})…`;
+
+    const byKey = {};
+    const brandsSeen = new Set();
+    let rowCount = 0, matched = 0;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      worker: true,
+      step: function(res){
+        rowCount++;
+        const row = res.data;
+        if(row.region !== 'WEST JAVA') return;
+        if(row.parameter !== 'SECONDARY') return;
+        const brand = row.brand;
+        if(brand !== 'IM3' && brand !== '3ID') return;
+        brandsSeen.add(brand);
+        const oid = normId(row.outlet_id);
+        const key = brand + '|' + oid;
+        const rev = parseFloat(row.rev) || 0;
+        byKey[key] = (byKey[key] || 0) + rev;
+        matched++;
+        if(rowCount % 50000 === 0) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris…`;
+      },
+      complete: function(){
+        if(brandsSeen.size === 0){
+          progressEl.textContent = `Tidak ada baris valid di file ini (cek kolom region=WEST JAVA, parameter=SECONDARY, brand=IM3/3ID).`;
+          resolve();
+          return;
+        }
+        progressEl.textContent = `Menggabungkan data Secondary (${matched.toLocaleString('id-ID')} baris transaksi, ${Object.keys(byKey).length.toLocaleString('id-ID')} outlet)…`;
+        setTimeout(()=>finishSecondaryProcessing(byKey, brandsSeen, progressEl).then(resolve), 30);
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+async function finishSecondaryProcessing(byKey, brandsSeen, progressEl){
+  let totalUpdated = 0;
+  const brandSummaries = [];
+  brandsSeen.forEach(brand=>{
+    const brandI = META.brands.indexOf(brand);
+    if(brandI < 0) return;
+    const hasBrandRows = SELLIN_OUTLETS.some(r=>r[IDX_S.brandIdx]===brandI);
+    if(!hasBrandRows){
+      brandSummaries.push(`${brand}: dilewati (belum ada data Sell In & GA untuk brand ini)`);
+      return;
+    }
+    let updated = 0;
+    SELLIN_OUTLETS.forEach(r=>{
+      if(r[IDX_S.brandIdx] !== brandI) return;
+      const key = brand + '|' + r[IDX_S.outletId];
+      const v = byKey[key];
+      r[IDX_S.secondary] = v ? Math.round(v) : 0;
+      updated++;
+    });
+    totalUpdated += updated;
+    brandSummaries.push(`${brand}: ${updated.toLocaleString('id-ID')} outlet`);
+  });
+
+  SMETA = { ...SMETA, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString() };
+
+  progressEl.textContent = `Menyimpan data Secondary online (${totalUpdated.toLocaleString('id-ID')} outlet)…`;
+  const saveOk = await persistSellin((done,total)=>{ progressEl.textContent = `Menyimpan data Secondary online — bagian ${done}/${total}…`; });
+  if(saveOk){
+    progressEl.textContent = `Selesai. Data Secondary diganti — ` + brandSummaries.join(' · ') + '.';
+    await logUpdate('Secondary (replace)', brandSummaries.join(' · '), totalUpdated);
+  } else {
+    progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data Secondary tidak berhasil disimpan online. Coba upload ulang file ini.`;
   }
   refreshHeaderMeta();
   applyFilters();
@@ -4094,6 +4203,7 @@ function bindEvents(){
   document.getElementById('masterFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleMasterFile(e.target.files[0]); });
   document.getElementById('sellinFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleSellinFiles(e.target.files); });
   document.getElementById('supplyFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleSupplyFiles(e.target.files); });
+  document.getElementById('secondaryFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleSecondaryFile(e.target.files[0]); });
 
   document.querySelectorAll('.tab-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
