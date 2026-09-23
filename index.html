@@ -585,27 +585,28 @@
     </div>
   </div>
 
-  <div class="panel">
-    <h3 id="gaSlabBreakdownTitle">Slab GA per Branch</h3>
-    <div id="gaSlabBreakdownChart"></div>
-    <div class="legend">
-      <span><i class="dot" style="background:#9B98A8"></i>No GA</span>
-      <span><i class="dot" style="background:var(--amber)"></i>&lt;25</span>
-      <span><i class="dot" style="background:#6E8FD9"></i>25-50</span>
-      <span><i class="dot" style="background:#4E9E72"></i>50-100</span>
-      <span><i class="dot" style="background:var(--green)"></i>&gt;100</span>
-    </div>
-  </div>
-
   <div class="two-col">
+    <div class="panel">
+      <h3 id="gaSlabBreakdownTitle">Slab GA per Branch</h3>
+      <div id="gaSlabBreakdownChart"></div>
+      <div class="legend">
+        <span><i class="dot" style="background:#9B98A8"></i>No GA</span>
+        <span><i class="dot" style="background:var(--amber)"></i>&lt;25</span>
+        <span><i class="dot" style="background:#6E8FD9"></i>25-50</span>
+        <span><i class="dot" style="background:#4E9E72"></i>50-100</span>
+        <span><i class="dot" style="background:var(--green)"></i>&gt;100</span>
+      </div>
+    </div>
     <div class="panel">
       <h3 id="siBreakdownTitle">Total GA per Branch</h3>
       <div id="siBreakdownChart"></div>
     </div>
-    <div class="panel">
-      <h3 id="siSummaryTitle">Summary Sell In &amp; GA per Branch</h3>
-      <div style="overflow:auto;max-height:360px;">
-      <table class="summary" id="siSummaryTable">
+  </div>
+
+  <div class="panel">
+    <h3 id="siSummaryTitle">Summary Sell In &amp; GA per Branch</h3>
+    <div style="overflow:auto;max-height:360px;">
+    <table class="summary" id="siSummaryTable">
         <thead>
           <tr>
             <th style="text-align:left;" rowspan="2">Branch</th>
@@ -638,7 +639,6 @@
         <tfoot id="siSummaryTfoot"></tfoot>
       </table>
       </div>
-    </div>
   </div>
 
   <div class="two-col">
@@ -1754,9 +1754,9 @@ function renderGaSlabBreakdown(){
   ];
   const html = rows.map(r=>{
     const tooltip = `No GA: ${r.s0} · <25: ${r.s1} · 25-50: ${r.s2} · 50-100: ${r.s3} · >100: ${r.s4}`;
-    return `<div class="bar-row" style="margin-bottom:14px;">
+    return `<div class="bar-row" style="margin-bottom:8px;">
       <div class="bar-label" title="${r.name}">${r.name}</div>
-      ${stackedBarSvg(r, segs, tooltip, 24)}
+      ${stackedBarSvg(r, segs, tooltip, 18)}
       <div class="bar-total">${r.total}</div>
     </div>`;
   }).join('');
