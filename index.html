@@ -1185,13 +1185,32 @@ function fetchWithTimeout(url, opts, timeoutMs){
   return fetch(url, {...(opts||{}), signal: controller.signal}).finally(()=>clearTimeout(timer));
 }
 
-async function storageGet(key){
+// Reads never used to retry at all (only writes did) — one slow/failed request to a
+// cold-started Apps Script backend (common right after the app has been idle) would
+// come back as "no data found" even though the data is perfectly fine on the sheet,
+// which looked exactly like data loss to whoever was looking at the dashboard right
+// then. This retries ONCE on an actual network/timeout/parse failure — but NOT when
+// the backend genuinely and successfully reports the key doesn't exist, since
+// retrying a real "not found" would just waste time for no benefit.
+async function storageGetRaw(key){
   try{
     const res = await fetchWithTimeout(`${GAS_URL}?action=get&key=${encodeURIComponent(key)}`, null, 12000);
     const data = await res.json();
-    if(!data.ok || !data.found) return null;
-    return JSON.parse(data.value);
-  }catch(e){ console.error('storage get failed', key, e); return null; }
+    if(!data.ok || !data.found) return { found:false };
+    return { found:true, value: JSON.parse(data.value) };
+  }catch(e){ return { error:e }; }
+}
+async function storageGet(key){
+  for(let attempt=0; attempt<2; attempt++){
+    if(attempt>0) await new Promise(r=>setTimeout(r,900));
+    const r = await storageGetRaw(key);
+    if(r.error){
+      if(attempt===1) console.error('storage get failed (after 1 retry)', key, r.error);
+      continue;
+    }
+    return r.found ? r.value : null;
+  }
+  return null;
 }
 async function storageSet(key, val){
   try{
@@ -3339,6 +3358,14 @@ function parseSupplyBody(file, progressEl){
         if(rowCount % 20000 === 0) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris…`;
       },
       complete: function(){
+        if(brand !== 'IM3' && brand !== '3ID'){
+          // previously this silently continued through to finishSupplyProcessing with
+          // brand=undefined, logging a confusing "Supply — undefined — 0" entry and
+          // doing nothing useful (harmless, but gave no indication anything was wrong)
+          progressEl.innerHTML = `<b style="color:var(--red);">Kolom "brand" tidak ditemukan/tidak dikenali di file ini</b> (nilai terbaca: ${brand===null?'kosong':'"'+brand+'"'}). Pastikan file punya kolom "brand" berisi IM3 atau 3ID, lalu upload ulang.`;
+          resolve();
+          return;
+        }
         progressEl.textContent = `Menggabungkan data Supply ${brand} (${matched.toLocaleString('id-ID')} baris cocok)…`;
         setTimeout(()=>finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, progressEl).then(resolve), 30);
       },
