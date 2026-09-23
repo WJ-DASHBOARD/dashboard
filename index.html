@@ -2297,17 +2297,35 @@ function groupContext(){
 // container was (e.g. the Sell In & GA tab vs. the narrower Peta side panel). Plain
 // HTML text in flex children never gets stretched like that, so labels stay crisp
 // regardless of container width.
+// Renders a horizontal stacked bar using plain flexbox + text (not SVG — see the
+// note this replaced further below in version history). Labels are drawn in a
+// SEPARATE overlay layer on top of the colored segments (not inside them) — when a
+// label is wider than its own thin segment and spills over, it used to get visually
+// covered by the next segment's <div>, since later flex siblings paint over the
+// overflow of earlier ones. Putting all labels in their own top layer, sharing the
+// same flex-grow ratios so each still lines up over its segment, means nothing ever
+// paints over a label again regardless of how thin the segment is.
 function stackedBarSvg(row, segmentDefs, tooltip, height){
   const H = height || 16;
   const t = row.total || 1;
-  const segs = segmentDefs.map(seg=>{
+  const segsHtml = segmentDefs.map(seg=>{
+    const val = row[seg.key] || 0;
+    const grow = val > 0 ? val : 0;
+    return `<div style="flex:${grow} 0 0;min-width:${val>0?'2px':'0'};background:${seg.color};"></div>`;
+  }).join('');
+  const labelsHtml = segmentDefs.map(seg=>{
     const val = row[seg.key] || 0;
     const pct = val/t*100;
-    const showLabel = pct >= 1;
     const grow = val > 0 ? val : 0;
-    return `<div style="flex:${grow} 0 0;min-width:${val>0?'2px':'0'};background:${seg.color};display:flex;align-items:center;justify-content:center;overflow:visible;position:relative;">${showLabel ? `<span style="font-size:10px;font-weight:700;color:#111;white-space:nowrap;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 0 3px #fff;">${pct.toFixed(0)}%</span>` : ''}</div>`;
+    // show a label for any nonzero segment, even a sliver — sub-1% segments get one
+    // decimal place (e.g. "0.3%") since rounding them to "0%" would be meaningless
+    const label = pct <= 0 ? '' : (pct >= 1 ? pct.toFixed(0) : pct.toFixed(1)) + '%';
+    return `<div style="flex:${grow} 0 0;min-width:0;display:flex;align-items:center;justify-content:center;overflow:visible;">${label ? `<span style="font-size:10px;font-weight:700;color:#111;white-space:nowrap;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 0 3px #fff;">${label}</span>` : ''}</div>`;
   }).join('');
-  return `<div title="${tooltip}" style="flex:1;min-width:0;height:${H}px;border-radius:4px;overflow:hidden;background:var(--grey-soft);display:flex;">${segs}</div>`;
+  return `<div title="${tooltip}" style="flex:1;min-width:0;height:${H}px;border-radius:4px;overflow:hidden;background:var(--grey-soft);position:relative;">
+    <div style="position:absolute;inset:0;display:flex;">${segsHtml}</div>
+    <div style="position:absolute;inset:0;display:flex;pointer-events:none;">${labelsHtml}</div>
+  </div>`;
 }
 
 function renderBreakdown(){
@@ -3374,11 +3392,12 @@ async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, pro
   progressEl.textContent = `Menyimpan data Supply online (${SUPPLY_OUTLETS.length.toLocaleString('id-ID')} outlet)…`;
   const saveOk = await persistSupply((done,total,which)=>{ progressEl.textContent = `Menyimpan data Supply online — data ${which} ${done}/${total}…`; });
   if(saveOk){
-    progressEl.textContent = `Selesai. Data Supply ${brand} diperbarui (${rebuilt.length.toLocaleString('id-ID')} outlet).`;
+    progressEl.textContent = `Selesai. Data Supply ${brand} diperbarui (${rebuilt.length.toLocaleString('id-ID')} outlet), per ${maxDate||'-'}.`;
     await logUpdate('Supply', brand, rebuilt.length);
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data Supply ${brand} tidak berhasil disimpan online. Coba upload ulang file ini.`;
   }
+  refreshHeaderMeta();
   applyFilters();
 }
 
