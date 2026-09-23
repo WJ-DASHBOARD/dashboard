@@ -3932,6 +3932,11 @@ async function doLogin(){
   const u = document.getElementById('loginUser').value.trim();
   const p = document.getElementById('loginPass').value;
   const errEl = document.getElementById('loginError');
+  // USERS loads independently and in parallel with everything else now (see init()),
+  // so this normally resolves instantly — it only actually waits in the rare case
+  // someone submits the form in the first moment the page opens, before the
+  // background users fetch has finished.
+  if(usersReadyPromise) await usersReadyPromise;
   const byName = USERS.find(x=>x.username===u);
   let match = null;
   if(byName){
@@ -4188,6 +4193,11 @@ async function removeUserByName(name){
 }
 window.removeUserByName = removeUserByName;
 
+function bindLoginEvents(){
+  document.getElementById('btnDoLogin').addEventListener('click', doLogin);
+  document.getElementById('loginPass').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
+}
+
 function bindEvents(){
   document.getElementById('fBrand').addEventListener('change', applyFilters);
   document.getElementById('fArea').addEventListener('change', ()=>{ refreshBranchOptions(); refreshMicroOptions(); applyFilters(); });
@@ -4241,8 +4251,6 @@ function bindEvents(){
 
   document.getElementById('btnOpenUpdate').addEventListener('click', ()=>{ renderUpdateLog(); document.getElementById('updateOverlay').classList.add('show'); });
   document.getElementById('closeUpdate').addEventListener('click', ()=>document.getElementById('updateOverlay').classList.remove('show'));
-  document.getElementById('btnDoLogin').addEventListener('click', doLogin);
-  document.getElementById('loginPass').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
   document.getElementById('btnForceChangePass').addEventListener('click', doForceChangePassword);
   document.getElementById('forceNewPass2').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doForceChangePassword(); });
   document.getElementById('btnChangePass').addEventListener('click', ()=>document.getElementById('changePassOverlay').classList.add('show'));
@@ -4320,10 +4328,19 @@ async function loadStep(name, fn){
   }
 }
 
+// Kicked off immediately at script load, in parallel with everything else — login
+// used to only become clickable after ALL data (outlets, sell-in, supply, geo — which
+// can take a while, especially with the retry logic above) had finished loading,
+// since the button's event listener was only attached at the very end of init().
+// Now the button is wired up straight away and USERS loads independently, so login
+// stops being blocked behind data that has nothing to do with it.
+let usersReadyPromise = loadStep('users', loadUsers);
+bindLoginEvents();
+
 async function init(){
   await loadStep('outlets', loadFromStorageOrSeed);
   await loadStep('sellin', loadSellinFromStorageOrSeed);
-  await loadStep('users', loadUsers);
+  await usersReadyPromise;
   await loadStep('updateLog', loadUpdateLog);
   await loadStep('supply', loadSupplyFromStorageOrSeed);
   await loadStep('geo', loadGeoFromStorageOrSeed);
