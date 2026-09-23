@@ -3829,7 +3829,11 @@ async function loadUsers(){
   try{
     const stored = await storageGet('users');
     if(stored && Array.isArray(stored) && stored.length) USERS = stored;
-  }catch(e){}
+    else setTimeout(()=>showToast('Data user online kosong/tidak terbaca — memakai akun admin default sementara.'), 800);
+  }catch(e){
+    setTimeout(()=>showToast('Gagal memuat data user online (koneksi tidak stabil) — memakai akun admin default sementara. Refresh halaman untuk coba lagi.'), 800);
+    throw e;
+  }
 }
 async function saveUsers(){
   return await storageSetWithRetry('users', USERS);
@@ -4240,19 +4244,26 @@ async function loadGeoFromStorageOrSeed(){
 
 function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
 
-async function init(){
+// Each step gets its own try/catch — previously all six steps shared ONE try/catch,
+// so if e.g. loadFromStorageOrSeed() failed (a transient network hiccup), everything
+// after it — including loadUsers() — never ran, silently falling back to the
+// hardcoded default admin/password. Isolating each step means a single failure
+// only affects that one dataset, never login or the other tabs.
+async function loadStep(name, fn){
   try{
-    await loadFromStorageOrSeed();
-    await loadSellinFromStorageOrSeed();
-    await loadUsers();
-    await loadUpdateLog();
-    await loadSupplyFromStorageOrSeed();
-    await loadGeoFromStorageOrSeed();
+    await fn();
   }catch(e){
-    // even if something above failed unexpectedly, make sure the login form and
-    // buttons still work — a broken data load should never leave the page inert
-    console.error('init: data loading failed, continuing with defaults', e);
+    console.error(`init: ${name} failed, continuing with defaults for this step only`, e);
   }
+}
+
+async function init(){
+  await loadStep('outlets', loadFromStorageOrSeed);
+  await loadStep('sellin', loadSellinFromStorageOrSeed);
+  await loadStep('users', loadUsers);
+  await loadStep('updateLog', loadUpdateLog);
+  await loadStep('supply', loadSupplyFromStorageOrSeed);
+  await loadStep('geo', loadGeoFromStorageOrSeed);
   // "Perbarui data" is hidden by default so people who only have the shared link can
   // view/download but not overwrite the online data. Logging in as admin unlocks it.
   applyLoginState();
