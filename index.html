@@ -2150,11 +2150,8 @@ function renderSellinSummaryTable(){
   document.querySelector('#siSummaryTable thead th').textContent = ctx.label==='branch' ? 'Branch' : 'Micro Cluster';
   const gKey = ctx.key===IDX.branchIdx ? IDX_S.branchIdx : IDX_S.microIdx;
 
-  const agg = {};
-  filteredSellin.forEach(r=>{
-    const g = r[gKey];
-    if(!agg[g]) agg[g] = {outlet:0, ga:0, sp:0, vou:0, saldo:0, tertiary:0, secondary:0, wSp:0, wVou:0, wSaldo:0, wGa:0, s0:0,s1:0,s2:0,s3:0,s4:0};
-    const a = agg[g];
+  const initSI = () => ({outlet:0, ga:0, sp:0, vou:0, saldo:0, tertiary:0, secondary:0, wSp:0, wVou:0, wSaldo:0, wGa:0, s0:0,s1:0,s2:0,s3:0,s4:0});
+  const accumSI = (a,r) => {
     a.outlet++; a.ga+=r[IDX_S.rguGa]; a.sp+=r[IDX_S.sellinSp]; a.vou+=r[IDX_S.sellinVou];
     a.saldo+=r[IDX_S.sellinSaldo]; a.tertiary+=r[IDX_S.tertiary]; a.secondary+=r[IDX_S.secondary];
     if(r[IDX_S.sellinSp]>0) a.wSp++;
@@ -2164,21 +2161,52 @@ function renderSellinSummaryTable(){
     const gaVal = r[IDX_S.rguGa];
     const slab = gaVal<=0?'s0' : gaVal<25?'s1' : gaVal<50?'s2' : gaVal<100?'s3' : 's4';
     a[slab]++;
-  });
-  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.ga-a.ga);
+  };
+  const aggregateBy = (arr, keyIdx) => {
+    const agg = {};
+    arr.forEach(r=>{
+      const g = r[keyIdx];
+      if(!agg[g]) agg[g] = initSI();
+      accumSI(agg[g], r);
+    });
+    return agg;
+  };
 
   const pct = (w,t) => t? (w/t*100).toFixed(0)+'%' : '–';
-  document.getElementById('siSummaryTbody').innerHTML = rows.map(r=>`
-    <tr>
-      <td>${r.name}</td><td>${fmtN(r.outlet)}</td><td>${fmtN(r.ga)}</td>
+  const rowCells = r => `
+      <td>${fmtN(r.outlet)}</td><td>${fmtN(r.ga)}</td>
       <td>${fmtBn(r.sp)}</td><td>${fmtBn(r.vou)}</td><td>${fmtBn(r.saldo)}</td>
       <td>${fmtBn(r.tertiary)}</td><td>${fmtBn(r.secondary)}</td>
       <td>${fmtN(r.wSp)}</td><td>${pct(r.wSp,r.outlet)}</td>
       <td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td>
       <td>${fmtN(r.wSaldo)}</td><td>${pct(r.wSaldo,r.outlet)}</td>
       <td>${fmtN(r.wGa)}</td><td>${pct(r.wGa,r.outlet)}</td>
-      <td>${fmtN(r.s0)}</td><td>${fmtN(r.s1)}</td><td>${fmtN(r.s2)}</td><td>${fmtN(r.s3)}</td><td>${fmtN(r.s4)}</td>
-    </tr>`).join('') || '<tr><td colspan="21" style="color:var(--muted);">Tidak ada data.</td></tr>';
+      <td>${fmtN(r.s0)}</td><td>${fmtN(r.s1)}</td><td>${fmtN(r.s2)}</td><td>${fmtN(r.s3)}</td><td>${fmtN(r.s4)}</td>`;
+
+  const agg = aggregateBy(filteredSellin, gKey);
+  const rows = Object.keys(agg).map(g=>({key:g, name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.ga-a.ga);
+
+  let bodyHtml = '';
+  rows.forEach(r=>{
+    if(ctx.label==='branch'){
+      const isOpen = expandedBranchesSI.has(String(r.key));
+      bodyHtml += `<tr>
+        <td><span class="expand-toggle" data-scope="si" data-key="${r.key}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${isOpen?'⊟':'⊞'}</span>${r.name}</td>${rowCells(r)}
+      </tr>`;
+      if(isOpen){
+        const subAgg = aggregateBy(filteredSellin.filter(rr=>String(rr[IDX_S.branchIdx])===String(r.key)), IDX_S.microIdx);
+        const subRows = Object.keys(subAgg).map(mg=>({name: META.micros[mg], ...subAgg[mg]})).sort((a,b)=>b.ga-a.ga);
+        subRows.forEach(mr=>{
+          bodyHtml += `<tr style="background:#FAFAF8;">
+            <td style="padding-left:28px;color:var(--ink-soft);font-size:11.5px;">${mr.name}</td>${rowCells(mr)}
+          </tr>`;
+        });
+      }
+    } else {
+      bodyHtml += `<tr><td>${r.name}</td>${rowCells(r)}</tr>`;
+    }
+  });
+  document.getElementById('siSummaryTbody').innerHTML = bodyHtml || '<tr><td colspan="21" style="color:var(--muted);">Tidak ada data.</td></tr>';
 
   const grand = rows.reduce((acc,r)=>{
     acc.outlet+=r.outlet; acc.ga+=r.ga; acc.sp+=r.sp; acc.vou+=r.vou; acc.saldo+=r.saldo;
@@ -2404,17 +2432,20 @@ function renderBreakdown(){
   document.getElementById('breakdownChart').innerHTML = html || '<p style="color:var(--muted);font-size:13px;">Tidak ada data.</p>';
 }
 
+// Toggle-able drill-down state: which Branch keys are currently expanded to show
+// their Micro Clusters nested underneath, for each of the two summary tables
+// (kept separate since the two tables are viewed/expanded independently).
+let expandedBranchesLB = new Set();
+let expandedBranchesSI = new Set();
+
 function renderSummaryTable(){
   const ctx = groupContext();
   document.getElementById('summaryTableTitle').textContent = 'Summary ' + ctx.title;
   document.querySelector('#summaryTable thead th').textContent = ctx.label==='branch' ? 'Branch' : 'Micro Cluster';
 
-  const agg = {};
-  filtered.forEach(r=>{
-    const g = r[ctx.key];
-    if(!agg[g]) agg[g] = {outlet:0, stock:0, spoQ:0, spiQ:0, spoA:0, spiA:0, voQ:0, viQ:0, voA:0, viA:0, salA:0,
-      dspA:0, dvouA:0, dsalA:0, zero:0, low:0, ok:0};
-    const a = agg[g];
+  const initLB = () => ({outlet:0, stock:0, spoQ:0, spiQ:0, spoA:0, spiA:0, voQ:0, viQ:0, voA:0, viA:0, salA:0,
+    dspA:0, dvouA:0, dsalA:0, zero:0, low:0, ok:0});
+  const accumLB = (a,r) => {
     a.outlet++;
     a.stock += stockAmt(r);
     a.spoQ += r[IDX.spoQty]; a.spiQ += r[IDX.spiQty];
@@ -2425,8 +2456,16 @@ function renderSummaryTable(){
     a.dspA += r[IDX.dspAmt]; a.dvouA += r[IDX.dvouAmt]; a.dsalA += r[IDX.dsalAmt];
     const st = outletStatus(r[IDX.salAmt]);
     a[st]++;
-  });
-  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.stock-a.stock);
+  };
+  const aggregateBy = (arr, keyIdx) => {
+    const agg = {};
+    arr.forEach(r=>{
+      const g = r[keyIdx];
+      if(!agg[g]) agg[g] = initLB();
+      accumLB(agg[g], r);
+    });
+    return agg;
+  };
 
   const dosCells = a => {
     const dSp = dosOf(a.spoA+a.spiA, a.dspA);
@@ -2435,10 +2474,7 @@ function renderSummaryTable(){
     const dAll = dosOf(a.spoA+a.spiA+a.voA+a.viA+a.salA, a.dspA+a.dvouA+a.dsalA);
     return `<td>${dSp!==null?dSp.toFixed(2):'–'}</td><td>${dVou!==null?dVou.toFixed(2):'–'}</td><td>${dSal!==null?dSal.toFixed(2):'–'}</td><td>${dAll!==null?dAll.toFixed(2):'–'}</td>`;
   };
-
-  document.getElementById('summaryTbody').innerHTML = rows.map(r=>`
-    <tr>
-      <td>${r.name}</td>
+  const rowCells = r => `
       <td>${fmtN(r.outlet)}</td>
       <td>${fmtBn(r.stock)}</td>
       <td>${fmtN(r.spoQ)}</td>
@@ -2453,8 +2489,32 @@ function renderSummaryTable(){
       ${dosCells(r)}
       <td>${fmtN(r.zero)}</td>
       <td>${fmtN(r.low)}</td>
-      <td>${fmtN(r.ok)}</td>
-    </tr>`).join('') || '<tr><td colspan="19" style="color:var(--muted);">Tidak ada data.</td></tr>';
+      <td>${fmtN(r.ok)}</td>`;
+
+  const agg = aggregateBy(filtered, ctx.key);
+  const rows = Object.keys(agg).map(g=>({key:g, name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.stock-a.stock);
+
+  let bodyHtml = '';
+  rows.forEach(r=>{
+    if(ctx.label==='branch'){
+      const isOpen = expandedBranchesLB.has(String(r.key));
+      bodyHtml += `<tr>
+        <td><span class="expand-toggle" data-scope="lb" data-key="${r.key}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${isOpen?'⊟':'⊞'}</span>${r.name}</td>${rowCells(r)}
+      </tr>`;
+      if(isOpen){
+        const subAgg = aggregateBy(filtered.filter(rr=>String(rr[IDX.branchIdx])===String(r.key)), IDX.microIdx);
+        const subRows = Object.keys(subAgg).map(mg=>({name: META.micros[mg], ...subAgg[mg]})).sort((a,b)=>b.stock-a.stock);
+        subRows.forEach(mr=>{
+          bodyHtml += `<tr style="background:#FAFAF8;">
+            <td style="padding-left:28px;color:var(--ink-soft);font-size:11.5px;">${mr.name}</td>${rowCells(mr)}
+          </tr>`;
+        });
+      }
+    } else {
+      bodyHtml += `<tr><td>${r.name}</td>${rowCells(r)}</tr>`;
+    }
+  });
+  document.getElementById('summaryTbody').innerHTML = bodyHtml || '<tr><td colspan="19" style="color:var(--muted);">Tidak ada data.</td></tr>';
 
   const grand = rows.reduce((acc,r)=>{
     acc.outlet+=r.outlet; acc.stock+=r.stock; acc.spoQ+=r.spoQ; acc.spiQ+=r.spiQ;
@@ -4213,6 +4273,23 @@ function bindLoginEvents(){
 }
 
 function bindEvents(){
+  // Delegated click handler for the Branch → Micro Cluster expand/collapse toggle
+  // in the two summary tables — one listener on the document handles both tables
+  // and survives their innerHTML being replaced on every re-render (a listener
+  // bound directly to the <span> would be destroyed along with it).
+  document.addEventListener('click', (e)=>{
+    const t = e.target.closest('.expand-toggle');
+    if(!t) return;
+    const key = t.dataset.key;
+    if(t.dataset.scope==='lb'){
+      if(expandedBranchesLB.has(key)) expandedBranchesLB.delete(key); else expandedBranchesLB.add(key);
+      renderSummaryTable();
+    } else if(t.dataset.scope==='si'){
+      if(expandedBranchesSI.has(key)) expandedBranchesSI.delete(key); else expandedBranchesSI.add(key);
+      renderSellinSummaryTable();
+    }
+  });
+
   document.getElementById('fBrand').addEventListener('change', applyFilters);
   document.getElementById('fArea').addEventListener('change', ()=>{ refreshBranchOptions(); refreshMicroOptions(); applyFilters(); });
   document.getElementById('fBranch').addEventListener('change', ()=>{ refreshMicroOptions(); applyFilters(); });
