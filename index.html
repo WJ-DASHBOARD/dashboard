@@ -426,6 +426,7 @@
             <th rowspan="2">Salmo Amount (Bn)</th>
             <th colspan="4" style="text-align:center;">DOS</th>
             <th colspan="3" style="text-align:center;">Slab Saldo (Salmo)</th>
+            <th colspan="5" style="text-align:center;">Slab GA</th>
           </tr>
           <tr>
             <th style="font-weight:500;">Ori</th>
@@ -443,6 +444,11 @@
             <th style="font-weight:500;white-space:nowrap;">Saldo 0</th>
             <th style="font-weight:500;">&lt;100K</th>
             <th style="font-weight:500;">&ge;100K</th>
+            <th style="font-weight:500;white-space:nowrap;">No GA</th>
+            <th style="font-weight:500;">&lt;25</th>
+            <th style="font-weight:500;">25-50</th>
+            <th style="font-weight:500;">50-100</th>
+            <th style="font-weight:500;">&gt;100</th>
           </tr>
         </thead>
         <tbody id="summaryTbody"></tbody>
@@ -2413,7 +2419,17 @@ function renderSummaryTable(){
     const st = outletStatus(r[IDX.salAmt]);
     a[st]++;
   });
-  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.stock-a.stock);
+  const gaAgg = {};
+  filteredSellin.forEach(r=>{
+    const g = r[ctx.key];
+    if(!gaAgg[g]) gaAgg[g] = {s0:0,s1:0,s2:0,s3:0,s4:0};
+    const ga = r[IDX_S.rguGa];
+    const slab = ga<=0?'s0' : ga<25?'s1' : ga<50?'s2' : ga<100?'s3' : 's4';
+    gaAgg[g][slab]++;
+  });
+  const emptyGa = {s0:0,s1:0,s2:0,s3:0,s4:0};
+
+  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g], ...(gaAgg[g]||emptyGa)})).sort((a,b)=>b.stock-a.stock);
 
   const dosCells = a => {
     const dSp = dosOf(a.spoA+a.spiA, a.dspA);
@@ -2441,7 +2457,12 @@ function renderSummaryTable(){
       <td>${fmtN(r.zero)}</td>
       <td>${fmtN(r.low)}</td>
       <td>${fmtN(r.ok)}</td>
-    </tr>`).join('') || '<tr><td colspan="19" style="color:var(--muted);">Tidak ada data.</td></tr>';
+      <td>${fmtN(r.s0)}</td>
+      <td>${fmtN(r.s1)}</td>
+      <td>${fmtN(r.s2)}</td>
+      <td>${fmtN(r.s3)}</td>
+      <td>${fmtN(r.s4)}</td>
+    </tr>`).join('') || '<tr><td colspan="24" style="color:var(--muted);">Tidak ada data.</td></tr>';
 
   const grand = rows.reduce((acc,r)=>{
     acc.outlet+=r.outlet; acc.stock+=r.stock; acc.spoQ+=r.spoQ; acc.spiQ+=r.spiQ;
@@ -2449,8 +2470,9 @@ function renderSummaryTable(){
     acc.voA+=r.voA; acc.viA+=r.viA; acc.salA+=r.salA;
     acc.dspA+=r.dspA; acc.dvouA+=r.dvouA; acc.dsalA+=r.dsalA;
     acc.zero+=r.zero; acc.low+=r.low; acc.ok+=r.ok;
+    acc.s0+=r.s0; acc.s1+=r.s1; acc.s2+=r.s2; acc.s3+=r.s3; acc.s4+=r.s4;
     return acc;
-  }, {outlet:0,stock:0,spoQ:0,spiQ:0,spoA:0,spiA:0,voQ:0,viQ:0,voA:0,viA:0,salA:0,dspA:0,dvouA:0,dsalA:0,zero:0,low:0,ok:0});
+  }, {outlet:0,stock:0,spoQ:0,spiQ:0,spoA:0,spiA:0,voQ:0,viQ:0,voA:0,viA:0,salA:0,dspA:0,dvouA:0,dsalA:0,zero:0,low:0,ok:0,s0:0,s1:0,s2:0,s3:0,s4:0});
   document.getElementById('summaryTfoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
       <td>Total West Java</td>
@@ -2469,6 +2491,11 @@ function renderSummaryTable(){
       <td>${fmtN(grand.zero)}</td>
       <td>${fmtN(grand.low)}</td>
       <td>${fmtN(grand.ok)}</td>
+      <td>${fmtN(grand.s0)}</td>
+      <td>${fmtN(grand.s1)}</td>
+      <td>${fmtN(grand.s2)}</td>
+      <td>${fmtN(grand.s3)}</td>
+      <td>${fmtN(grand.s4)}</td>
     </tr>` : '';
 }
 
@@ -2491,7 +2518,16 @@ function exportSummaryTableCsv(){
     const st = outletStatus(r[IDX.salAmt]);
     a[st]++;
   });
-  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.stock-a.stock);
+  const gaAgg = {};
+  filteredSellin.forEach(r=>{
+    const g = r[ctx.key];
+    if(!gaAgg[g]) gaAgg[g] = {s0:0,s1:0,s2:0,s3:0,s4:0};
+    const ga = r[IDX_S.rguGa];
+    const slab = ga<=0?'s0' : ga<25?'s1' : ga<50?'s2' : ga<100?'s3' : 's4';
+    gaAgg[g][slab]++;
+  });
+  const emptyGa2 = {s0:0,s1:0,s2:0,s3:0,s4:0};
+  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g], ...(gaAgg[g]||emptyGa2)})).sort((a,b)=>b.stock-a.stock);
 
   const dosVals = a => {
     const dSp = dosOf(a.spoA+a.spiA, a.dspA);
@@ -2503,11 +2539,13 @@ function exportSummaryTableCsv(){
 
   const headers = [ctx.label==='branch'?'Branch':'Micro Cluster','Outlet','Total Stock Amount',
     'SP Qty Ori','SP Qty Inj','SP Amount Ori','SP Amount Inj','Voucher Qty Ori','Voucher Qty Inj',
-    'Voucher Amount Ori','Voucher Amount Inj','Salmo Amount','DOS SP','DOS Voucher','DOS Salmo','DOS All Product','Saldo 0','<100K','>=100K'];
+    'Voucher Amount Ori','Voucher Amount Inj','Salmo Amount','DOS SP','DOS Voucher','DOS Salmo','DOS All Product','Saldo 0','<100K','>=100K',
+    'Slab GA No GA','Slab GA <25','Slab GA 25-50','Slab GA 50-100','Slab GA >100'];
   const lines = [headers.join(',')];
   rows.forEach(r=>{
     lines.push([r.name, r.outlet, Math.round(r.stock), r.spoQ, r.spiQ, Math.round(r.spoA), Math.round(r.spiA),
-      r.voQ, r.viQ, Math.round(r.voA), Math.round(r.viA), Math.round(r.salA), ...dosVals(r), r.zero, r.low, r.ok].join(','));
+      r.voQ, r.viQ, Math.round(r.voA), Math.round(r.viA), Math.round(r.salA), ...dosVals(r), r.zero, r.low, r.ok,
+      r.s0, r.s1, r.s2, r.s3, r.s4].join(','));
   });
   const grand = rows.reduce((acc,r)=>{
     acc.outlet+=r.outlet; acc.stock+=r.stock; acc.spoQ+=r.spoQ; acc.spiQ+=r.spiQ;
@@ -2515,11 +2553,12 @@ function exportSummaryTableCsv(){
     acc.voA+=r.voA; acc.viA+=r.viA; acc.salA+=r.salA;
     acc.dspA+=r.dspA; acc.dvouA+=r.dvouA; acc.dsalA+=r.dsalA;
     acc.zero+=r.zero; acc.low+=r.low; acc.ok+=r.ok;
+    acc.s0+=r.s0; acc.s1+=r.s1; acc.s2+=r.s2; acc.s3+=r.s3; acc.s4+=r.s4;
     return acc;
-  }, {outlet:0,stock:0,spoQ:0,spiQ:0,spoA:0,spiA:0,voQ:0,viQ:0,voA:0,viA:0,salA:0,dspA:0,dvouA:0,dsalA:0,zero:0,low:0,ok:0});
+  }, {outlet:0,stock:0,spoQ:0,spiQ:0,spoA:0,spiA:0,voQ:0,viQ:0,voA:0,viA:0,salA:0,dspA:0,dvouA:0,dsalA:0,zero:0,low:0,ok:0,s0:0,s1:0,s2:0,s3:0,s4:0});
   lines.push(['Total West Java', grand.outlet, Math.round(grand.stock), grand.spoQ, grand.spiQ, Math.round(grand.spoA),
     Math.round(grand.spiA), grand.voQ, grand.viQ, Math.round(grand.voA), Math.round(grand.viA), Math.round(grand.salA),
-    ...dosVals(grand), grand.zero, grand.low, grand.ok].join(','));
+    ...dosVals(grand), grand.zero, grand.low, grand.ok, grand.s0, grand.s1, grand.s2, grand.s3, grand.s4].join(','));
 
   const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
