@@ -1280,7 +1280,21 @@ async function saveChunked(prefix, rows, previousNumChunks, onProgress){
 // Reads and concatenates `${prefix}0` .. `${prefix}(numChunks-1)`.
 async function loadChunked(prefix, numChunks){
   if(!numChunks || numChunks<1) return [];
-  const parts = await Promise.all(Array.from({length:numChunks}, (_,i)=>storageGet(prefix+i)));
+  let parts = await Promise.all(Array.from({length:numChunks}, (_,i)=>storageGet(prefix+i)));
+  // storageGet already retries once per key on failure, but under a genuinely flaky
+  // connection (e.g. an unstable VPN) several chunks out of a large batch can still
+  // come back null even after that. Rather than accept a silently incomplete result,
+  // retry just the missing indices (not the whole batch) a couple more times with a
+  // short pause — this targets exactly the intermittent-loss pattern instead of
+  // re-fetching dozens of chunks that already succeeded.
+  for(let attempt=0; attempt<2; attempt++){
+    const missing = [];
+    parts.forEach((c,i)=>{ if(c===null) missing.push(i); });
+    if(missing.length===0) break;
+    await new Promise(r=>setTimeout(r, 1000));
+    const retried = await Promise.all(missing.map(i=>storageGet(prefix+i)));
+    missing.forEach((idx,k)=>{ parts[idx] = retried[k]; });
+  }
   let rows = [];
   parts.forEach(c=>{ if(c) rows = rows.concat(c); });
   return rows;
@@ -2336,9 +2350,12 @@ function stackedBarSvg(row, segmentDefs, tooltip, height){
     const val = row[seg.key] || 0;
     const pct = val/t*100;
     const grow = val > 0 ? val : 0;
-    // show a label for any nonzero segment, even a sliver — sub-1% segments get one
-    // decimal place (e.g. "0.3%") since rounding them to "0%" would be meaningless
-    const label = pct <= 0 ? '' : (pct >= 1 ? pct.toFixed(0) : pct.toFixed(1)) + '%';
+    // Below ~3% there usually isn't enough room for a label without it spilling into
+    // a neighboring segment's label — and when several thin segments sit right next
+    // to each other (as often happens with the smallest slabs), all of them spilling
+    // at once makes the numbers overlap into unreadable mush. Exact figures for these
+    // thin slivers are still available on hover via the row's tooltip.
+    const label = pct >= 3 ? pct.toFixed(0) + '%' : '';
     return `<div style="flex:${grow} 0 0;min-width:0;display:flex;align-items:center;justify-content:center;overflow:visible;">${label ? `<span style="font-size:10px;font-weight:700;color:#111;white-space:nowrap;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 0 3px #fff;">${label}</span>` : ''}</div>`;
   }).join('');
   return `<div title="${tooltip}" style="flex:1;min-width:0;height:${H}px;border-radius:4px;overflow:hidden;background:var(--grey-soft);position:relative;">
