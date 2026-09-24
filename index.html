@@ -612,27 +612,21 @@
             <th style="text-align:left;" rowspan="2">Branch</th>
             <th rowspan="2">Outlet</th>
             <th rowspan="2">Total GA</th>
-            <th rowspan="2">Sell In SP (Bn)</th>
-            <th rowspan="2">Sell In Voucher (Bn)</th>
-            <th rowspan="2">Sell In Saldo (Bn)</th>
-            <th rowspan="2">Tertiary (Bn)</th>
+            <th colspan="9" style="text-align:center;">#OUTLET with Sell in</th>
             <th rowspan="2">Secondary (Bn)</th>
-            <th colspan="2" style="text-align:center;">SP</th>
-            <th colspan="2" style="text-align:center;">Voucher</th>
-            <th colspan="2" style="text-align:center;">Saldo</th>
-            <th colspan="2" style="text-align:center;">GA</th>
-            <th colspan="5" style="text-align:center;">Slab GA</th>
+            <th rowspan="2">Tertiary (Bn)</th>
+            <th colspan="6" style="text-align:center;">Slab Outlet GA</th>
           </tr>
           <tr>
-            <th style="font-weight:500;">#With</th><th style="font-weight:500;">%With</th>
-            <th style="font-weight:500;">#With</th><th style="font-weight:500;">%With</th>
-            <th style="font-weight:500;">#With</th><th style="font-weight:500;">%With</th>
-            <th style="font-weight:500;">#With</th><th style="font-weight:500;">%With</th>
+            <th style="font-weight:500;">SP</th><th style="font-weight:500;">%</th><th style="font-weight:500;">Amount (Bn)</th>
+            <th style="font-weight:500;">Voucher</th><th style="font-weight:500;">%</th><th style="font-weight:500;">Amount (Bn)</th>
+            <th style="font-weight:500;">Saldo</th><th style="font-weight:500;">%</th><th style="font-weight:500;">Amount (Bn)</th>
             <th style="font-weight:500;white-space:nowrap;">No GA</th>
             <th style="font-weight:500;">&lt;25</th>
             <th style="font-weight:500;">25-50</th>
             <th style="font-weight:500;">50-100</th>
             <th style="font-weight:500;">&gt;100</th>
+            <th style="font-weight:500;">With</th>
           </tr>
         </thead>
         <tbody id="siSummaryTbody"></tbody>
@@ -655,20 +649,15 @@
             <th style="text-align:left;" rowspan="2">Kategori</th>
             <th rowspan="2">Outlet</th>
             <th rowspan="2">Total GA</th>
-            <th rowspan="2">Sell In SP (Bn)</th>
-            <th rowspan="2">Sell In Voucher (Bn)</th>
-            <th rowspan="2">Sell In Saldo (Bn)</th>
-            <th rowspan="2">Tertiary (Bn)</th>
+            <th colspan="9" style="text-align:center;">#OUTLET with Sell in</th>
             <th rowspan="2">Secondary (Bn)</th>
-            <th colspan="2" style="text-align:center;">SP</th>
-            <th colspan="2" style="text-align:center;">Voucher</th>
-            <th colspan="2" style="text-align:center;">Saldo</th>
+            <th rowspan="2">Tertiary (Bn)</th>
             <th colspan="2" style="text-align:center;">GA</th>
           </tr>
           <tr>
-            <th style="font-weight:500;">#With</th><th style="font-weight:500;">%With</th>
-            <th style="font-weight:500;">#With</th><th style="font-weight:500;">%With</th>
-            <th style="font-weight:500;">#With</th><th style="font-weight:500;">%With</th>
+            <th style="font-weight:500;">SP</th><th style="font-weight:500;">%</th><th style="font-weight:500;">Amount (Bn)</th>
+            <th style="font-weight:500;">Voucher</th><th style="font-weight:500;">%</th><th style="font-weight:500;">Amount (Bn)</th>
+            <th style="font-weight:500;">Saldo</th><th style="font-weight:500;">%</th><th style="font-weight:500;">Amount (Bn)</th>
             <th style="font-weight:500;">#With</th><th style="font-weight:500;">%With</th>
           </tr>
         </thead>
@@ -1013,6 +1002,17 @@
         <table class="summary" style="width:100%;">
           <thead><tr><th style="text-align:left;">Waktu</th><th style="text-align:left;">Jenis</th><th style="text-align:left;">Detail</th><th>Jumlah</th></tr></thead>
           <tbody id="updateLogBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="upload-block">
+      <h4>Riwayat Login</h4>
+      <p class="hint">Catatan siapa saja yang login ke dashboard (waktu, username, role).</p>
+      <div style="max-height:200px;overflow:auto;">
+        <table class="summary" style="width:100%;">
+          <thead><tr><th style="text-align:left;">Waktu</th><th style="text-align:left;">Username</th><th style="text-align:left;">Role</th></tr></thead>
+          <tbody id="loginLogBody"></tbody>
         </table>
       </div>
     </div>
@@ -2154,11 +2154,10 @@ function renderSellinCatSummary(){
   document.getElementById('siCatTbody').innerHTML = rows.map(r=>`
     <tr>
       <td><span class="badge ${r.name}">${r.name}</span></td><td>${fmtN(r.outlet)}</td><td>${fmtN(r.ga)}</td>
-      <td>${fmtBn(r.sp)}</td><td>${fmtBn(r.vou)}</td><td>${fmtBn(r.saldo)}</td>
-      <td>${fmtBn(r.tertiary)}</td><td>${fmtBn(r.secondary)}</td>
-      <td>${fmtN(r.wSp)}</td><td>${pct(r.wSp,r.outlet)}</td>
-      <td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td>
-      <td>${fmtN(r.wSaldo)}</td><td>${pct(r.wSaldo,r.outlet)}</td>
+      <td>${fmtN(r.wSp)}</td><td>${pct(r.wSp,r.outlet)}</td><td>${fmtBn(r.sp)}</td>
+      <td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td><td>${fmtBn(r.vou)}</td>
+      <td>${fmtN(r.wSaldo)}</td><td>${pct(r.wSaldo,r.outlet)}</td><td>${fmtBn(r.saldo)}</td>
+      <td>${fmtBn(r.secondary)}</td><td>${fmtBn(r.tertiary)}</td>
       <td>${fmtN(r.wGa)}</td><td>${pct(r.wGa,r.outlet)}</td>
     </tr>`).join('') || '<tr><td colspan="16" style="color:var(--muted);">Tidak ada data.</td></tr>';
 
@@ -2170,11 +2169,10 @@ function renderSellinCatSummary(){
   document.getElementById('siCatTfoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
       <td>Total West Java</td><td>${fmtN(grand.outlet)}</td><td>${fmtN(grand.ga)}</td>
-      <td>${fmtBn(grand.sp)}</td><td>${fmtBn(grand.vou)}</td><td>${fmtBn(grand.saldo)}</td>
-      <td>${fmtBn(grand.tertiary)}</td><td>${fmtBn(grand.secondary)}</td>
-      <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td>
-      <td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td>
-      <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td>
+      <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td><td>${fmtBn(grand.sp)}</td>
+      <td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td><td>${fmtBn(grand.vou)}</td>
+      <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td><td>${fmtBn(grand.saldo)}</td>
+      <td>${fmtBn(grand.secondary)}</td><td>${fmtBn(grand.tertiary)}</td>
       <td>${fmtN(grand.wGa)}</td><td>${pct(grand.wGa,grand.outlet)}</td>
     </tr>` : '';
 }
@@ -2210,13 +2208,12 @@ function renderSellinSummaryTable(){
   const pct = (w,t) => t? (w/t*100).toFixed(0)+'%' : '–';
   const rowCells = r => `
       <td>${fmtN(r.outlet)}</td><td>${fmtN(r.ga)}</td>
-      <td>${fmtBn(r.sp)}</td><td>${fmtBn(r.vou)}</td><td>${fmtBn(r.saldo)}</td>
-      <td>${fmtBn(r.tertiary)}</td><td>${fmtBn(r.secondary)}</td>
-      <td>${fmtN(r.wSp)}</td><td>${pct(r.wSp,r.outlet)}</td>
-      <td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td>
-      <td>${fmtN(r.wSaldo)}</td><td>${pct(r.wSaldo,r.outlet)}</td>
-      <td>${fmtN(r.wGa)}</td><td>${pct(r.wGa,r.outlet)}</td>
-      <td>${fmtN(r.s0)}</td><td>${fmtN(r.s1)}</td><td>${fmtN(r.s2)}</td><td>${fmtN(r.s3)}</td><td>${fmtN(r.s4)}</td>`;
+      <td>${fmtN(r.wSp)}</td><td>${pct(r.wSp,r.outlet)}</td><td>${fmtBn(r.sp)}</td>
+      <td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td><td>${fmtBn(r.vou)}</td>
+      <td>${fmtN(r.wSaldo)}</td><td>${pct(r.wSaldo,r.outlet)}</td><td>${fmtBn(r.saldo)}</td>
+      <td>${fmtBn(r.secondary)}</td><td>${fmtBn(r.tertiary)}</td>
+      <td>${fmtN(r.s0)}</td><td>${fmtN(r.s1)}</td><td>${fmtN(r.s2)}</td><td>${fmtN(r.s3)}</td><td>${fmtN(r.s4)}</td>
+      <td>${fmtN(r.wGa)}</td>`;
 
   const agg = aggregateBy(filteredSellin, gKey);
   const rows = Object.keys(agg).map(g=>({key:g, name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.ga-a.ga);
@@ -2241,7 +2238,7 @@ function renderSellinSummaryTable(){
       bodyHtml += `<tr><td>${r.name}</td>${rowCells(r)}</tr>`;
     }
   });
-  document.getElementById('siSummaryTbody').innerHTML = bodyHtml || '<tr><td colspan="21" style="color:var(--muted);">Tidak ada data.</td></tr>';
+  document.getElementById('siSummaryTbody').innerHTML = bodyHtml || '<tr><td colspan="20" style="color:var(--muted);">Tidak ada data.</td></tr>';
 
   const grand = rows.reduce((acc,r)=>{
     acc.outlet+=r.outlet; acc.ga+=r.ga; acc.sp+=r.sp; acc.vou+=r.vou; acc.saldo+=r.saldo;
@@ -2253,13 +2250,12 @@ function renderSellinSummaryTable(){
   document.getElementById('siSummaryTfoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
       <td>Total West Java</td><td>${fmtN(grand.outlet)}</td><td>${fmtN(grand.ga)}</td>
-      <td>${fmtBn(grand.sp)}</td><td>${fmtBn(grand.vou)}</td><td>${fmtBn(grand.saldo)}</td>
-      <td>${fmtBn(grand.tertiary)}</td><td>${fmtBn(grand.secondary)}</td>
-      <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td>
-      <td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td>
-      <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td>
-      <td>${fmtN(grand.wGa)}</td><td>${pct(grand.wGa,grand.outlet)}</td>
+      <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td><td>${fmtBn(grand.sp)}</td>
+      <td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td><td>${fmtBn(grand.vou)}</td>
+      <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td><td>${fmtBn(grand.saldo)}</td>
+      <td>${fmtBn(grand.secondary)}</td><td>${fmtBn(grand.tertiary)}</td>
       <td>${fmtN(grand.s0)}</td><td>${fmtN(grand.s1)}</td><td>${fmtN(grand.s2)}</td><td>${fmtN(grand.s3)}</td><td>${fmtN(grand.s4)}</td>
+      <td>${fmtN(grand.wGa)}</td>
     </tr>` : '';
 }
 
@@ -3903,8 +3899,8 @@ function renderMapPoints(){
     const sellinSp = sellinRow ? sellinRow[IDX_S.sellinSp] : null;
     const sellinSaldo = sellinRow ? sellinRow[IDX_S.sellinSaldo] : null;
     const marker = L.circleMarker([p[GIDX.lat], p[GIDX.lon]], {
-      radius: 3.2, color: isRed ? '#C81E3A' : '#1B8A5A', fillColor: isRed ? '#C81E3A' : '#1B8A5A',
-      fillOpacity: 0.75, weight: isRed ? 1 : 0.6
+      radius: 4.5, color: isRed ? '#C81E3A' : '#1B8A5A', fillColor: isRed ? '#C81E3A' : '#1B8A5A',
+      fillOpacity: 0.75, weight: isRed ? 1.5 : 1
     });
     marker.bindPopup(
       `<b>${p[GIDX.outletName]||'-'}</b><br>Outlet ID: ${p[GIDX.outletId]}<br>Brand: ${brandName} · Branch: ${META.branches[p[GIDX.branchIdx]]} · MC: ${META.micros[p[GIDX.microIdx]]}<br>Kategori: ${META.cats[p[GIDX.catIdx]]}<br>Lat/Long: ${p[GIDX.lat]}, ${p[GIDX.lon]}<br>Sell In SP: ${sellinSp!==null ? fmtN(sellinSp) : '-'}<br>Sell In Saldo: ${sellinSaldo!==null ? fmtN(sellinSaldo) : '-'}<br>Stock Saldo (Salmo): ${stockSaldo!==null ? fmtN(stockSaldo) : '-'}<br>Status: ${isRed ? '<span style="color:#C81E3A;font-weight:600;">Ada masalah (cek GA/Sell In SP/Sell In Saldo/Stock)</span>' : '<span style="color:#1B8A5A;font-weight:600;">Lengkap</span>'}${isNoStock ? '<br><span style="color:#C81E3A;font-weight:600;">⚠ Tidak ada stock sama sekali</span>' : ''}`
@@ -3995,6 +3991,36 @@ function renderUpdateLog(){
       <td>${fmtN(e.count)}</td>
     </tr>`).join('') || '<tr><td colspan="4" style="color:var(--muted);">Belum ada riwayat update.</td></tr>';
 }
+
+let LOGIN_LOG = [];
+
+async function loadLoginLog(){
+  try{
+    const stored = await storageGet('login_log');
+    if(stored && Array.isArray(stored)) LOGIN_LOG = stored;
+  }catch(e){}
+}
+
+async function logLogin(username, role){
+  LOGIN_LOG.unshift({ time: new Date().toISOString(), username, role });
+  LOGIN_LOG = LOGIN_LOG.slice(0, 200); // logins happen more often than data uploads, keep more history
+  // Best-effort — a failed write here should never block someone from actually
+  // logging in, so this deliberately doesn't check/report the result the way
+  // saveUsers()/persistAll() do elsewhere.
+  storageSet('login_log', LOGIN_LOG).catch(()=>{});
+  renderLoginLog();
+}
+
+function renderLoginLog(){
+  const body = document.getElementById('loginLogBody');
+  if(!body) return;
+  body.innerHTML = LOGIN_LOG.map(e=>`
+    <tr>
+      <td>${new Date(e.time).toLocaleString('id-ID')}</td>
+      <td>${e.username}</td>
+      <td>${e.role}</td>
+    </tr>`).join('') || '<tr><td colspan="3" style="color:var(--muted);">Belum ada riwayat login.</td></tr>';
+}
 let pendingLoginUser = null; // set while the force-change-password gate is open
 
 async function loadUsers(){
@@ -4008,6 +4034,17 @@ async function loadUsers(){
   }
 }
 async function saveUsers(){
+  // Refuse to write until we've actually confirmed we're holding the real,
+  // server-loaded user list — never the initial hardcoded default. Writing
+  // USERS overwrites the *entire* list on the server, so saving a stale/default
+  // copy (e.g. because the load failed or hadn't finished yet) would silently
+  // wipe out real password changes other sessions had already made. This is
+  // exactly what caused a previously-changed password to get reset back to
+  // default in the past — this guard is the permanent fix for that.
+  if(!usersLoaded){
+    console.error('saveUsers: refused — USERS has not been confirmed loaded from the server yet.');
+    return false;
+  }
   return await storageSetWithRetry('users', USERS);
 }
 
@@ -4035,17 +4072,36 @@ function finishLogin(username, role){
   document.getElementById('forceChangeGate').classList.add('hidden');
   applyLoginState();
   showToast('Berhasil login sebagai ' + username + '.');
+  logLogin(username, role || 'viewer');
 }
 
 async function doLogin(){
   const u = document.getElementById('loginUser').value.trim();
   const p = document.getElementById('loginPass').value;
   const errEl = document.getElementById('loginError');
+  const btn = document.getElementById('btnDoLogin');
   // USERS loads independently and in parallel with everything else now (see init()),
   // so this normally resolves instantly — it only actually waits in the rare case
   // someone submits the form in the first moment the page opens, before the
-  // background users fetch has finished.
-  if(usersReadyPromise) await usersReadyPromise;
+  // background users fetch has finished. If the connection is slow/flaky that first
+  // fetch can take a while (it retries). We show feedback and give up waiting after
+  // 8s so the button never looks frozen — but critically, if it's STILL not loaded
+  // by then we stop and say so, rather than silently validating against whatever
+  // USERS currently holds (the built-in default account), which would wrongly tell
+  // someone their real, correct password is wrong just because it hadn't arrived yet.
+  if(usersReadyPromise && !usersLoaded){
+    btn.disabled = true;
+    const prevLabel = btn.textContent;
+    btn.textContent = 'Memeriksa…';
+    errEl.textContent = '';
+    await Promise.race([usersReadyPromise, new Promise(r=>setTimeout(r, 15000))]);
+    btn.disabled = false;
+    btn.textContent = prevLabel;
+    if(!usersLoaded){
+      errEl.textContent = 'Koneksi lambat — data akun belum selesai dimuat. Tunggu sebentar lalu coba lagi (jangan asumsikan password salah dulu).';
+      return;
+    }
+  }
   const byName = USERS.find(x=>x.username===u);
   let match = null;
   if(byName){
@@ -4378,7 +4434,7 @@ function bindEvents(){
   document.getElementById('supBtnDownloadSummary').addEventListener('click', exportSupplySummaryCsv);
   document.getElementById('btnRefresh').addEventListener('click', ()=>checkForRemoteUpdate(false));
 
-  document.getElementById('btnOpenUpdate').addEventListener('click', ()=>{ renderUpdateLog(); document.getElementById('updateOverlay').classList.add('show'); });
+  document.getElementById('btnOpenUpdate').addEventListener('click', ()=>{ renderUpdateLog(); renderLoginLog(); document.getElementById('updateOverlay').classList.add('show'); });
   document.getElementById('closeUpdate').addEventListener('click', ()=>document.getElementById('updateOverlay').classList.remove('show'));
   document.getElementById('btnForceChangePass').addEventListener('click', doForceChangePassword);
   document.getElementById('forceNewPass2').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doForceChangePassword(); });
@@ -4463,16 +4519,25 @@ async function loadStep(name, fn){
 // since the button's event listener was only attached at the very end of init().
 // Now the button is wired up straight away and USERS loads independently, so login
 // stops being blocked behind data that has nothing to do with it.
-let usersReadyPromise = loadStep('users', loadUsers);
+let usersLoaded = false;
+let usersReadyPromise = loadStep('users', loadUsers).then(()=>{ usersLoaded = true; });
 bindLoginEvents();
 
 async function init(){
+  // Outlets has to load first (it sets META, which the Sell In / Supply loaders read
+  // for de-duping). Everything else — Sell In, Supply, the update log, and the map's
+  // geo points — is independent of each other and used to run one-after-another for
+  // no real reason, so the page waited through 4 separate network round-trips in a
+  // row. Running them together cuts that down to whichever one is slowest.
   await loadStep('outlets', loadFromStorageOrSeed);
-  await loadStep('sellin', loadSellinFromStorageOrSeed);
+  await Promise.all([
+    loadStep('sellin', loadSellinFromStorageOrSeed),
+    loadStep('updateLog', loadUpdateLog),
+    loadStep('loginLog', loadLoginLog),
+    loadStep('supply', loadSupplyFromStorageOrSeed),
+    loadStep('geo', loadGeoFromStorageOrSeed),
+  ]);
   await usersReadyPromise;
-  await loadStep('updateLog', loadUpdateLog);
-  await loadStep('supply', loadSupplyFromStorageOrSeed);
-  await loadStep('geo', loadGeoFromStorageOrSeed);
   // "Perbarui data" is hidden by default so people who only have the shared link can
   // view/download but not overwrite the online data. Logging in as admin unlocks it.
   applyLoginState();
