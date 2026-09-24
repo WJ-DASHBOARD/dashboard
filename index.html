@@ -3898,13 +3898,23 @@ function renderMapPoints(){
     const stockSaldo = stockRow ? stockRow[IDX.salAmt] : null;
     const sellinSp = sellinRow ? sellinRow[IDX_S.sellinSp] : null;
     const sellinSaldo = sellinRow ? sellinRow[IDX_S.sellinSaldo] : null;
-    const marker = L.circleMarker([p[GIDX.lat], p[GIDX.lon]], {
-      radius: 4.5, color: isRed ? '#C81E3A' : '#1B8A5A', fillColor: isRed ? '#C81E3A' : '#1B8A5A',
-      fillOpacity: 0.75, weight: isRed ? 1.5 : 1
+    // Two layered markers per point: a small visible dot (back to its original size,
+    // purely decorative — interactive:false so it never steals the click) plus a
+    // larger INVISIBLE circle underneath that actually catches clicks/taps and shows
+    // the popup. This keeps the map looking exactly as compact as before while making
+    // outlets meaningfully easier to click/tap, especially isolated points far from
+    // any other marker to help aim at.
+    const hitMarker = L.circleMarker([p[GIDX.lat], p[GIDX.lon]], {
+      radius: 9, fillOpacity: 0, opacity: 0, interactive: true
     });
-    marker.bindPopup(
+    hitMarker.bindPopup(
       `<b>${p[GIDX.outletName]||'-'}</b><br>Outlet ID: ${p[GIDX.outletId]}<br>Brand: ${brandName} · Branch: ${META.branches[p[GIDX.branchIdx]]} · MC: ${META.micros[p[GIDX.microIdx]]}<br>Kategori: ${META.cats[p[GIDX.catIdx]]}<br>Lat/Long: ${p[GIDX.lat]}, ${p[GIDX.lon]}<br>Sell In SP: ${sellinSp!==null ? fmtN(sellinSp) : '-'}<br>Sell In Saldo: ${sellinSaldo!==null ? fmtN(sellinSaldo) : '-'}<br>Stock Saldo (Salmo): ${stockSaldo!==null ? fmtN(stockSaldo) : '-'}<br>Status: ${isRed ? '<span style="color:#C81E3A;font-weight:600;">Ada masalah (cek GA/Sell In SP/Sell In Saldo/Stock)</span>' : '<span style="color:#1B8A5A;font-weight:600;">Lengkap</span>'}${isNoStock ? '<br><span style="color:#C81E3A;font-weight:600;">⚠ Tidak ada stock sama sekali</span>' : ''}`
     );
+    mapMarkerLayer.addLayer(hitMarker);
+    const marker = L.circleMarker([p[GIDX.lat], p[GIDX.lon]], {
+      radius: 3.2, color: isRed ? '#C81E3A' : '#1B8A5A', fillColor: isRed ? '#C81E3A' : '#1B8A5A',
+      fillOpacity: 0.75, weight: isRed ? 1 : 0.6, interactive: false
+    });
     mapMarkerLayer.addLayer(marker);
     if(searchTokens.length) shownLatLngs.push([p[GIDX.lat], p[GIDX.lon]]);
   });
