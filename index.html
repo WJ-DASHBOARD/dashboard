@@ -3993,6 +3993,17 @@ async function loadUsers(){
   }
 }
 async function saveUsers(){
+  // Refuse to write until we've actually confirmed we're holding the real,
+  // server-loaded user list — never the initial hardcoded default. Writing
+  // USERS overwrites the *entire* list on the server, so saving a stale/default
+  // copy (e.g. because the load failed or hadn't finished yet) would silently
+  // wipe out real password changes other sessions had already made. This is
+  // exactly what caused a previously-changed password to get reset back to
+  // default in the past — this guard is the permanent fix for that.
+  if(!usersLoaded){
+    console.error('saveUsers: refused — USERS has not been confirmed loaded from the server yet.');
+    return false;
+  }
   return await storageSetWithRetry('users', USERS);
 }
 
@@ -4026,11 +4037,29 @@ async function doLogin(){
   const u = document.getElementById('loginUser').value.trim();
   const p = document.getElementById('loginPass').value;
   const errEl = document.getElementById('loginError');
+  const btn = document.getElementById('btnDoLogin');
   // USERS loads independently and in parallel with everything else now (see init()),
   // so this normally resolves instantly — it only actually waits in the rare case
   // someone submits the form in the first moment the page opens, before the
-  // background users fetch has finished.
-  if(usersReadyPromise) await usersReadyPromise;
+  // background users fetch has finished. If the connection is slow/flaky that first
+  // fetch can take a while (it retries). We show feedback and give up waiting after
+  // 8s so the button never looks frozen — but critically, if it's STILL not loaded
+  // by then we stop and say so, rather than silently validating against whatever
+  // USERS currently holds (the built-in default account), which would wrongly tell
+  // someone their real, correct password is wrong just because it hadn't arrived yet.
+  if(usersReadyPromise && !usersLoaded){
+    btn.disabled = true;
+    const prevLabel = btn.textContent;
+    btn.textContent = 'Memeriksa…';
+    errEl.textContent = '';
+    await Promise.race([usersReadyPromise, new Promise(r=>setTimeout(r, 15000))]);
+    btn.disabled = false;
+    btn.textContent = prevLabel;
+    if(!usersLoaded){
+      errEl.textContent = 'Koneksi lambat — data akun belum selesai dimuat. Tunggu sebentar lalu coba lagi (jangan asumsikan password salah dulu).';
+      return;
+    }
+  }
   const byName = USERS.find(x=>x.username===u);
   let match = null;
   if(byName){
@@ -4448,7 +4477,8 @@ async function loadStep(name, fn){
 // since the button's event listener was only attached at the very end of init().
 // Now the button is wired up straight away and USERS loads independently, so login
 // stops being blocked behind data that has nothing to do with it.
-let usersReadyPromise = loadStep('users', loadUsers);
+let usersLoaded = false;
+let usersReadyPromise = loadStep('users', loadUsers).then(()=>{ usersLoaded = true; });
 bindLoginEvents();
 
 async function init(){
