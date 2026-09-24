@@ -807,14 +807,14 @@
 
   <div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-      <h3 style="margin:0;">Summary Supply per Branch</h3>
+      <h3 style="margin:0;" id="supSummaryTitle">Summary Supply per Branch</h3>
       <button class="btn btn-ghost btn-sm" id="supBtnDownloadSummary">Unduh CSV</button>
     </div>
     <div style="overflow:auto;max-height:360px;">
       <table class="summary" id="supSummaryTable">
         <thead>
           <tr>
-            <th style="text-align:left;" rowspan="2">Branch</th>
+            <th style="text-align:left;" rowspan="2" id="supSummaryHeadCol">Branch</th>
             <th rowspan="2">Outlet</th>
             <th colspan="3" style="text-align:center;">SP Inject (Outlet / Hit / Rev Bn)</th>
             <th colspan="3" style="text-align:center;">Rebuy (Outlet / Hit / Rev Bn)</th>
@@ -1881,12 +1881,16 @@ function renderTopProducts(){
   renderGroup('VoucherORI', 'supTopVouOriBody');
 }
 
+let expandedBranchesSup = new Set();
+
 function renderSupplySummaryTable(){
-  const agg = {};
-  filteredSupply.forEach(r=>{
-    const g = r[IDX_SUP.branchIdx];
-    if(!agg[g]) agg[g] = { outlet:0, spOutlet:0, spHit:0, spRev:0, rebuyOutlet:0, rebuyHit:0, rebuyRev:0, vouOutlet:0, vouHit:0, vouRev:0, vouOriOutlet:0, vouOriHit:0, vouOriRev:0 };
-    const a = agg[g];
+  const ctx = groupContext();
+  document.getElementById('supSummaryTitle').textContent = 'Summary Supply ' + ctx.title;
+  document.getElementById('supSummaryHeadCol').textContent = ctx.label==='branch' ? 'Branch' : 'Micro Cluster';
+  const gKey = ctx.key===IDX.branchIdx ? IDX_SUP.branchIdx : IDX_SUP.microIdx;
+
+  const initSup = () => ({ outlet:0, spOutlet:0, spHit:0, spRev:0, rebuyOutlet:0, rebuyHit:0, rebuyRev:0, vouOutlet:0, vouHit:0, vouRev:0, vouOriOutlet:0, vouOriHit:0, vouOriRev:0 });
+  const accumSup = (a,r) => {
     a.outlet++;
     const spHit = r[IDX_SUP.sp_injectHit];
     const rebuyHit = r[IDX_SUP.rebuy_cvmHit]+r[IDX_SUP.rebuy_atlHit]+r[IDX_SUP.rebuy_pulsaHit];
@@ -1904,16 +1908,47 @@ function renderSupplySummaryTable(){
     a.vouRev += r[IDX_SUP.vou_injectRev];
     a.vouOriHit += vouOriHit;
     a.vouOriRev += r[IDX_SUP.vouori_spvoriRev];
-  });
-  const rows = Object.keys(agg).map(g=>({name: META.branches[g], ...agg[g]})).sort((a,b)=>(b.spRev+b.rebuyRev+b.vouRev+b.vouOriRev)-(a.spRev+a.rebuyRev+a.vouRev+a.vouOriRev));
-  document.getElementById('supSummaryBody').innerHTML = rows.map(r=>`
-    <tr>
-      <td>${r.name}</td><td>${fmtN(r.outlet)}</td>
+  };
+  const aggregateBy = (arr, keyIdx) => {
+    const agg = {};
+    arr.forEach(r=>{
+      const g = r[keyIdx];
+      if(!agg[g]) agg[g] = initSup();
+      accumSup(agg[g], r);
+    });
+    return agg;
+  };
+  const rowCells = r => `
+      <td>${fmtN(r.outlet)}</td>
       <td>${fmtN(r.spOutlet)}</td><td>${fmtN(r.spHit)}</td><td>${fmtBn(r.spRev)}</td>
       <td>${fmtN(r.rebuyOutlet)}</td><td>${fmtN(r.rebuyHit)}</td><td>${fmtBn(r.rebuyRev)}</td>
       <td>${fmtN(r.vouOutlet)}</td><td>${fmtN(r.vouHit)}</td><td>${fmtBn(r.vouRev)}</td>
-      <td>${fmtN(r.vouOriOutlet)}</td><td>${fmtN(r.vouOriHit)}</td><td>${fmtBn(r.vouOriRev)}</td>
-    </tr>`).join('') || '<tr><td colspan="14" style="color:var(--muted);">Tidak ada data.</td></tr>';
+      <td>${fmtN(r.vouOriOutlet)}</td><td>${fmtN(r.vouOriHit)}</td><td>${fmtBn(r.vouOriRev)}</td>`;
+
+  const agg = aggregateBy(filteredSupply, gKey);
+  const rows = Object.keys(agg).map(g=>({key:g, name: ctx.names[g], ...agg[g]})).sort((a,b)=>(b.spRev+b.rebuyRev+b.vouRev+b.vouOriRev)-(a.spRev+a.rebuyRev+a.vouRev+a.vouOriRev));
+
+  let bodyHtml = '';
+  rows.forEach(r=>{
+    if(ctx.label==='branch'){
+      const isOpen = expandedBranchesSup.has(String(r.key));
+      bodyHtml += `<tr>
+        <td><span class="expand-toggle" data-scope="sup" data-key="${r.key}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${isOpen?'⊟':'⊞'}</span>${r.name}</td>${rowCells(r)}
+      </tr>`;
+      if(isOpen){
+        const subAgg = aggregateBy(filteredSupply.filter(rr=>String(rr[IDX_SUP.branchIdx])===String(r.key)), IDX_SUP.microIdx);
+        const subRows = Object.keys(subAgg).map(mg=>({name: META.micros[mg], ...subAgg[mg]})).sort((a,b)=>(b.spRev+b.rebuyRev+b.vouRev+b.vouOriRev)-(a.spRev+a.rebuyRev+a.vouRev+a.vouOriRev));
+        subRows.forEach(mr=>{
+          bodyHtml += `<tr style="background:#FAFAF8;">
+            <td style="padding-left:28px;color:var(--ink-soft);font-size:11.5px;">${mr.name}</td>${rowCells(mr)}
+          </tr>`;
+        });
+      }
+    } else {
+      bodyHtml += `<tr><td>${r.name}</td>${rowCells(r)}</tr>`;
+    }
+  });
+  document.getElementById('supSummaryBody').innerHTML = bodyHtml || '<tr><td colspan="14" style="color:var(--muted);">Tidak ada data.</td></tr>';
   const grand = rows.reduce((acc,r)=>{
     acc.outlet+=r.outlet; acc.spOutlet+=r.spOutlet; acc.spHit+=r.spHit; acc.spRev+=r.spRev;
     acc.rebuyOutlet+=r.rebuyOutlet; acc.rebuyHit+=r.rebuyHit; acc.rebuyRev+=r.rebuyRev;
@@ -4287,6 +4322,9 @@ function bindEvents(){
     } else if(t.dataset.scope==='si'){
       if(expandedBranchesSI.has(key)) expandedBranchesSI.delete(key); else expandedBranchesSI.add(key);
       renderSellinSummaryTable();
+    } else if(t.dataset.scope==='sup'){
+      if(expandedBranchesSup.has(key)) expandedBranchesSup.delete(key); else expandedBranchesSup.add(key);
+      renderSupplySummaryTable();
     }
   });
 
