@@ -649,20 +649,15 @@
             <th style="text-align:left;" rowspan="2">Kategori</th>
             <th rowspan="2">Outlet</th>
             <th rowspan="2">Total GA</th>
-            <th rowspan="2">Sell In SP (Bn)</th>
-            <th rowspan="2">Sell In Voucher (Bn)</th>
-            <th rowspan="2">Sell In Saldo (Bn)</th>
-            <th rowspan="2">Tertiary (Bn)</th>
+            <th colspan="9" style="text-align:center;">#OUTLET with Sell in</th>
             <th rowspan="2">Secondary (Bn)</th>
-            <th colspan="2" style="text-align:center;">SP</th>
-            <th colspan="2" style="text-align:center;">Voucher</th>
-            <th colspan="2" style="text-align:center;">Saldo</th>
+            <th rowspan="2">Tertiary (Bn)</th>
             <th colspan="2" style="text-align:center;">GA</th>
           </tr>
           <tr>
-            <th style="font-weight:500;">#With</th><th style="font-weight:500;">%With</th>
-            <th style="font-weight:500;">#With</th><th style="font-weight:500;">%With</th>
-            <th style="font-weight:500;">#With</th><th style="font-weight:500;">%With</th>
+            <th style="font-weight:500;">SP</th><th style="font-weight:500;">%</th><th style="font-weight:500;">Amount (Bn)</th>
+            <th style="font-weight:500;">Voucher</th><th style="font-weight:500;">%</th><th style="font-weight:500;">Amount (Bn)</th>
+            <th style="font-weight:500;">Saldo</th><th style="font-weight:500;">%</th><th style="font-weight:500;">Amount (Bn)</th>
             <th style="font-weight:500;">#With</th><th style="font-weight:500;">%With</th>
           </tr>
         </thead>
@@ -2148,11 +2143,10 @@ function renderSellinCatSummary(){
   document.getElementById('siCatTbody').innerHTML = rows.map(r=>`
     <tr>
       <td><span class="badge ${r.name}">${r.name}</span></td><td>${fmtN(r.outlet)}</td><td>${fmtN(r.ga)}</td>
-      <td>${fmtBn(r.sp)}</td><td>${fmtBn(r.vou)}</td><td>${fmtBn(r.saldo)}</td>
-      <td>${fmtBn(r.tertiary)}</td><td>${fmtBn(r.secondary)}</td>
-      <td>${fmtN(r.wSp)}</td><td>${pct(r.wSp,r.outlet)}</td>
-      <td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td>
-      <td>${fmtN(r.wSaldo)}</td><td>${pct(r.wSaldo,r.outlet)}</td>
+      <td>${fmtN(r.wSp)}</td><td>${pct(r.wSp,r.outlet)}</td><td>${fmtBn(r.sp)}</td>
+      <td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td><td>${fmtBn(r.vou)}</td>
+      <td>${fmtN(r.wSaldo)}</td><td>${pct(r.wSaldo,r.outlet)}</td><td>${fmtBn(r.saldo)}</td>
+      <td>${fmtBn(r.secondary)}</td><td>${fmtBn(r.tertiary)}</td>
       <td>${fmtN(r.wGa)}</td><td>${pct(r.wGa,r.outlet)}</td>
     </tr>`).join('') || '<tr><td colspan="16" style="color:var(--muted);">Tidak ada data.</td></tr>';
 
@@ -2164,11 +2158,10 @@ function renderSellinCatSummary(){
   document.getElementById('siCatTfoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
       <td>Total West Java</td><td>${fmtN(grand.outlet)}</td><td>${fmtN(grand.ga)}</td>
-      <td>${fmtBn(grand.sp)}</td><td>${fmtBn(grand.vou)}</td><td>${fmtBn(grand.saldo)}</td>
-      <td>${fmtBn(grand.tertiary)}</td><td>${fmtBn(grand.secondary)}</td>
-      <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td>
-      <td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td>
-      <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td>
+      <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td><td>${fmtBn(grand.sp)}</td>
+      <td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td><td>${fmtBn(grand.vou)}</td>
+      <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td><td>${fmtBn(grand.saldo)}</td>
+      <td>${fmtBn(grand.secondary)}</td><td>${fmtBn(grand.tertiary)}</td>
       <td>${fmtN(grand.wGa)}</td><td>${pct(grand.wGa,grand.outlet)}</td>
     </tr>` : '';
 }
@@ -4459,12 +4452,19 @@ let usersReadyPromise = loadStep('users', loadUsers);
 bindLoginEvents();
 
 async function init(){
+  // Outlets has to load first (it sets META, which the Sell In / Supply loaders read
+  // for de-duping). Everything else — Sell In, Supply, the update log, and the map's
+  // geo points — is independent of each other and used to run one-after-another for
+  // no real reason, so the page waited through 4 separate network round-trips in a
+  // row. Running them together cuts that down to whichever one is slowest.
   await loadStep('outlets', loadFromStorageOrSeed);
-  await loadStep('sellin', loadSellinFromStorageOrSeed);
+  await Promise.all([
+    loadStep('sellin', loadSellinFromStorageOrSeed),
+    loadStep('updateLog', loadUpdateLog),
+    loadStep('supply', loadSupplyFromStorageOrSeed),
+    loadStep('geo', loadGeoFromStorageOrSeed),
+  ]);
   await usersReadyPromise;
-  await loadStep('updateLog', loadUpdateLog);
-  await loadStep('supply', loadSupplyFromStorageOrSeed);
-  await loadStep('geo', loadGeoFromStorageOrSeed);
   // "Perbarui data" is hidden by default so people who only have the shared link can
   // view/download but not overwrite the online data. Logging in as admin unlocks it.
   applyLoginState();
