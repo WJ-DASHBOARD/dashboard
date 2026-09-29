@@ -150,6 +150,11 @@
   .bar-seg-ga3{background:#4E9E72;height:100%;flex-shrink:0;}
   .bar-seg-ga4{background:var(--green);height:100%;flex-shrink:0;}
   .bar-total{width:auto;min-width:44px;text-align:right;color:var(--muted);font-size:11.5px;white-space:nowrap;}
+  .cmp-toggle{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;cursor:pointer;padding:7px 13px;border:1px solid var(--border);border-radius:20px;background:#fff;user-select:none;}
+  .cmp-toggle input{accent-color:var(--red);cursor:pointer;}
+  .cmp-banner{font-size:11.5px;color:var(--muted);flex-basis:100%;padding:0 2px;}
+  .dlt{font-size:9px;font-weight:600;line-height:1.15;white-space:nowrap;}
+  .dlt.good{color:var(--green);} .dlt.bad{color:var(--red);} .dlt.flat{color:var(--muted);}
   .bar-pct{width:110px;flex-shrink:0;text-align:right;color:var(--muted);font-size:10px;white-space:nowrap;}
 
   .legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:12px;}
@@ -256,6 +261,13 @@
     <div class="search-wrap">
       <input type="text" id="fSearch" placeholder="Cari Outlet ID / Nama / Branch (mis. &quot;cell abc kuningan&quot;)…" style="min-width:260px;">
     </div>
+    <label class="cmp-toggle" id="cmpToggleWrap" title="Compare angka sekarang dengan data Last Week (data sebelum upload terakhir)">
+      <input type="checkbox" id="cmpToggle"> <span>Compare Last Week</span>
+    </label>
+    <label class="cmp-toggle" id="cmpToggleLmtdWrap" title="Compare angka sekarang dengan LMTD: 1 sampai tanggal yang sama di bulan lalu (Last Month To Date)">
+      <input type="checkbox" id="cmpToggleLmtd"> <span>Compare LMTD</span>
+    </label>
+    <div class="cmp-banner" id="cmpBanner" style="display:none;"></div>
   </div>
 </div>
 
@@ -283,7 +295,7 @@
         <h3 style="margin:0 0 6px;font-size:13px;font-weight:600;">Summary (sesuai filter)</h3>
         <div style="overflow:auto;">
         <table class="summary" id="petaStatTable">
-          <thead><tr><th style="text-align:left;">Metrik</th><th>IM3</th><th>3ID</th><th>IOH</th></tr></thead>
+          <thead><tr><th style="text-align:left;">Metrik</th><th>IM3</th><th>3ID</th><th>IOH</th><th id="petaCmpTh" style="display:none;">vs LW</th></tr></thead>
           <tbody id="petaStatList"></tbody>
         </table>
         </div>
@@ -397,7 +409,7 @@
     </div>
   </div>
 
-  <div class="two-col">
+  <div class="two-col" style="grid-template-columns:1fr;">
     <div class="panel">
       <h3 id="breakdownTitle">Slab Saldo per Branch</h3>
       <div id="breakdownChart"></div>
@@ -528,6 +540,7 @@
       <div class="kpi-label">Total Sell In Amount (Bn)</div>
       <div class="kpi-value" id="siKpiSellin">–</div>
       <div class="kpi-sub">SP + Voucher + Saldo</div>
+      <div class="kpi-sub" id="siSpPcsSub">SP (Pcs): –</div>
     </div>
     <div class="kpi-card warn">
       <div class="kpi-label">Total Tertiary + Secondary (Bn)</div>
@@ -707,7 +720,7 @@
   </details>
 
   <footer class="note">
-    Data Sell In &amp; GA bersumber dari file DSE_PROD (Sell In SP/Voucher/Saldo, Tertiary, Secondary) dan RGUGA (GA/aktivasi) bulan berjalan, dicocokkan ke outlet pairing yang sama dengan tab Low Balance. Nilai GA adalah akumulasi month-to-date sampai tanggal data terakhir.
+    Sell In bersumber dari file DSE_PROD (SP/Voucher/Saldo), GA dari file GA (per MSISDN / RGUGA, menu #6), dan Secondary dari export BigQuery (menu #5), semuanya bulan berjalan, dicocokkan ke outlet pairing yang sama dengan tab Low Balance. Nilai GA adalah akumulasi month-to-date sampai tanggal data terakhir.
   </footer>
 
 </div>
@@ -976,7 +989,7 @@
 
     <div class="upload-block">
       <h4>3. Data Sell In &amp; GA — DSE_PROD (CSV, per brand)</h4>
-      <p class="hint">Upload file IM3_DSE_PROD dan/atau 3ID_DSE_PROD bulan berjalan (region difilter otomatis ke WEST JAVA). Brand terdeteksi otomatis dari struktur kolom file. Bisa pilih 2 file (IM3 + 3ID) sekaligus — diproses satu per satu otomatis.</p>
+      <p class="hint">Upload file IM3_DSE_PROD dan/atau 3ID_DSE_PROD bulan berjalan (region difilter otomatis ke WEST JAVA). Brand terdeteksi otomatis dari struktur kolom file. Bisa pilih 2 file (IM3 + 3ID) sekaligus — diproses satu per satu otomatis. <b>Dari file ini hanya data Sell In (SP, Voucher, Saldo) yang diambil.</b> Kolom rgu_ga, tertiary, dan secondary di file diabaikan: GA diisi lewat menu #6, Secondary lewat menu #5, dan keduanya (juga Tertiary) tetap memakai data sebelumnya.</p>
       <input type="file" id="sellinFile" accept=".csv" multiple>
       <div class="progress-line" id="sellinProgress"></div>
     </div>
@@ -993,6 +1006,48 @@
       <p class="hint">Ganti kolom Secondary di data Sell In &amp; GA yang sudah ada, dari file transaksi mentah (kolom brand, region, outlet_id, parameter, rev, dst — 1 file berisi IM3+3ID sekaligus). Baris difilter otomatis ke region=WEST JAVA dan parameter=SECONDARY, lalu nilai <b>rev</b> dijumlahkan per outlet. Hanya kolom Secondary yang diganti — GA/Sell In SP/Voucher/Saldo/Tertiary tidak disentuh. Outlet yang tidak muncul di file ini akan di-set Secondary = 0 (dianggap tidak ada transaksi Secondary bulan tsb). Perlu data Sell In &amp; GA (menu #3) sudah pernah diupload dulu.</p>
       <input type="file" id="secondaryFile" accept=".csv">
       <div class="progress-line" id="secondaryProgress"></div>
+    </div>
+
+    <div class="upload-block">
+      <h4>6. Update GA — file RGUGA atau file GA per MSISDN (CSV)</h4>
+      <p class="hint">Ganti angka <b>GA (MTD)</b> di data Sell In &amp; GA. Format file dikenali otomatis (bisa pilih beberapa file sekaligus):<br>
+      • <b>RGUGA harian</b> — <code>IM3_OUTLET_RGUGA_YYYYMM.csv</code> / <code>3ID_OUTLET_RGUGA_YYYYMM.csv</code> (⚠ angka RGUGA 3ID jauh lebih besar dari GA di DSE_PROD dan GA per MSISDN — untuk 3ID sebaiknya pakai export BigQuery atau file GA per MSISDN): kolom <b>dt01…dt31 dijumlahkan</b> dari tanggal 1 sampai <b>tanggal terakhir yang ada datanya</b> (kolom hari setelahnya yang nol semua diabaikan), semua baris &amp; parameter per outlet dijumlah, hanya region WEST JAVA.<br>
+      • <b>Export BigQuery</b> — file berkolom <code>brand, dt_id, kpi, outlet_id, b_msisdn</code>: <b>hanya baris kpi = RET_TAG yang dihitung sebagai GA</b> (huruf besar/kecil dan spasi tidak masalah; semua <code>flag_outlet</code>, termasuk 0); baris kpi = SELLIN adalah sell-in SIM, bukan GA, dan diabaikan. GA outlet = jumlah MSISDN unik per <code>outlet_id</code> di bulan terakhir pada file; IM3 &amp; 3ID sekaligus, tanggal terakhir = <code>dt_id</code> terbaru per brand.<br>
+      • <b>GA per MSISDN</b> — file berkolom <code>msisdn, brand, ga_dt, tag_outlet</code>: 1 baris = 1 aktivasi, <b>GA outlet = jumlah baris (MSISDN unik) per <code>tag_outlet</code></b> di bulan terakhir pada file; IM3 &amp; 3ID sekaligus dalam 1 file, tanggal terakhir = <code>ga_dt</code> terbaru per brand. Baris yang <code>tag_outlet</code>-nya kosong tidak bisa dihubungkan ke outlet, jadi tidak dihitung (jumlahnya ditampilkan setelah upload).<br>
+      Outlet yang tidak muncul di file dianggap GA = 0. Hanya kolom GA yang diganti — Sell In, Tertiary, Secondary tidak disentuh. Berbeda dengan data Stock, yang memakai nilai <i>as of</i> tanggal terakhir (tidak dijumlah). Perlu data Sell In &amp; GA (menu #3) sudah pernah diupload dulu. File 3ID besar (~150 MB), prosesnya bisa 1–2 menit.</p>
+      <input type="file" id="gaFile" accept=".csv" multiple>
+      <div class="progress-line" id="gaProgress"></div>
+    </div>
+
+    <div class="upload-block">
+      <h4>7. Data pembanding LMTD (bulan lalu)</h4>
+      <p class="hint">Upload file <b>BULAN LALU</b> untuk dipakai sebagai pembanding <b>Compare LMTD</b> (Last Month To Date = 1 sampai tanggal yang sama di bulan lalu). Format file sama seperti menu #1–#6 dan dikenali otomatis; bisa pilih beberapa file sekaligus. <b>Data yang sedang tampil tidak berubah.</b><br>
+      • <b>GA, Secondary, Supply</b> (punya tanggal di tiap baris): otomatis dipotong di tanggal yang sama dengan data sekarang — mis. data sekarang per 28 Sep, maka dihitung 1–28 Agu.<br>
+      • <b>Stock</b>: dipakai nilai terakhir pada tanggal ≤ tanggal itu (tidak dijumlah). <b>Sell In DSE_PROD</b>: dipakai apa adanya (kumulatif per tanggal cetak) — kalau tanggal filenya bukan tanggal yang sama, ada peringatan dan tanggal aslinya tampil di banner.<br>
+      • Tertiary belum punya sumber LMTD. Hanya kolom yang filenya sudah diupload yang mendapat pembanding.</p>
+      <input type="file" id="lmtdFile" accept=".csv" multiple>
+      <div class="progress-line" id="lmtdProgress"></div>
+    </div>
+
+    <div class="upload-block">
+      <h4>8. Update Sell In (OSA) — file OSA_IM3 / OSA_3ID (CSV)</h4>
+      <p class="hint">Ganti <b>Sell In SP, Voucher, Saldo</b> dari file OSA (kolom dt_id, qr_code/outlet_id, parameter, brand, amt — 1 baris per outlet per hari per parameter). Untuk tiap outlet, dipakai nilai di <b>tanggal paling akhir yang ada di file (tidak dijumlah)</b>: <code>osa_sp</code> → Sell In SP, <code>osa_vou</code> → Sell In Voucher, <code>osa_saldo</code> → Sell In Saldo. Baris <code>osa</code> polos tidak dipakai. Bisa pilih 2 file (IM3 + 3ID) sekaligus. GA, Tertiary, dan Secondary tidak disentuh — cara kerjanya sama seperti upload DSE_PROD (menu #3), cuma sumber datanya beda.</p>
+      <input type="file" id="osaFile" accept=".csv" multiple>
+      <div class="progress-line" id="osaProgress"></div>
+    </div>
+
+    <div class="upload-block">
+      <h4>9. Update Tertiary — file Tertiary (CSV)</h4>
+      <p class="hint">Ganti kolom <b>Tertiary</b> dari file transaksi (kolom brand, dt_id, outlet_id, region_outlet, net_rev). Baris difilter ke region_outlet=WEST JAVA, lalu <b>net_rev dijumlahkan</b> per outlet (beda dengan OSA di atas yang pakai tanggal terakhir — Tertiary dijumlah). Hanya kolom Tertiary yang diganti — Sell In, GA, dan Secondary tidak disentuh. Perlu data Sell In sudah pernah diupload dulu.</p>
+      <input type="file" id="tertiaryFile" accept=".csv">
+      <div class="progress-line" id="tertiaryProgress"></div>
+    </div>
+
+    <div class="upload-block">
+      <h4>10. Update Sell In SP (Pcs) — export BigQuery (kpi SELLIN)</h4>
+      <p class="hint">Isi field baru <b>Sell In SP (Pcs)</b> — jumlah unit SP terjual, bukan Rupiah — dari file export BigQuery yang sama dengan menu #6 (kolom brand, dt_id, kpi, outlet_id, b_msisdn). Kali ini baris yang dipakai <b>kpi = SELLIN</b> (bukan RET_TAG). Nilainya = <b>jumlah baris/MSISDN unik per outlet</b> (1 baris = 1 unit SP). Hanya field ini yang diganti — Sell In (Rp), GA, Tertiary, Secondary tidak disentuh.</p>
+      <input type="file" id="sellinPcsFile" accept=".csv">
+      <div class="progress-line" id="sellinPcsProgress"></div>
     </div>
 
     <div class="upload-block">
@@ -1091,7 +1146,11 @@ function rebuildMasterFromOutlets(){
 
 
 const FIELDS_S = ['brandIdx','areaIdx','branchIdx','microIdx','outletId','outletName','catIdx',
-  'rguGa','qsso','sellinSp','sellinVou','sellinSaldo','tertiary','secondary'];
+  'rguGa','qsso','sellinSp','sellinVou','sellinSaldo','tertiary','secondary','sellinSpPcs'];
+// sellinSpPcs (SP Sell In, satuan Pcs — jumlah baris kpi=SELLIN unik per outlet dari export
+// BigQuery, menu #10) was added after everything above it; rows saved before this feature
+// existed are 1 element shorter, so any read of this field falls back to 0 (see spPcsOf()).
+function spPcsOf(row){ const v = row[IDX_S.sellinSpPcs]; return v == null ? 0 : v; }
 const IDX_S = Object.fromEntries(FIELDS_S.map((k,i)=>[k,i]));
 
 let META = null;
@@ -1604,6 +1663,735 @@ function refreshMicroOptions(){
   if(micros.includes(cur)) fMicro.value = cur;
 }
 
+// ---------- Last Week comparison ----------
+// Whenever an upload is about to replace a dataset with a NEWER as-of date, the data
+// being replaced is first saved as a "previous" snapshot (per dataset, per brand), so
+// the dashboard can show how each number moved since then. Snapshots use two
+// alternating slots per brand: the new one is written to the slot NOT currently in
+// use and only becomes the active one when its meta record is written last — so an
+// interrupted write can never leave a half-old/half-new snapshot behind.
+// Nothing here is read on normal page load: the snapshot is fetched lazily the first
+// time someone switches "Compare Last Week" on.
+const PREV_BRANDS = ['IM3','3ID'];
+let compareOn = false;
+let compareMode = 'week';                                   // 'week' = Compare Last Week, 'lmtd' = Compare LMTD (Last Month To Date)
+const emptyPrev = () => ({ stock:null, sellin:null, supply:null, ga:null });
+let PREV = emptyPrev();                                     // the ACTIVE comparison baseline: {rows, asOf:{IM3,3ID}} per dataset once loaded
+const PREVS = { week:null, lmtd:null };                     // both baselines, loaded lazily and independently
+const prevLoadPromises = { week:null, lmtd:null };
+let PREV_FILTERED = { stock:[], sellin:[], supply:[] };     // PREV rows passing the current filters
+let lastPasses = null;                                      // the filter predicate from the latest applyFilters()
+
+function cmpName(mode){ return (mode || compareMode) === 'lmtd' ? 'LMTD' : 'Last Week'; }
+// Last Week baselines are stored as prev_<kind>_<brand>_…; LMTD ones as lmtd_<kind>_<brand>_…
+function prevKey(kind, brand, mode){ return `${mode==='lmtd' ? 'lmtd' : 'prev'}_${kind}_${brand}`; }
+
+// Never throws — a failed snapshot must not affect the upload that triggered it.
+async function snapshotPrev(kind, oldRows, oldMeta, asOfByBrand){
+  try{
+    const names = { brands: oldMeta.brands.slice(), areas: oldMeta.areas.slice(), branches: oldMeta.branches.slice(),
+                    micros: oldMeta.micros.slice(), cats: oldMeta.cats.slice() };
+    let allOk = true;
+    for(const brand of Object.keys(asOfByBrand)){
+      const bi = oldMeta.brands.indexOf(brand);
+      if(bi < 0) continue;
+      const rows = oldRows.filter(r=>r[0]===bi).map(r=>r.slice());   // copy: some uploads mutate rows in place
+      if(!rows.length) continue;
+      const metaKey = prevKey(kind, brand) + '_meta';
+      const cur = await storageGet(metaKey);
+      const slot = (cur && cur.slot === 0) ? 1 : 0;
+      const res = await saveChunked(`${prevKey(kind, brand)}_s${slot}_c`, rows, 0);
+      if(!res.allOk){ allOk = false; continue; }
+      const okMeta = await storageSetWithRetry(metaKey, {
+        slot, numChunks: res.numChunks, total: rows.length, asOf: asOfByBrand[brand] || null,
+        savedAt: new Date().toISOString(), names
+      });
+      if(!okMeta) allOk = false;
+    }
+    // make the next Last Week compare re-read the fresh snapshot (and, if it is switched on right
+    // now, pick it up immediately)
+    PREVS.week = null; prevLoadPromises.week = null;
+    if(compareOn && compareMode === 'week'){
+      ensurePrevLoaded('week').then(()=>{ PREV = PREVS.week || emptyPrev(); refreshCompareBanner(); applyFilters(); });
+    }
+    return allOk;
+  }catch(e){ console.warn('snapshotPrev failed', kind, e); return false; }
+}
+
+// Rows in a snapshot use the dimension indexes (brand/area/branch/micro/category) that
+// were current when it was saved. If the master data changed since, those positions can
+// have shifted — so each row is translated by NAME to today's indexes (rows whose branch
+// or micro cluster no longer exists are skipped rather than mis-assigned).
+async function loadPrevBrand(kind, brand, mode){
+  const key = prevKey(kind, brand, mode);
+  const m = await storageGet(key + '_meta');
+  if(!m || !m.numChunks) return null;
+  const raw = await loadChunked(`${key}_s${m.slot}_c`, m.numChunks);
+  if(m.total && raw.length < m.total * 0.98) return null;   // incomplete — better no comparison than a wrong one
+  const n = m.names || {};
+  const map = (arr, cur) => (arr || []).map(nm=>cur.indexOf(nm));
+  const bMap = map(n.brands, META.brands), aMap = map(n.areas, META.areas), brMap = map(n.branches, META.branches),
+        mMap = map(n.micros, META.micros), cMap = map(n.cats, META.cats);
+  const rows = [];
+  for(const r of raw){
+    const b = bMap[r[0]], a = aMap[r[1]], br = brMap[r[2]], mi = mMap[r[3]], c = cMap[r[6]];
+    if(!(b>=0 && a>=0 && br>=0 && mi>=0 && c>=0)) continue;
+    const r2 = r.slice(); r2[0]=b; r2[1]=a; r2[2]=br; r2[3]=mi; r2[6]=c;
+    rows.push(r2);
+  }
+  return { rows, meta: m };
+}
+
+async function loadPrevKind(kind, mode){
+  mode = mode || 'week';
+  const rows = [], asOf = {}, parts = {};
+  for(const brand of PREV_BRANDS){
+    const r = await loadPrevBrand(kind, brand, mode);
+    if(!r) continue;
+    for(const row of r.rows) rows.push(row);
+    asOf[brand] = r.meta.asOf || null;
+    if(r.meta.parts) parts[brand] = r.meta.parts;
+  }
+  if(!rows.length) return null;
+  if(kind === 'ga') return { rows, asOf };   // GA snapshot is only ever an overlay on the Sell In snapshot (see ensurePrevLoaded)
+  // Last Week only: a brand with no snapshot simply hasn't been replaced by a newer upload yet, so
+  // its live data IS still its previous data. Carry it over unchanged (it will show "no change") —
+  // leaving it out would make every total lopsided: all brands now versus only the re-uploaded
+  // brand(s) before. (An LMTD baseline has no such carry-over: a brand without one has no baseline.)
+  if(mode !== 'lmtd'){
+    const curRows = kind==='stock' ? OUTLETS : (kind==='sellin' ? SELLIN_OUTLETS : SUPPLY_OUTLETS);
+    PREV_BRANDS.forEach(brand=>{
+      if(asOf[brand] !== undefined) return;
+      const bi = META.brands.indexOf(brand);
+      if(bi < 0) return;
+      curRows.forEach(r=>{ if(r[0] === bi) rows.push(r.slice()); });
+    });
+  }
+  return { rows, asOf, parts };
+}
+
+function ensurePrevLoaded(mode){
+  mode = mode || 'week';
+  if(prevLoadPromises[mode]) return prevLoadPromises[mode];
+  prevLoadPromises[mode] = (async ()=>{
+    if(mode === 'lmtd'){
+      const [st, si, su] = await Promise.all([loadPrevKind('stock','lmtd'), loadPrevKind('sellin','lmtd'), loadPrevKind('supply','lmtd')]);
+      // The LMTD Sell In baseline is assembled from separate uploads (DSE_PROD sell-in, GA, Secondary),
+      // so record which of those actually exist — a column nobody has uploaded yet must show NO
+      // comparison rather than a misleading "▲ baru" against a zero.
+      if(si){
+        const has = { dse:false, ga:false, secondary:false, tertiary:false };
+        Object.values(si.parts || {}).forEach(pt=>{ if(pt.dse) has.dse = true; if(pt.ga) has.ga = true; if(pt.secondary) has.secondary = true; });
+        si.avail = has;
+      }
+      PREVS.lmtd = { stock: st, sellin: si, supply: su, ga: null };
+      if(compareMode === 'lmtd') PREV = PREVS.lmtd;
+      return !!(st || si || su);
+    }
+    const [st, si, su, ga] = await Promise.all([loadPrevKind('stock'), loadPrevKind('sellin'), loadPrevKind('supply'), loadPrevKind('ga')]);
+    // GA can be replaced on its own (RGUGA files) at a different time than the rest of Sell In,
+    // so its "previous" values live in a separate snapshot. Lay them over the Sell In snapshot's
+    // GA column so every existing GA comparison picks up the right numbers automatically.
+    let sellinPrev = si;
+    if(ga){
+      if(!sellinPrev){
+        // GA was updated but Sell In itself hasn't been re-uploaded since: everything else
+        // is unchanged, so the current rows stand in for "previous" (they show no change)
+        sellinPrev = { rows: SELLIN_OUTLETS.map(r=>r.slice()), asOf: Object.assign({}, ga.asOf) };
+      }
+      const gaMap = new Map();
+      ga.rows.forEach(r=>gaMap.set(r[0]+'|'+r[4], r[IDX_S.rguGa]));
+      sellinPrev.rows.forEach(r=>{ const v = gaMap.get(r[0]+'|'+r[4]); if(v !== undefined){ r[IDX_S.rguGa] = v; r[IDX_S.qsso] = qssoOf(v); } });
+    }
+    PREVS.week = { stock: st, sellin: sellinPrev, supply: su, ga };
+    if(compareMode === 'week') PREV = PREVS.week;
+    return !!(st || sellinPrev || su);
+  })().catch(e=>{ console.warn('ensurePrevLoaded failed', mode, e); prevLoadPromises[mode] = null; return false; });
+  return prevLoadPromises[mode];
+}
+
+function computePrevFiltered(){
+  if(!compareOn || !lastPasses){ PREV_FILTERED = { stock:[], sellin:[], supply:[] }; return; }
+  PREV_FILTERED = {
+    stock:  PREV.stock  ? PREV.stock.rows.filter(lastPasses)  : [],
+    sellin: PREV.sellin ? PREV.sellin.rows.filter(lastPasses) : [],
+    supply: PREV.supply ? PREV.supply.rows.filter(lastPasses) : [],
+  };
+}
+
+function prevAvail(kind){ return compareOn && !!PREV[kind]; }
+
+// In LMTD mode the Sell In baseline is built from separate uploads, so a metric only gets a
+// change figure once the upload that feeds it exists. (Last Week snapshots carry every column,
+// so nothing is ever filtered there.) Tertiary has no LMTD source at all.
+function sellinMetricOk(key){
+  const a = PREV.sellin && PREV.sellin.avail;
+  if(!a) return true;
+  const grp = ({ ga:'ga', wGa:'ga', s0:'ga', s1:'ga', s2:'ga', s3:'ga', s4:'ga',
+    sp:'dse', vou:'dse', saldo:'dse', wSp:'dse', wVou:'dse', wSaldo:'dse',
+    secondary:'secondary', tertiary:'tertiary',   // 'tertiary' part is populated once menu #7's Tertiary file has been uploaded
+    sellinSpPcs:'spPcs' })[key];   // Sell In SP (Pcs, menu #10) has no LMTD source yet — always hidden under Compare LMTD
+  return grp ? !!a[grp] : true;
+}
+
+// Small "▲ 5.2%" chip comparing cur with the Last Week value. goodUp says whether an
+// increase is good news (green) or bad news (red, e.g. more outlets with no GA).
+function dl(cur, prev, goodUp, fmt){
+  if(prev === null || prev === undefined || !isFinite(prev)) return '';
+  const d = cur - prev;
+  const tip = cmpName() + ': ' + (fmt || fmtN)(prev);
+  if(Math.abs(d) < 1e-9) return `<div class="dlt flat" title="${tip}">– 0%</div>`;
+  const up = d > 0;
+  const cls = (up === goodUp) ? 'good' : 'bad';
+  const txt = prev !== 0 ? Math.abs(d/prev*100).toFixed(1) + '%' : 'baru';
+  return `<div class="dlt ${cls}" title="${tip}">${up?'▲':'▼'} ${txt}</div>`;
+}
+
+// KPI cards set their numbers with textContent/innerHTML on every render, so the chip
+// is appended INSIDE the value element (as an inline span) after the number is set —
+// it disappears by itself on the next render when compare is off.
+function appendKpiDelta(elId, html){
+  const el = document.getElementById(elId);
+  if(!el || !html) return;
+  el.insertAdjacentHTML('beforeend', html.replace(/^<div/, '<span style="margin-left:6px;vertical-align:middle;"').replace(/<\/div>$/, '</span>'));
+}
+
+// short "per <date>" label used in the banner under the filter bar
+function prevDateLabel(kind){
+  const p = PREV[kind];
+  if(!p) return 'belum ada';
+  const ds = Object.values(p.asOf).filter(Boolean).sort();
+  return ds.length ? ds[0] : 'tanggal tidak diketahui';
+}
+
+function refreshCompareBanner(){
+  const el = document.getElementById('cmpBanner');
+  if(!el) return;
+  if(!compareOn){ el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const tail = '▲▼ = perubahan dibanding data tersebut (hijau = membaik, merah = memburuk).';
+  if(compareMode === 'lmtd'){
+    // Sell In is assembled from up to three separate uploads, each with its own date
+    const s = PREV.sellin, dates = {dse:[], ga:[], secondary:[], tertiary:[]};
+    if(s) Object.values(s.parts || {}).forEach(pt=>{ ['dse','ga','secondary','tertiary'].forEach(k=>{ if(pt[k] && pt[k].asOf) dates[k].push(pt[k].asOf); }); });
+    const lab = k => dates[k].length ? dates[k].sort()[0] : 'belum ada';
+    el.textContent = `Compare LMTD (bulan lalu s/d tanggal yang sama) — Stock: ${prevDateLabel('stock')} · Sell In: ${lab('dse')} · GA: ${lab('ga')} · Tertiary: ${lab('tertiary')} · Secondary: ${lab('secondary')} · Supply: ${prevDateLabel('supply')}. ${tail}`;
+    return;
+  }
+  el.textContent = `Compare Last Week — Stock: ${prevDateLabel('stock')} · Sell In & GA: ${prevDateLabel('sellin')} · Supply: ${prevDateLabel('supply')}. ${tail}`;
+}
+
+// Both checkboxes are mutually exclusive: every cell can only show ONE change figure.
+async function setCompare(mode){
+  const cbW = document.getElementById('cmpToggle'), cbL = document.getElementById('cmpToggleLmtd');
+  if(!mode){
+    compareOn = false;
+    refreshCompareBanner();
+    applyFilters();
+    return;
+  }
+  const prevMode = compareMode;
+  compareMode = mode;
+  showToast(`Memuat data Compare ${cmpName(mode)}…`);
+  const any = await ensurePrevLoaded(mode);
+  if(compareMode !== mode) return;               // the user already switched to something else
+  if(!any){
+    (mode === 'lmtd' ? cbL : cbW).checked = false;
+    compareOn = false;
+    compareMode = prevMode;
+    showToast(mode === 'lmtd'
+      ? 'Belum ada data LMTD — upload file bulan lalu lewat Perbarui data → menu #7 dulu.'
+      : 'Belum ada data Last Week untuk di-compare — akan tersedia otomatis setelah ada upload data baru berikutnya.');
+    refreshCompareBanner();
+    applyFilters();
+    return;
+  }
+  PREV = PREVS[mode] || emptyPrev();
+  compareOn = true;
+  refreshCompareBanner();
+  applyFilters();
+}
+
+function onCompareToggle(which){
+  const cbW = document.getElementById('cmpToggle'), cbL = document.getElementById('cmpToggleLmtd');
+  const me = which === 'lmtd' ? cbL : cbW, other = which === 'lmtd' ? cbW : cbL;
+  if(me.checked){ other.checked = false; setCompare(which); }
+  else if(!other.checked){ setCompare(null); }
+}
+
+// ---------- LMTD (Last Month To Date) baseline ----------
+// LMTD compares this month so far with the SAME PERIOD last month (day 1 through the same day
+// of the month). The baseline comes from last month's own files, uploaded through menu #7 and
+// stored under lmtd_* keys — the live data is never touched. Files with a date on every row
+// (GA, Supply, Secondary) are cut at the same day-of-month as the live data's "as of" date;
+// point-in-time files (Stock, DSE_PROD Sell In) are used as they are, and the date they really
+// stand for is shown in the banner so a mismatch is visible.
+
+// "2026-09-28" -> "2026-08-28" (clamped to the shorter month, e.g. 2026-03-31 -> 2026-02-28)
+function lmtdShiftBack(iso){
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  if(!m) return null;
+  let y = +m[1], mo = +m[2] - 1, d = +m[3];
+  mo--; if(mo < 0){ mo = 11; y--; }
+  const dim = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
+  d = Math.min(d, dim);
+  return `${y}-${String(mo + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+function isoDateOnly(v){ return /^\d{4}-\d{2}-\d{2}/.test(String(v || '')) ? String(v).slice(0,10) : null; }
+
+// The LMTD cut-off for a dataset = that dataset's live "as of" date, one month earlier.
+function lmtdCutoff(kind, brand){
+  let live = null;
+  if(kind === 'stock') live = META && META.asOf;
+  else if(kind === 'supply') live = SUPMETA && (brand === 'IM3' ? SUPMETA.imDate : SUPMETA.tidDate);
+  else if(kind === 'ga') live = (SMETA && SMETA.gaAsOfByBrand && SMETA.gaAsOfByBrand[brand]) || (SMETA && SMETA.asOf);
+  else {   // 'sellin' / 'secondary': no date of their own — follow the newest Sell In / GA date
+    const c = [];
+    if(SMETA){ if(SMETA.asOf) c.push(SMETA.asOf); Object.values(SMETA.gaAsOfByBrand || {}).forEach(v=>{ if(v) c.push(v); }); }
+    live = c.map(isoDateOnly).filter(Boolean).sort().pop();
+  }
+  return lmtdShiftBack(isoDateOnly(live) || new Date().toISOString().slice(0,10));
+}
+
+// Two alternating slots, meta written last — same crash-safe pattern as the Last Week snapshots.
+async function lmtdWriteBaseline(kind, brand, rows, extraMeta){
+  const key = prevKey(kind, brand, 'lmtd'), metaKey = key + '_meta';
+  const cur = await storageGet(metaKey);
+  const slot = (cur && cur.slot === 0) ? 1 : 0;
+  const res = await saveChunked(`${key}_s${slot}_c`, rows, 0);
+  if(!res.allOk) return false;
+  const names = { brands: META.brands.slice(), areas: META.areas.slice(), branches: META.branches.slice(),
+                  micros: META.micros.slice(), cats: META.cats.slice() };
+  const ok = await storageSetWithRetry(metaKey, Object.assign(
+    { slot, numChunks: res.numChunks, total: rows.length, savedAt: new Date().toISOString(), names }, extraMeta || {}));
+  if(ok){
+    PREVS.lmtd = null; prevLoadPromises.lmtd = null;     // next Compare LMTD re-reads the fresh baseline
+    if(compareOn && compareMode === 'lmtd'){
+      ensurePrevLoaded('lmtd').then(()=>{ PREV = PREVS.lmtd || emptyPrev(); refreshCompareBanner(); applyFilters(); });
+    }
+  }
+  return ok;
+}
+
+// All-zero rows for every pairing outlet of a brand, in the same layout as the live datasets
+function lmtdBlankRows(kind, brand){
+  const brandI = META.brands.indexOf(brand), width = kind === 'stock' ? 13 : (kind === 'sellin' ? 8 : 12);
+  const out = [];
+  Object.keys(MASTER).forEach(key=>{
+    if(!key.startsWith(brand + '|')) return;
+    const mm = MASTER[key], oid = key.split('|')[1];
+    out.push([brandI, META.areas.indexOf(mm.area), META.branches.indexOf(mm.branch), META.micros.indexOf(mm.micro),
+              oid, mm.name || '', META.cats.indexOf(mm.cat)].concat(new Array(width).fill(0)));
+  });
+  return out;
+}
+
+// The LMTD Sell In baseline is filled in by up to three different uploads (DSE_PROD sell-in,
+// GA, Secondary); `parts` remembers which ones are in and as of when.
+async function lmtdSellinBaseline(brand){
+  const ex = await loadPrevBrand('sellin', brand, 'lmtd');
+  if(ex) return { rows: ex.rows, parts: Object.assign({}, ex.meta.parts || {}) };
+  return { rows: lmtdBlankRows('sellin', brand), parts: {} };
+}
+async function lmtdSaveSellin(brand, rows, parts){
+  const dates = Object.values(parts).map(p=>p && p.asOf).filter(Boolean).sort();
+  return lmtdWriteBaseline('sellin', brand, rows, { parts, asOf: dates[0] || null });
+}
+
+// ---- GA: reuses the normal GA parsers; their result is diverted here instead of the live data ----
+let gaSink = null;
+async function lmtdGaSink(brand, byKey, lastDay, ym, wjRows, progressEl, extraNote){
+  const cutoff = lmtdCutoff('ga', brand), cutYm = cutoff.slice(0,7), cutDay = +cutoff.slice(8,10);
+  if(ym !== cutYm){
+    progressEl.textContent = `LMTD GA ${brand}: file ini bulan ${ym}, padahal LMTD butuh bulan ${cutYm} (tanggal 1–${cutDay}). Upload file GA bulan ${cutYm}.`;
+    return;
+  }
+  const useDay = Math.min(lastDay, cutDay);
+  const bl = await lmtdSellinBaseline(brand);
+  let withGa = 0, total = 0;
+  bl.rows.forEach(r=>{
+    const arr = byKey.get(brand + '|' + r[IDX_S.outletId]);
+    let sum = 0;
+    if(arr){ for(let d = 0; d < useDay; d++) sum += arr[d]; }
+    r[IDX_S.rguGa] = Math.round(sum * 100) / 100;
+    r[IDX_S.qsso] = qssoOf(r[IDX_S.rguGa]);
+    total += r[IDX_S.rguGa]; if(sum > 0) withGa++;
+  });
+  const asOf = `${ym}-${String(useDay).padStart(2,'0')}`;
+  bl.parts.ga = { asOf };
+  const ok = await lmtdSaveSellin(brand, bl.rows, bl.parts);
+  progressEl.textContent = ok
+    ? `Selesai. LMTD GA ${brand}: total ${fmtN(Math.round(total))} (${withGa.toLocaleString('id-ID')} outlet), dijumlah tgl 1–${useDay} (per ${asOf}).`
+      + (lastDay < cutDay ? ` ⚠ data di file baru sampai tgl ${lastDay}, sedangkan data sekarang sampai tgl ${cutDay}.` : '')
+    : `Gagal menyimpan LMTD GA ${brand} — coba upload ulang file ini.`;
+  if(ok) await logUpdate('LMTD GA', `${brand} per ${asOf}`, bl.rows.length);
+}
+
+// ---- Stock: latest value on or before the cut-off date, per outlet (never summed) ----
+function lmtdParseStock(file, delim, progressEl){
+  return new Promise((resolve)=>{
+    const cutoff = lmtdCutoff('stock');
+    const data = {};
+    let rowCount = 0, used = 0, minD = null, maxD = null, usedMax = null;
+    const seenBrands = {};
+    Papa.parse(file, {
+      header: true, delimiter: delim, skipEmptyLines: true, worker: true,
+      step: function(res){
+        rowCount++;
+        const row = res.data, pos = row.flag_position, d = row.as_of_date;
+        if(pos !== 'stock_outlet' && pos !== 'demand_30') return;
+        if(d && (!minD || d < minD)) minD = d;
+        if(d && (!maxD || d > maxD)) maxD = d;
+        if(!d || d > cutoff) return;
+        const key = row.brand + '|' + normId(row.outlet_id);
+        if(!MASTER[key]) return;
+        const qty = parseFloat(row.qty) || 0, amt = parseFloat(row.amt) || 0, flag = row.flag;
+        let e = data[key];
+        if(!e){ e = { stockMaxDate: null, stockAgg: {}, demandMaxDate: null, demandAgg: {} }; data[key] = e; }
+        const maxKey = pos === 'stock_outlet' ? 'stockMaxDate' : 'demandMaxDate';
+        const aggKey = pos === 'stock_outlet' ? 'stockAgg' : 'demandAgg';
+        if(!e[maxKey] || d > e[maxKey]){ e[maxKey] = d; e[aggKey] = {}; }
+        if(d === e[maxKey]){ const a = e[aggKey]; if(a[flag]){ a[flag][0] += qty; a[flag][1] += amt; } else a[flag] = [qty, amt]; }
+        used++; seenBrands[row.brand] = true; if(!usedMax || d > usedMax) usedMax = d;
+        if(rowCount % 100000 === 0) progressEl.textContent = `LMTD Stock: memproses ${rowCount.toLocaleString('id-ID')} baris…`;
+      },
+      complete: async function(){
+        if(!used){
+          progressEl.textContent = `LMTD Stock: tidak ada data bertanggal ≤ ${cutoff} di file ini (tanggal di file: ${minD || '-'} s/d ${maxD || '-'}). `
+            + `LMTD butuh stock per tanggal itu di bulan lalu — pastikan file berisi tanggal tersebut.`;
+          resolve(); return;
+        }
+        const perBrand = {};
+        PREV_BRANDS.forEach(b=>{ perBrand[b] = lmtdBlankRows('stock', b); });
+        PREV_BRANDS.forEach(b=>{
+          perBrand[b].forEach(r=>{
+            const e = data[b + '|' + r[IDX.outletId]];
+            if(!e) return;
+            let spoQ=0,spoA=0,spiQ=0,spiA=0,voQ=0,voA=0,viQ=0,viA=0,salQ=0,salA=0,dspA=0,dvouA=0,dsalA=0;
+            Object.keys(e.stockAgg).forEach(flag=>{
+              const [qty, amt] = e.stockAgg[flag];
+              if(flag==='sp_ori'){ spoQ+=qty; spoA+=amt; } else if(flag==='sp_inj'){ spiQ+=qty; spiA+=amt; }
+              else if(flag==='vou_ori'){ voQ+=qty; voA+=amt; } else if(flag==='vou_inj'){ viQ+=qty; viA+=amt; }
+              else if(flag==='salmo'){ salQ+=qty; salA+=amt; }
+            });
+            Object.keys(e.demandAgg).forEach(flag=>{
+              const amt = e.demandAgg[flag][1];
+              if(flag==='sp_ori' || flag==='sp_inj') dspA += amt; else if(flag==='vou_ori' || flag==='vou_inj') dvouA += amt; else if(flag==='salmo') dsalA += amt;
+            });
+            const v = [spoQ,spoA,spiQ,spiA,voQ,voA,viQ,viA,salQ,salA,dspA,dvouA,dsalA].map(x=>Math.round(x));
+            for(let i=0;i<13;i++) r[7+i] = v[i];
+          });
+        });
+        progressEl.textContent = `LMTD Stock: menyimpan…`;
+        let allOk = true;
+        for(const b of PREV_BRANDS){
+          if(!seenBrands[b]) continue;     // a brand that isn't in this file gets no baseline (not an all-zero one)
+          if(!(await lmtdWriteBaseline('stock', b, perBrand[b], { asOf: usedMax }))) allOk = false;
+        }
+        progressEl.textContent = allOk
+          ? `Selesai. LMTD Stock per ${usedMax} (batas ${cutoff}), ${used.toLocaleString('id-ID')} baris dipakai.`
+            + (usedMax < cutoff ? ` ⚠ tanggal terakhir di file (${usedMax}) lebih awal dari batas ${cutoff}.` : '')
+          : `Gagal menyimpan LMTD Stock — coba upload ulang file ini.`;
+        if(allOk) await logUpdate('LMTD Stock', usedMax, Object.keys(data).length);
+        resolve();
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+// ---- DSE_PROD: Sell In (SP / Voucher / Saldo) only, exactly like the live upload ----
+function lmtdParseDse(file, delim, cols, progressEl){
+  return new Promise((resolve)=>{
+    const brand = cols.includes('mc_ts') ? '3ID' : 'IM3', colMap = brand === '3ID' ? TID_SI_COLS : IM3_SI_COLS;
+    const byKey = {};
+    let rowCount = 0, maxAsOf = null;
+    Papa.parse(file, {
+      header: true, delimiter: delim, skipEmptyLines: true, worker: true,
+      step: function(res){
+        rowCount++;
+        const row = res.data;
+        if(row[colMap.region] !== 'WEST JAVA') return;
+        const dt = colMap.asOfDt ? normAsOfDt(row[colMap.asOfDt], row.mth_id, file.name) : null;
+        if(dt && (!maxAsOf || dt > maxAsOf)) maxAsOf = dt;
+        const key = brand + '|' + normId(row[colMap.id_outlet]);
+        if(!MASTER[key]) return;
+        byKey[key] = { sp: parseFloat(row[colMap.sp]) || 0, vou: parseFloat(row[colMap.vou]) || 0, saldo: parseFloat(row[colMap.saldo]) || 0 };
+        if(rowCount % 50000 === 0) progressEl.textContent = `LMTD Sell In ${brand}: memproses ${rowCount.toLocaleString('id-ID')} baris…`;
+      },
+      complete: async function(){
+        const cutoff = lmtdCutoff('sellin'), cutYm = cutoff.slice(0,7);
+        if(!maxAsOf || maxAsOf.slice(0,7) !== cutYm){
+          progressEl.textContent = `LMTD Sell In ${brand}: tanggal di file (${maxAsOf || 'tidak terbaca'}) bukan bulan ${cutYm}. Upload file DSE_PROD bulan ${cutYm}.`;
+          resolve(); return;
+        }
+        const bl = await lmtdSellinBaseline(brand);
+        bl.rows.forEach(r=>{
+          const s = byKey[brand + '|' + r[IDX_S.outletId]];
+          r[IDX_S.sellinSp] = s ? Math.round(s.sp) : 0; r[IDX_S.sellinVou] = s ? Math.round(s.vou) : 0; r[IDX_S.sellinSaldo] = s ? Math.round(s.saldo) : 0;
+        });
+        bl.parts.dse = { asOf: maxAsOf };
+        const ok = await lmtdSaveSellin(brand, bl.rows, bl.parts);
+        progressEl.textContent = ok
+          ? `Selesai. LMTD Sell In ${brand} per ${maxAsOf} (${Object.keys(byKey).length.toLocaleString('id-ID')} outlet).`
+            + (maxAsOf !== cutoff ? ` ⚠ file ini per ${maxAsOf}, sedangkan tanggal LMTD ${cutoff} — angka Sell In (kumulatif) bukan tanggal yang sama.` : '')
+          : `Gagal menyimpan LMTD Sell In ${brand} — coba upload ulang file ini.`;
+        if(ok) await logUpdate('LMTD Sell In', `${brand} per ${maxAsOf}`, Object.keys(byKey).length);
+        resolve();
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+// ---- Secondary (BigQuery export): sum rev per outlet, only rows dated on or before the cut-off ----
+function lmtdParseSecondary(file, delim, progressEl){
+  return new Promise((resolve)=>{
+    const byKey = {}, used = {}, maxUsed = {};
+    let rowCount = 0, skippedOther = 0;
+    const cutoff = lmtdCutoff('secondary'), cutYm = cutoff.slice(0,7);
+    Papa.parse(file, {
+      header: true, delimiter: delim, skipEmptyLines: true, worker: true,
+      step: function(res){
+        rowCount++;
+        const row = res.data;
+        if(row.region !== 'WEST JAVA' || row.parameter !== 'SECONDARY') return;
+        const brand = row.brand;
+        if(brand !== 'IM3' && brand !== '3ID') return;
+        const d = String(row.dt_id || '').slice(0,10);
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+        if(d.slice(0,7) !== cutYm || d > cutoff){ skippedOther++; return; }
+        const key = brand + '|' + normId(row.outlet_id);
+        byKey[key] = (byKey[key] || 0) + (parseFloat(row.rev) || 0);
+        used[brand] = (used[brand] || 0) + 1;
+        if(!maxUsed[brand] || d > maxUsed[brand]) maxUsed[brand] = d;
+        if(rowCount % 50000 === 0) progressEl.textContent = `LMTD Secondary: memproses ${rowCount.toLocaleString('id-ID')} baris…`;
+      },
+      complete: async function(){
+        const brands = Object.keys(used);
+        if(!brands.length){
+          progressEl.textContent = `LMTD Secondary: tidak ada baris WEST JAVA / SECONDARY bertanggal ${cutYm}-01 s/d ${cutoff} di file ini.`;
+          resolve(); return;
+        }
+        const msgs = [];
+        for(const brand of brands){
+          const bl = await lmtdSellinBaseline(brand);
+          let total = 0;
+          bl.rows.forEach(r=>{ const v = byKey[brand + '|' + r[IDX_S.outletId]]; r[IDX_S.secondary] = v ? Math.round(v) : 0; total += r[IDX_S.secondary]; });
+          bl.parts.secondary = { asOf: maxUsed[brand] };
+          const ok = await lmtdSaveSellin(brand, bl.rows, bl.parts);
+          msgs.push(ok ? `LMTD Secondary ${brand}: total ${fmtN(total)} per ${maxUsed[brand]} (batas ${cutoff}).` : `Gagal menyimpan LMTD Secondary ${brand}.`);
+          if(ok) await logUpdate('LMTD Secondary', `${brand} per ${maxUsed[brand]}`, bl.rows.length);
+        }
+        progressEl.textContent = 'Selesai. ' + msgs.join(' ') + (skippedOther ? ` (${skippedOther.toLocaleString('id-ID')} baris di luar ${cutYm}-01…${cutoff} diabaikan.)` : '');
+        resolve();
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+// ---- Supply (SUPPLY_PROD): same grouping as the live upload, only rows dated on or before the cut-off ----
+function lmtdParseSupply(file, delim, progressEl){
+  return new Promise((resolve)=>{
+    const outletAgg = {}; let brand = null, rowCount = 0, used = 0, maxUsed = null, skipped = 0;
+    Papa.parse(file, {
+      header: true, delimiter: delim, skipEmptyLines: true, worker: true,
+      step: function(res){
+        rowCount++;
+        const row = res.data;
+        if(!brand && (row.brand === 'IM3' || row.brand === '3ID')) brand = row.brand;
+        if(row.brand !== brand) return;
+        const d = String(row.dt_id || '').slice(0,10);
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+        const cutoff = lmtdCutoff('supply', brand);
+        if(d.slice(0,7) !== cutoff.slice(0,7) || d > cutoff){ skipped++; return; }
+        const key = brand + '|' + normId(row.ret_qr_cd || row.outlet_id);
+        if(!MASTER[key]) return;
+        const field = supCatFieldFor(brand, normSupplyCategory(row.category));
+        if(!field) return;
+        const hit = parseFloat(row.hit) || 0, rev = parseFloat(row.rev) || 0;
+        if(!outletAgg[key]) outletAgg[key] = {};
+        if(!outletAgg[key][field]) outletAgg[key][field] = [0,0];
+        outletAgg[key][field][0] += hit; outletAgg[key][field][1] += rev;
+        used++; if(!maxUsed || d > maxUsed) maxUsed = d;
+        if(rowCount % 20000 === 0) progressEl.textContent = `LMTD Supply: memproses ${rowCount.toLocaleString('id-ID')} baris…`;
+      },
+      complete: async function(){
+        if(!brand || !used){
+          const c = brand ? lmtdCutoff('supply', brand) : null;
+          progressEl.textContent = `LMTD Supply: tidak ada baris bertanggal ${c ? c.slice(0,7) + '-01 s/d ' + c : 'yang sesuai'} untuk brand ${brand || '(tidak terbaca)'} di file ini.`;
+          resolve(); return;
+        }
+        const rows = lmtdBlankRows('supply', brand);
+        rows.forEach(r=>{
+          const agg = outletAgg[brand + '|' + r[IDX_SUP.outletId]];
+          if(!agg) return;
+          SUP_CAT_FIELDS.forEach((f, i)=>{ const v = agg[f] || [0,0]; r[7 + i*2] = Math.round(v[0]); r[8 + i*2] = Math.round(v[1]); });
+        });
+        const ok = await lmtdWriteBaseline('supply', brand, rows, { asOf: maxUsed });
+        const cutoff = lmtdCutoff('supply', brand);
+        progressEl.textContent = ok
+          ? `Selesai. LMTD Supply ${brand} per ${maxUsed} (batas ${cutoff}), ${used.toLocaleString('id-ID')} baris dipakai.` + (skipped ? ` ${skipped.toLocaleString('id-ID')} baris di luar periode diabaikan.` : '')
+          : `Gagal menyimpan LMTD Supply ${brand} — coba upload ulang file ini.`;
+        if(ok) await logUpdate('LMTD Supply', `${brand} per ${maxUsed}`, Object.keys(outletAgg).length);
+        resolve();
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+
+// ---- Sell In (OSA): same last-date-per-field logic as the live upload, cut at the LMTD cutoff ----
+function lmtdParseOsa(file, idCol, progressEl){
+  return new Promise((resolve)=>{
+    const cutoff = lmtdCutoff('sellin');
+    const B = {};
+    let rowCount = 0;
+    Papa.parse(file, {
+      header: true, skipEmptyLines: true, worker: true,
+      chunk: function(res){
+        const rows = res.data;
+        for(let i=0;i<rows.length;i++){
+          const row = rows[i]; rowCount++;
+          const brand = row.brand;
+          if(brand !== 'IM3' && brand !== '3ID') continue;
+          const field = OSA_PARAM_MAP[row.parameter];
+          if(!field) continue;
+          const dt = String(row.dt_id || '').trim();
+          if(!/^\d{4}-\d{2}-\d{2}/.test(dt) || dt.slice(0,7) !== cutoff.slice(0,7) || dt > cutoff) continue;
+          let b = B[brand]; if(!b) b = B[brand] = { maxDate:'', byKey:new Map() };
+          if(dt > b.maxDate) b.maxDate = dt;
+          const key = brand + '|' + normId(row[idCol]);
+          if(!MASTER[key]) continue;
+          let e = b.byKey.get(key);
+          if(!e){ e = { sp:{d:'',v:0}, vou:{d:'',v:0}, saldo:{d:'',v:0} }; b.byKey.set(key, e); }
+          const amt = parseFloat(row.amt) || 0;
+          if(dt >= e[field].d) e[field] = { d: dt, v: amt };
+        }
+        if(rowCount % 50000 < rows.length) progressEl.textContent = `LMTD Sell In (OSA): memproses ${rowCount.toLocaleString('id-ID')} baris…`;
+      },
+      complete: async function(){
+        const brands = Object.keys(B);
+        if(!brands.length){
+          progressEl.textContent = `LMTD Sell In (OSA): tidak ada baris bertanggal ${cutoff.slice(0,7)}-01 s/d ${cutoff} di file ini.`;
+          resolve(); return;
+        }
+        const msgs = [];
+        for(const brand of brands){
+          const b = B[brand];
+          const bl = await lmtdSellinBaseline(brand);
+          bl.rows.forEach(r=>{
+            const e = b.byKey.get(brand + '|' + r[IDX_S.outletId]);
+            r[IDX_S.sellinSp] = e ? Math.round(e.sp.v) : 0;
+            r[IDX_S.sellinVou] = e ? Math.round(e.vou.v) : 0;
+            r[IDX_S.sellinSaldo] = e ? Math.round(e.saldo.v) : 0;
+          });
+          bl.parts.dse = { asOf: b.maxDate };
+          const ok = await lmtdSaveSellin(brand, bl.rows, bl.parts);
+          msgs.push(ok ? `LMTD Sell In (OSA) ${brand} per ${b.maxDate} (${b.byKey.size.toLocaleString('id-ID')} outlet).` : `Gagal menyimpan LMTD Sell In (OSA) ${brand}.`);
+          if(ok) await logUpdate('LMTD Sell In (OSA)', `${brand} per ${b.maxDate}`, bl.rows.length);
+        }
+        progressEl.textContent = 'Selesai. ' + msgs.join(' ');
+        resolve();
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+// ---- Tertiary: summed, cut at the LMTD cutoff ----
+function lmtdParseTertiary(file, progressEl){
+  return new Promise((resolve)=>{
+    const cutoff = lmtdCutoff('sellin'), cutYm = cutoff.slice(0,7);
+    const byKey = {}, used = {}, maxUsed = {};
+    let rowCount = 0, skippedOther = 0;
+    Papa.parse(file, {
+      header: true, skipEmptyLines: true, worker: true,
+      step: function(res){
+        rowCount++;
+        const row = res.data;
+        if(row.region_outlet !== 'WEST JAVA') return;
+        const brand = row.brand;
+        if(brand !== 'IM3' && brand !== '3ID') return;
+        const d = String(row.dt_id || '').slice(0,10);
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+        if(d.slice(0,7) !== cutYm || d > cutoff){ skippedOther++; return; }
+        const key = brand + '|' + normId(row.outlet_id);
+        byKey[key] = (byKey[key] || 0) + (parseFloat(row.net_rev) || 0);
+        used[brand] = (used[brand] || 0) + 1;
+        if(!maxUsed[brand] || d > maxUsed[brand]) maxUsed[brand] = d;
+        if(rowCount % 50000 === 0) progressEl.textContent = `LMTD Tertiary: memproses ${rowCount.toLocaleString('id-ID')} baris…`;
+      },
+      complete: async function(){
+        const brands = Object.keys(used);
+        if(!brands.length){
+          progressEl.textContent = `LMTD Tertiary: tidak ada baris WEST JAVA bertanggal ${cutYm}-01 s/d ${cutoff} di file ini.`;
+          resolve(); return;
+        }
+        const msgs = [];
+        for(const brand of brands){
+          const bl = await lmtdSellinBaseline(brand);
+          let total = 0;
+          bl.rows.forEach(r=>{ const v = byKey[brand + '|' + r[IDX_S.outletId]]; r[IDX_S.tertiary] = v ? Math.round(v) : 0; total += r[IDX_S.tertiary]; });
+          bl.parts.tertiary = { asOf: maxUsed[brand] };
+          const ok = await lmtdSaveSellin(brand, bl.rows, bl.parts);
+          msgs.push(ok ? `LMTD Tertiary ${brand}: total ${fmtN(total)} per ${maxUsed[brand]}.` : `Gagal menyimpan LMTD Tertiary ${brand}.`);
+          if(ok) await logUpdate('LMTD Tertiary', `${brand} per ${maxUsed[brand]}`, bl.rows.length);
+        }
+        progressEl.textContent = 'Selesai. ' + msgs.join(' ') + (skippedOther ? ` (${skippedOther.toLocaleString('id-ID')} baris di luar periode diabaikan.)` : '');
+        resolve();
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+// ---- menu #7: figure out what kind of file it is, then hand it to the right reader ----
+async function handleLmtdFile(file, progressEl){
+  if(!MASTER || Object.keys(MASTER).length === 0){
+    progressEl.innerHTML = '<b style="color:var(--red);">Data pairing outlet belum termuat</b> — refresh halaman ini dulu (Ctrl+Shift+R), tunggu sampai selesai loading, baru coba upload lagi.';
+    return;
+  }
+  progressEl.textContent = `Membaca header file (${file.name})…`;
+  const head = ((await file.slice(0, 16384).text()).split(/\r?\n/)[0]) || '';
+  const delim = head.split(';').length > head.split(',').length ? ';' : ',';
+  const cols = await new Promise(res=>Papa.parse(file, { header: true, delimiter: delim, preview: 1,
+    complete: r=>res((r.meta && r.meta.fields) || []), error: ()=>res([]) }));
+  const has = (...c)=>c.every(x=>cols.includes(x));
+  if(has('as_of_date','flag_position','brand','outlet_id')) return lmtdParseStock(file, delim, progressEl);
+  if(has('id_outlet','as_of_dt') && (cols.includes('mc_ts') || cols.includes('micro_cluster'))) return lmtdParseDse(file, delim, cols, progressEl);
+  const txFmt = GA_TX_FORMATS.find(f=>f.need.every(c=>cols.includes(c)));
+  try{
+    if(txFmt){ gaSink = lmtdGaSink; await parseGaTxBody(file, delim, txFmt, progressEl); return; }
+    if(has('dt01','region') && (cols.includes('organization_id') || cols.includes('partner_qr_cd'))){
+      gaSink = lmtdGaSink;
+      await parseGaBody(file, cols.includes('organization_id') ? 'IM3' : '3ID', progressEl);
+      return;
+    }
+  } finally { gaSink = null; }
+  if(has('dt_id','parameter','brand','amt','pjp_category') && (cols.includes('qr_code') || cols.includes('outlet_id'))){
+    return lmtdParseOsa(file, cols.includes('qr_code') ? 'qr_code' : 'outlet_id', progressEl);
+  }
+  if(has('brand','dt_id','outlet_id','region_outlet','net_rev')) return lmtdParseTertiary(file, progressEl);
+  if(has('brand','dt_id','outlet_id','region','parameter','rev')) return lmtdParseSecondary(file, delim, progressEl);
+  if(has('brand','dt_id','category','hit','rev') && (cols.includes('ret_qr_cd') || cols.includes('outlet_id'))) return lmtdParseSupply(file, delim, progressEl);
+  progressEl.textContent = `Format file "${file.name}" tidak dikenali. Yang didukung: Stock, DSE_PROD / OSA (Sell In), GA (RGUGA / per MSISDN / export BigQuery RET_TAG), Tertiary, Secondary (BigQuery), dan SUPPLY_PROD — semuanya dari bulan lalu.`;
+}
+
+async function handleLmtdFiles(fileList){
+  const files = Array.from(fileList), progressEl = document.getElementById('lmtdProgress'), results = [];
+  uploadInProgress = true;
+  try{
+    for(const f of files){ await handleLmtdFile(f, progressEl); results.push(progressEl.textContent); }
+    if(files.length > 1) progressEl.innerHTML = `<b>Semua ${files.length} file selesai diproses:</b><br>` + results.map(r=>'• ' + r).join('<br>');
+  } catch(e){
+    console.error('LMTD upload failed', e);
+    progressEl.textContent = 'Gagal memproses file LMTD: ' + (e && e.message || e);
+  } finally { uploadInProgress = false; gaSink = null; }
+}
+
 // ---------- filtering ----------
 function applyFilters(){
   const brand = document.getElementById('fBrand').value;
@@ -1640,6 +2428,8 @@ function applyFilters(){
   filtered = OUTLETS.filter(passes);
   filteredSellin = SELLIN_OUTLETS.filter(passes);
   filteredSupply = SUPPLY_OUTLETS.filter(passes);
+  lastPasses = passes;
+  computePrevFiltered();
 
   sortFiltered();
   sortFilteredSellin();
@@ -1810,6 +2600,26 @@ function renderSupplyKpis(){
     document.getElementById(id+'Pct').textContent = totalRev? (val/totalRev*100).toFixed(0)+'%' : '–';
     document.getElementById(id+'Bar').style.width = totalRev? (val/totalRev*100)+'%' : '0%';
   });
+
+  // Last Week comparison chips
+  if(prevAvail('supply')){
+    let pSp=0, pRebuy=0, pVou=0, pVouOri=0, pNo=0;
+    PREV_FILTERED.supply.forEach(r=>{
+      pSp += r[IDX_SUP.sp_injectRev];
+      pRebuy += r[IDX_SUP.rebuy_cvmRev]+r[IDX_SUP.rebuy_atlRev]+r[IDX_SUP.rebuy_pulsaRev];
+      pVou += r[IDX_SUP.vou_injectRev];
+      pVouOri += r[IDX_SUP.vouori_spvoriRev];
+      const hit = r[IDX_SUP.sp_injectHit]+r[IDX_SUP.rebuy_cvmHit]+r[IDX_SUP.rebuy_atlHit]+r[IDX_SUP.rebuy_pulsaHit]
+        +r[IDX_SUP.vou_injectHit]+r[IDX_SUP.vouori_spvoriHit];
+      if(hit<=0) pNo++;
+    });
+    appendKpiDelta('supKpiRevAll', dl(totalRev, pSp+pRebuy+pVou+pVouOri, true, fmtBn));
+    appendKpiDelta('supKpiNoSupply', dl(noSupply, pNo, false));
+    appendKpiDelta('supSlabSp', dl(spRev, pSp, true, fmtBn));
+    appendKpiDelta('supSlabRebuy', dl(rebuyRev, pRebuy, true, fmtBn));
+    appendKpiDelta('supSlabVou', dl(vouRev, pVou, true, fmtBn));
+    appendKpiDelta('supSlabVouOri', dl(vouOriRev, pVouOri, true, fmtBn));
+  }
 }
 
 function renderSupplyCoverageCards(){
@@ -1918,34 +2728,40 @@ function renderSupplySummaryTable(){
     });
     return agg;
   };
-  const rowCells = r => `
+  // Last Week comparison (toggle on + a Supply snapshot exists)
+  const cmpOn = prevAvail('supply');
+  const dk = (r, p, k, good, fmt) => (cmpOn && p) ? dl(r[k], p[k], good, fmt) : '';
+  const rowCells = (r, p) => `
       <td>${fmtN(r.outlet)}</td>
-      <td>${fmtN(r.spOutlet)}</td><td>${fmtN(r.spHit)}</td><td>${fmtBn(r.spRev)}</td>
-      <td>${fmtN(r.rebuyOutlet)}</td><td>${fmtN(r.rebuyHit)}</td><td>${fmtBn(r.rebuyRev)}</td>
-      <td>${fmtN(r.vouOutlet)}</td><td>${fmtN(r.vouHit)}</td><td>${fmtBn(r.vouRev)}</td>
-      <td>${fmtN(r.vouOriOutlet)}</td><td>${fmtN(r.vouOriHit)}</td><td>${fmtBn(r.vouOriRev)}</td>`;
+      <td>${fmtN(r.spOutlet)}</td><td>${fmtN(r.spHit)}${dk(r,p,'spHit',true)}</td><td>${fmtBn(r.spRev)}${dk(r,p,'spRev',true,fmtBn)}</td>
+      <td>${fmtN(r.rebuyOutlet)}</td><td>${fmtN(r.rebuyHit)}${dk(r,p,'rebuyHit',true)}</td><td>${fmtBn(r.rebuyRev)}${dk(r,p,'rebuyRev',true,fmtBn)}</td>
+      <td>${fmtN(r.vouOutlet)}</td><td>${fmtN(r.vouHit)}${dk(r,p,'vouHit',true)}</td><td>${fmtBn(r.vouRev)}${dk(r,p,'vouRev',true,fmtBn)}</td>
+      <td>${fmtN(r.vouOriOutlet)}</td><td>${fmtN(r.vouOriHit)}${dk(r,p,'vouOriHit',true)}</td><td>${fmtBn(r.vouOriRev)}${dk(r,p,'vouOriRev',true,fmtBn)}</td>`;
 
   const agg = aggregateBy(filteredSupply, gKey);
   const rows = Object.keys(agg).map(g=>({key:g, name: ctx.names[g], ...agg[g]})).sort((a,b)=>(b.spRev+b.rebuyRev+b.vouRev+b.vouOriRev)-(a.spRev+a.rebuyRev+a.vouRev+a.vouOriRev));
+  const prevAgg = cmpOn ? aggregateBy(PREV_FILTERED.supply, gKey) : null;
+  const prevOf = k => prevAgg ? (prevAgg[k] || initSup()) : null;
 
   let bodyHtml = '';
   rows.forEach(r=>{
     if(ctx.label==='branch'){
       const isOpen = expandedBranchesSup.has(String(r.key));
       bodyHtml += `<tr>
-        <td><span class="expand-toggle" data-scope="sup" data-key="${r.key}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${isOpen?'⊟':'⊞'}</span>${r.name}</td>${rowCells(r)}
+        <td><span class="expand-toggle" data-scope="sup" data-key="${r.key}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${isOpen?'⊟':'⊞'}</span>${r.name}</td>${rowCells(r, prevOf(r.key))}
       </tr>`;
       if(isOpen){
         const subAgg = aggregateBy(filteredSupply.filter(rr=>String(rr[IDX_SUP.branchIdx])===String(r.key)), IDX_SUP.microIdx);
-        const subRows = Object.keys(subAgg).map(mg=>({name: META.micros[mg], ...subAgg[mg]})).sort((a,b)=>(b.spRev+b.rebuyRev+b.vouRev+b.vouOriRev)-(a.spRev+a.rebuyRev+a.vouRev+a.vouOriRev));
+        const subRows = Object.keys(subAgg).map(mg=>({key:mg, name: META.micros[mg], ...subAgg[mg]})).sort((a,b)=>(b.spRev+b.rebuyRev+b.vouRev+b.vouOriRev)-(a.spRev+a.rebuyRev+a.vouRev+a.vouOriRev));
+        const subPrev = cmpOn ? aggregateBy(PREV_FILTERED.supply.filter(rr=>String(rr[IDX_SUP.branchIdx])===String(r.key)), IDX_SUP.microIdx) : null;
         subRows.forEach(mr=>{
           bodyHtml += `<tr style="background:#FAFAF8;">
-            <td style="padding-left:28px;color:var(--ink-soft);font-size:11.5px;">${mr.name}</td>${rowCells(mr)}
+            <td style="padding-left:28px;color:var(--ink-soft);font-size:11.5px;">${mr.name}</td>${rowCells(mr, subPrev ? (subPrev[mr.key] || initSup()) : null)}
           </tr>`;
         });
       }
     } else {
-      bodyHtml += `<tr><td>${r.name}</td>${rowCells(r)}</tr>`;
+      bodyHtml += `<tr><td>${r.name}</td>${rowCells(r, prevOf(r.key))}</tr>`;
     }
   });
   document.getElementById('supSummaryBody').innerHTML = bodyHtml || '<tr><td colspan="14" style="color:var(--muted);">Tidak ada data.</td></tr>';
@@ -1956,13 +2772,14 @@ function renderSupplySummaryTable(){
     acc.vouOriOutlet+=r.vouOriOutlet; acc.vouOriHit+=r.vouOriHit; acc.vouOriRev+=r.vouOriRev;
     return acc;
   }, {outlet:0,spOutlet:0,spHit:0,spRev:0,rebuyOutlet:0,rebuyHit:0,rebuyRev:0,vouOutlet:0,vouHit:0,vouRev:0,vouOriOutlet:0,vouOriHit:0,vouOriRev:0});
+  const prevGrand = prevAgg ? Object.values(prevAgg).reduce((acc,x)=>{ Object.keys(acc).forEach(k=>acc[k]+=x[k]); return acc; }, initSup()) : null;
   document.getElementById('supSummaryFoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
       <td>Total West Java</td><td>${fmtN(grand.outlet)}</td>
-      <td>${fmtN(grand.spOutlet)}</td><td>${fmtN(grand.spHit)}</td><td>${fmtBn(grand.spRev)}</td>
-      <td>${fmtN(grand.rebuyOutlet)}</td><td>${fmtN(grand.rebuyHit)}</td><td>${fmtBn(grand.rebuyRev)}</td>
-      <td>${fmtN(grand.vouOutlet)}</td><td>${fmtN(grand.vouHit)}</td><td>${fmtBn(grand.vouRev)}</td>
-      <td>${fmtN(grand.vouOriOutlet)}</td><td>${fmtN(grand.vouOriHit)}</td><td>${fmtBn(grand.vouOriRev)}</td>
+      <td>${fmtN(grand.spOutlet)}</td><td>${fmtN(grand.spHit)}${dk(grand,prevGrand,'spHit',true)}</td><td>${fmtBn(grand.spRev)}${dk(grand,prevGrand,'spRev',true,fmtBn)}</td>
+      <td>${fmtN(grand.rebuyOutlet)}</td><td>${fmtN(grand.rebuyHit)}${dk(grand,prevGrand,'rebuyHit',true)}</td><td>${fmtBn(grand.rebuyRev)}${dk(grand,prevGrand,'rebuyRev',true,fmtBn)}</td>
+      <td>${fmtN(grand.vouOutlet)}</td><td>${fmtN(grand.vouHit)}${dk(grand,prevGrand,'vouHit',true)}</td><td>${fmtBn(grand.vouRev)}${dk(grand,prevGrand,'vouRev',true,fmtBn)}</td>
+      <td>${fmtN(grand.vouOriOutlet)}</td><td>${fmtN(grand.vouOriHit)}${dk(grand,prevGrand,'vouOriHit',true)}</td><td>${fmtBn(grand.vouOriRev)}${dk(grand,prevGrand,'vouOriRev',true,fmtBn)}</td>
     </tr>` : '';
 }
 
@@ -2060,16 +2877,17 @@ function renderSellinKpis(){
   const n = filteredSellin.length;
   document.getElementById('siKpiTotal').textContent = fmtN(n);
 
-  let ga=0, sp=0, vou=0, saldo=0, tertiary=0, secondary=0;
+  let ga=0, sp=0, vou=0, saldo=0, tertiary=0, secondary=0, spPcs=0;
   filteredSellin.forEach(r=>{
     ga += r[IDX_S.rguGa]; sp += r[IDX_S.sellinSp]; vou += r[IDX_S.sellinVou]; saldo += r[IDX_S.sellinSaldo];
-    tertiary += r[IDX_S.tertiary]; secondary += r[IDX_S.secondary];
+    tertiary += r[IDX_S.tertiary]; secondary += r[IDX_S.secondary]; spPcs += spPcsOf(r);
   });
   const sellinTotal = sp+vou+saldo;
 
   document.getElementById('siKpiGa').textContent = fmtN(ga);
   document.getElementById('siKpiGaSub').textContent = n ? (ga/n).toFixed(2)+' per outlet' : '–';
   document.getElementById('siKpiSellin').textContent = fmtBn(sellinTotal);
+  document.getElementById('siSpPcsSub').textContent = 'SP (Pcs): ' + fmtN(spPcs);
   document.getElementById('siKpiTS').textContent = fmtBn(tertiary+secondary);
   document.getElementById('siKpiTSsub').textContent = `Tertiary ${fmtBn(tertiary)} · Secondary ${fmtBn(secondary)}`;
   document.getElementById('siSp').textContent = fmtBn(sp);
@@ -2081,6 +2899,24 @@ function renderSellinKpis(){
   document.getElementById('siSpBar').style.width = sellinTotal? (sp/sellinTotal*100)+'%':'0%';
   document.getElementById('siVouBar').style.width = sellinTotal? (vou/sellinTotal*100)+'%':'0%';
   document.getElementById('siSaldoBar').style.width = sellinTotal? (saldo/sellinTotal*100)+'%':'0%';
+
+  // Last Week comparison chips
+  if(prevAvail('sellin')){
+    let pGa=0, pSp=0, pVou=0, pSaldo=0, pTer=0, pSec=0, pSpPcs=0;
+    PREV_FILTERED.sellin.forEach(r=>{
+      pGa += r[IDX_S.rguGa]; pSp += r[IDX_S.sellinSp]; pVou += r[IDX_S.sellinVou]; pSaldo += r[IDX_S.sellinSaldo];
+      pTer += r[IDX_S.tertiary]; pSec += r[IDX_S.secondary]; pSpPcs += spPcsOf(r);
+    });
+    if(sellinMetricOk('ga')) appendKpiDelta('siKpiGa', dl(ga, pGa, true));
+    if(sellinMetricOk('sp')){
+      appendKpiDelta('siKpiSellin', dl(sellinTotal, pSp+pVou+pSaldo, true, fmtBn));
+      appendKpiDelta('siSp', dl(sp, pSp, true, fmtBn));
+      appendKpiDelta('siVou', dl(vou, pVou, true, fmtBn));
+      appendKpiDelta('siSaldo', dl(saldo, pSaldo, true, fmtBn));
+    }
+    if(sellinMetricOk('tertiary') && sellinMetricOk('secondary')) appendKpiDelta('siKpiTS', dl(tertiary+secondary, pTer+pSec, true, fmtBn));
+    if(sellinMetricOk('sellinSpPcs')) appendKpiDelta('siSpPcsSub', dl(spPcs, pSpPcs, true));
+  }
 }
 
 function renderCoverageCards(){
@@ -2139,7 +2975,24 @@ function renderSellinCatSummary(){
     if(r[IDX_S.sellinSaldo]>0) a.wSaldo++;
     if(r[IDX_S.rguGa]>0) a.wGa++;
   });
-  const rows = META.cats.map((c,i)=>({name:c, ...agg[i]})).filter(r=>r.outlet>0).sort((a,b)=>b.ga-a.ga);
+  const rows = META.cats.map((c,i)=>({idx:i, name:c, ...agg[i]})).filter(r=>r.outlet>0).sort((a,b)=>b.ga-a.ga);
+
+  // Last Week comparison — same per-category totals over the snapshot
+  const cmpOn = prevAvail('sellin');
+  const prevAgg = {};
+  if(cmpOn){
+    META.cats.forEach((c,i)=>prevAgg[i] = {outlet:0, ga:0, sp:0, vou:0, saldo:0, tertiary:0, secondary:0, wSp:0, wVou:0, wSaldo:0, wGa:0});
+    PREV_FILTERED.sellin.forEach(r=>{
+      const a = prevAgg[r[IDX_S.catIdx]];
+      a.outlet++; a.ga+=r[IDX_S.rguGa]; a.sp+=r[IDX_S.sellinSp]; a.vou+=r[IDX_S.sellinVou];
+      a.saldo+=r[IDX_S.sellinSaldo]; a.tertiary+=r[IDX_S.tertiary]; a.secondary+=r[IDX_S.secondary];
+      if(r[IDX_S.sellinSp]>0) a.wSp++;
+      if(r[IDX_S.sellinVou]>0) a.wVou++;
+      if(r[IDX_S.sellinSaldo]>0) a.wSaldo++;
+      if(r[IDX_S.rguGa]>0) a.wGa++;
+    });
+  }
+  const dk = (r, p, k, good, fmt) => (cmpOn && p && sellinMetricOk(k)) ? dl(r[k], p[k], good, fmt) : '';
 
   const maxGa = Math.max(1, ...rows.map(r=>r.ga));
   const grandTotalGaCat = rows.reduce((a,r)=>a+r.ga, 0) || 1;
@@ -2151,29 +3004,31 @@ function renderSellinCatSummary(){
     </div>`).join('') || '<p style="color:var(--muted);font-size:13px;">Tidak ada data.</p>';
 
   const pct = (w,t) => t? (w/t*100).toFixed(0)+'%' : '–';
-  document.getElementById('siCatTbody').innerHTML = rows.map(r=>`
+  document.getElementById('siCatTbody').innerHTML = rows.map(r=>{ const p = prevAgg[r.idx]; return `
     <tr>
-      <td><span class="badge ${r.name}">${r.name}</span></td><td>${fmtN(r.outlet)}</td><td>${fmtN(r.ga)}</td>
-      <td>${fmtN(r.wSp)}</td><td>${pct(r.wSp,r.outlet)}</td><td>${fmtBn(r.sp)}</td>
-      <td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td><td>${fmtBn(r.vou)}</td>
-      <td>${fmtN(r.wSaldo)}</td><td>${pct(r.wSaldo,r.outlet)}</td><td>${fmtBn(r.saldo)}</td>
-      <td>${fmtBn(r.secondary)}</td><td>${fmtBn(r.tertiary)}</td>
-      <td>${fmtN(r.wGa)}</td><td>${pct(r.wGa,r.outlet)}</td>
-    </tr>`).join('') || '<tr><td colspan="16" style="color:var(--muted);">Tidak ada data.</td></tr>';
+      <td><span class="badge ${r.name}">${r.name}</span></td><td>${fmtN(r.outlet)}</td><td>${fmtN(r.ga)}${dk(r,p,'ga',true)}</td>
+      <td>${fmtN(r.wSp)}</td><td>${pct(r.wSp,r.outlet)}</td><td>${fmtBn(r.sp)}${dk(r,p,'sp',true,fmtBn)}</td>
+      <td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td><td>${fmtBn(r.vou)}${dk(r,p,'vou',true,fmtBn)}</td>
+      <td>${fmtN(r.wSaldo)}</td><td>${pct(r.wSaldo,r.outlet)}</td><td>${fmtBn(r.saldo)}${dk(r,p,'saldo',true,fmtBn)}</td>
+      <td>${fmtBn(r.secondary)}${dk(r,p,'secondary',true,fmtBn)}</td><td>${fmtBn(r.tertiary)}${dk(r,p,'tertiary',true,fmtBn)}</td>
+      <td>${fmtN(r.wGa)}${dk(r,p,'wGa',true)}</td><td>${pct(r.wGa,r.outlet)}</td>
+    </tr>`; }).join('') || '<tr><td colspan="16" style="color:var(--muted);">Tidak ada data.</td></tr>';
 
   const grand = rows.reduce((acc,r)=>{
     acc.outlet+=r.outlet; acc.ga+=r.ga; acc.sp+=r.sp; acc.vou+=r.vou; acc.saldo+=r.saldo;
     acc.tertiary+=r.tertiary; acc.secondary+=r.secondary;
     acc.wSp+=r.wSp; acc.wVou+=r.wVou; acc.wSaldo+=r.wSaldo; acc.wGa+=r.wGa; return acc;
   }, {outlet:0,ga:0,sp:0,vou:0,saldo:0,tertiary:0,secondary:0,wSp:0,wVou:0,wSaldo:0,wGa:0});
+  const prevGrand = cmpOn ? Object.values(prevAgg).reduce((acc,x)=>{ Object.keys(acc).forEach(k=>acc[k]+=x[k]); return acc; },
+    {outlet:0,ga:0,sp:0,vou:0,saldo:0,tertiary:0,secondary:0,wSp:0,wVou:0,wSaldo:0,wGa:0}) : null;
   document.getElementById('siCatTfoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
-      <td>Total West Java</td><td>${fmtN(grand.outlet)}</td><td>${fmtN(grand.ga)}</td>
-      <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td><td>${fmtBn(grand.sp)}</td>
-      <td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td><td>${fmtBn(grand.vou)}</td>
-      <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td><td>${fmtBn(grand.saldo)}</td>
-      <td>${fmtBn(grand.secondary)}</td><td>${fmtBn(grand.tertiary)}</td>
-      <td>${fmtN(grand.wGa)}</td><td>${pct(grand.wGa,grand.outlet)}</td>
+      <td>Total West Java</td><td>${fmtN(grand.outlet)}</td><td>${fmtN(grand.ga)}${dk(grand,prevGrand,'ga',true)}</td>
+      <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td><td>${fmtBn(grand.sp)}${dk(grand,prevGrand,'sp',true,fmtBn)}</td>
+      <td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td><td>${fmtBn(grand.vou)}${dk(grand,prevGrand,'vou',true,fmtBn)}</td>
+      <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td><td>${fmtBn(grand.saldo)}${dk(grand,prevGrand,'saldo',true,fmtBn)}</td>
+      <td>${fmtBn(grand.secondary)}${dk(grand,prevGrand,'secondary',true,fmtBn)}</td><td>${fmtBn(grand.tertiary)}${dk(grand,prevGrand,'tertiary',true,fmtBn)}</td>
+      <td>${fmtN(grand.wGa)}${dk(grand,prevGrand,'wGa',true)}</td><td>${pct(grand.wGa,grand.outlet)}</td>
     </tr>` : '';
 }
 
@@ -2206,36 +3061,42 @@ function renderSellinSummaryTable(){
   };
 
   const pct = (w,t) => t? (w/t*100).toFixed(0)+'%' : '–';
-  const rowCells = r => `
-      <td>${fmtN(r.outlet)}</td><td>${fmtN(r.ga)}</td>
-      <td>${fmtN(r.wSp)}</td><td>${pct(r.wSp,r.outlet)}</td><td>${fmtBn(r.sp)}</td>
-      <td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td><td>${fmtBn(r.vou)}</td>
-      <td>${fmtN(r.wSaldo)}</td><td>${pct(r.wSaldo,r.outlet)}</td><td>${fmtBn(r.saldo)}</td>
-      <td>${fmtBn(r.secondary)}</td><td>${fmtBn(r.tertiary)}</td>
-      <td>${fmtN(r.s0)}</td><td>${fmtN(r.s1)}</td><td>${fmtN(r.s2)}</td><td>${fmtN(r.s3)}</td><td>${fmtN(r.s4)}</td>
-      <td>${fmtN(r.wGa)}</td>`;
+  // Last Week comparison (toggle on + a Sell In & GA snapshot exists)
+  const cmpOn = prevAvail('sellin');
+  const dk = (r, p, k, good, fmt) => (cmpOn && p && sellinMetricOk(k)) ? dl(r[k], p[k], good, fmt) : '';
+  const rowCells = (r, p) => `
+      <td>${fmtN(r.outlet)}</td><td>${fmtN(r.ga)}${dk(r,p,'ga',true)}</td>
+      <td>${fmtN(r.wSp)}</td><td>${pct(r.wSp,r.outlet)}</td><td>${fmtBn(r.sp)}${dk(r,p,'sp',true,fmtBn)}</td>
+      <td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td><td>${fmtBn(r.vou)}${dk(r,p,'vou',true,fmtBn)}</td>
+      <td>${fmtN(r.wSaldo)}</td><td>${pct(r.wSaldo,r.outlet)}</td><td>${fmtBn(r.saldo)}${dk(r,p,'saldo',true,fmtBn)}</td>
+      <td>${fmtBn(r.secondary)}${dk(r,p,'secondary',true,fmtBn)}</td><td>${fmtBn(r.tertiary)}${dk(r,p,'tertiary',true,fmtBn)}</td>
+      <td>${fmtN(r.s0)}${dk(r,p,'s0',false)}</td><td>${fmtN(r.s1)}</td><td>${fmtN(r.s2)}</td><td>${fmtN(r.s3)}</td><td>${fmtN(r.s4)}</td>
+      <td>${fmtN(r.wGa)}${dk(r,p,'wGa',true)}</td>`;
 
   const agg = aggregateBy(filteredSellin, gKey);
   const rows = Object.keys(agg).map(g=>({key:g, name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.ga-a.ga);
+  const prevAgg = cmpOn ? aggregateBy(PREV_FILTERED.sellin, gKey) : null;
+  const prevOf = k => prevAgg ? (prevAgg[k] || initSI()) : null;
 
   let bodyHtml = '';
   rows.forEach(r=>{
     if(ctx.label==='branch'){
       const isOpen = expandedBranchesSI.has(String(r.key));
       bodyHtml += `<tr>
-        <td><span class="expand-toggle" data-scope="si" data-key="${r.key}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${isOpen?'⊟':'⊞'}</span>${r.name}</td>${rowCells(r)}
+        <td><span class="expand-toggle" data-scope="si" data-key="${r.key}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${isOpen?'⊟':'⊞'}</span>${r.name}</td>${rowCells(r, prevOf(r.key))}
       </tr>`;
       if(isOpen){
         const subAgg = aggregateBy(filteredSellin.filter(rr=>String(rr[IDX_S.branchIdx])===String(r.key)), IDX_S.microIdx);
-        const subRows = Object.keys(subAgg).map(mg=>({name: META.micros[mg], ...subAgg[mg]})).sort((a,b)=>b.ga-a.ga);
+        const subRows = Object.keys(subAgg).map(mg=>({key:mg, name: META.micros[mg], ...subAgg[mg]})).sort((a,b)=>b.ga-a.ga);
+        const subPrev = cmpOn ? aggregateBy(PREV_FILTERED.sellin.filter(rr=>String(rr[IDX_S.branchIdx])===String(r.key)), IDX_S.microIdx) : null;
         subRows.forEach(mr=>{
           bodyHtml += `<tr style="background:#FAFAF8;">
-            <td style="padding-left:28px;color:var(--ink-soft);font-size:11.5px;">${mr.name}</td>${rowCells(mr)}
+            <td style="padding-left:28px;color:var(--ink-soft);font-size:11.5px;">${mr.name}</td>${rowCells(mr, subPrev ? (subPrev[mr.key] || initSI()) : null)}
           </tr>`;
         });
       }
     } else {
-      bodyHtml += `<tr><td>${r.name}</td>${rowCells(r)}</tr>`;
+      bodyHtml += `<tr><td>${r.name}</td>${rowCells(r, prevOf(r.key))}</tr>`;
     }
   });
   document.getElementById('siSummaryTbody').innerHTML = bodyHtml || '<tr><td colspan="20" style="color:var(--muted);">Tidak ada data.</td></tr>';
@@ -2247,15 +3108,16 @@ function renderSellinSummaryTable(){
     acc.s0+=r.s0; acc.s1+=r.s1; acc.s2+=r.s2; acc.s3+=r.s3; acc.s4+=r.s4;
     return acc;
   }, {outlet:0,ga:0,sp:0,vou:0,saldo:0,tertiary:0,secondary:0,wSp:0,wVou:0,wSaldo:0,wGa:0,s0:0,s1:0,s2:0,s3:0,s4:0});
+  const prevGrand = prevAgg ? Object.values(prevAgg).reduce((acc,x)=>{ Object.keys(acc).forEach(k=>acc[k]+=x[k]); return acc; }, initSI()) : null;
   document.getElementById('siSummaryTfoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
-      <td>Total West Java</td><td>${fmtN(grand.outlet)}</td><td>${fmtN(grand.ga)}</td>
-      <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td><td>${fmtBn(grand.sp)}</td>
-      <td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td><td>${fmtBn(grand.vou)}</td>
-      <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td><td>${fmtBn(grand.saldo)}</td>
-      <td>${fmtBn(grand.secondary)}</td><td>${fmtBn(grand.tertiary)}</td>
-      <td>${fmtN(grand.s0)}</td><td>${fmtN(grand.s1)}</td><td>${fmtN(grand.s2)}</td><td>${fmtN(grand.s3)}</td><td>${fmtN(grand.s4)}</td>
-      <td>${fmtN(grand.wGa)}</td>
+      <td>Total West Java</td><td>${fmtN(grand.outlet)}</td><td>${fmtN(grand.ga)}${dk(grand,prevGrand,'ga',true)}</td>
+      <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td><td>${fmtBn(grand.sp)}${dk(grand,prevGrand,'sp',true,fmtBn)}</td>
+      <td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td><td>${fmtBn(grand.vou)}${dk(grand,prevGrand,'vou',true,fmtBn)}</td>
+      <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td><td>${fmtBn(grand.saldo)}${dk(grand,prevGrand,'saldo',true,fmtBn)}</td>
+      <td>${fmtBn(grand.secondary)}${dk(grand,prevGrand,'secondary',true,fmtBn)}</td><td>${fmtBn(grand.tertiary)}${dk(grand,prevGrand,'tertiary',true,fmtBn)}</td>
+      <td>${fmtN(grand.s0)}${dk(grand,prevGrand,'s0',false)}</td><td>${fmtN(grand.s1)}</td><td>${fmtN(grand.s2)}</td><td>${fmtN(grand.s3)}</td><td>${fmtN(grand.s4)}</td>
+      <td>${fmtN(grand.wGa)}${dk(grand,prevGrand,'wGa',true)}</td>
     </tr>` : '';
 }
 
@@ -2383,6 +3245,22 @@ function renderKpis(){
   document.getElementById('slabZeroCatPct').textContent = 'thd kategori: ' + catPctLine(catZero);
   document.getElementById('slabLowCatPct').textContent = 'thd kategori: ' + catPctLine(catLow);
   document.getElementById('slabOkCatPct').textContent = 'thd kategori: ' + catPctLine(catOk);
+
+  // Last Week comparison chips
+  if(prevAvail('stock')){
+    let pZero=0, pLow=0, pOk=0, pStock=0, pDemand=0;
+    PREV_FILTERED.stock.forEach(r=>{
+      const st = outletStatus(r[IDX.salAmt]);
+      if(st==='zero') pZero++; else if(st==='low') pLow++; else pOk++;
+      pStock += stockAmt(r); pDemand += totalDemandAmt(r);
+    });
+    appendKpiDelta('kpiStock', dl(stockTotal, pStock, true, fmtBn));
+    if(demand>0 && pDemand>0) appendKpiDelta('kpiDos', dl(avgDos, pStock/pDemand, true, v=>v.toFixed(2)));
+    appendKpiDelta('kpiLow', dl(lowTotal, pZero+pLow, false));
+    appendKpiDelta('slabZero', dl(zero, pZero, false));
+    appendKpiDelta('slabLow', dl(low, pLow, false));
+    appendKpiDelta('slabOk', dl(ok, pOk, true));
+  }
 }
 
 function groupContext(){
@@ -2505,44 +3383,51 @@ function renderSummaryTable(){
     const dAll = dosOf(a.spoA+a.spiA+a.voA+a.viA+a.salA, a.dspA+a.dvouA+a.dsalA);
     return `<td>${dSp!==null?dSp.toFixed(2):'–'}</td><td>${dVou!==null?dVou.toFixed(2):'–'}</td><td>${dSal!==null?dSal.toFixed(2):'–'}</td><td>${dAll!==null?dAll.toFixed(2):'–'}</td>`;
   };
-  const rowCells = r => `
+  // Last Week comparison (only when the toggle is on AND a stock snapshot exists):
+  // a small ▲/▼ chip under the main amount / slab columns
+  const cmpOn = prevAvail('stock');
+  const dk = (r, p, k, good, fmt) => (cmpOn && p) ? dl(r[k], p[k], good, fmt) : '';
+  const rowCells = (r, p) => `
       <td>${fmtN(r.outlet)}</td>
-      <td>${fmtBn(r.stock)}</td>
+      <td>${fmtBn(r.stock)}${dk(r,p,'stock',true,fmtBn)}</td>
       <td>${fmtN(r.spoQ)}</td>
       <td>${fmtN(r.spiQ)}</td>
-      <td>${fmtBn(r.spoA)}</td>
-      <td>${fmtBn(r.spiA)}</td>
+      <td>${fmtBn(r.spoA)}${dk(r,p,'spoA',true,fmtBn)}</td>
+      <td>${fmtBn(r.spiA)}${dk(r,p,'spiA',true,fmtBn)}</td>
       <td>${fmtN(r.voQ)}</td>
       <td>${fmtN(r.viQ)}</td>
-      <td>${fmtBn(r.voA)}</td>
-      <td>${fmtBn(r.viA)}</td>
-      <td>${fmtBn(r.salA)}</td>
+      <td>${fmtBn(r.voA)}${dk(r,p,'voA',true,fmtBn)}</td>
+      <td>${fmtBn(r.viA)}${dk(r,p,'viA',true,fmtBn)}</td>
+      <td>${fmtBn(r.salA)}${dk(r,p,'salA',true,fmtBn)}</td>
       ${dosCells(r)}
-      <td>${fmtN(r.zero)}</td>
-      <td>${fmtN(r.low)}</td>
-      <td>${fmtN(r.ok)}</td>`;
+      <td>${fmtN(r.zero)}${dk(r,p,'zero',false)}</td>
+      <td>${fmtN(r.low)}${dk(r,p,'low',false)}</td>
+      <td>${fmtN(r.ok)}${dk(r,p,'ok',true)}</td>`;
 
   const agg = aggregateBy(filtered, ctx.key);
   const rows = Object.keys(agg).map(g=>({key:g, name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.stock-a.stock);
+  const prevAgg = cmpOn ? aggregateBy(PREV_FILTERED.stock, ctx.key) : null;
+  const prevOf = k => prevAgg ? (prevAgg[k] || initLB()) : null;   // a group missing last week counts as 0 → shows "baru"
 
   let bodyHtml = '';
   rows.forEach(r=>{
     if(ctx.label==='branch'){
       const isOpen = expandedBranchesLB.has(String(r.key));
       bodyHtml += `<tr>
-        <td><span class="expand-toggle" data-scope="lb" data-key="${r.key}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${isOpen?'⊟':'⊞'}</span>${r.name}</td>${rowCells(r)}
+        <td><span class="expand-toggle" data-scope="lb" data-key="${r.key}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${isOpen?'⊟':'⊞'}</span>${r.name}</td>${rowCells(r, prevOf(r.key))}
       </tr>`;
       if(isOpen){
         const subAgg = aggregateBy(filtered.filter(rr=>String(rr[IDX.branchIdx])===String(r.key)), IDX.microIdx);
-        const subRows = Object.keys(subAgg).map(mg=>({name: META.micros[mg], ...subAgg[mg]})).sort((a,b)=>b.stock-a.stock);
+        const subRows = Object.keys(subAgg).map(mg=>({key:mg, name: META.micros[mg], ...subAgg[mg]})).sort((a,b)=>b.stock-a.stock);
+        const subPrev = cmpOn ? aggregateBy(PREV_FILTERED.stock.filter(rr=>String(rr[IDX.branchIdx])===String(r.key)), IDX.microIdx) : null;
         subRows.forEach(mr=>{
           bodyHtml += `<tr style="background:#FAFAF8;">
-            <td style="padding-left:28px;color:var(--ink-soft);font-size:11.5px;">${mr.name}</td>${rowCells(mr)}
+            <td style="padding-left:28px;color:var(--ink-soft);font-size:11.5px;">${mr.name}</td>${rowCells(mr, subPrev ? (subPrev[mr.key] || initLB()) : null)}
           </tr>`;
         });
       }
     } else {
-      bodyHtml += `<tr><td>${r.name}</td>${rowCells(r)}</tr>`;
+      bodyHtml += `<tr><td>${r.name}</td>${rowCells(r, prevOf(r.key))}</tr>`;
     }
   });
   document.getElementById('summaryTbody').innerHTML = bodyHtml || '<tr><td colspan="19" style="color:var(--muted);">Tidak ada data.</td></tr>';
@@ -2555,24 +3440,25 @@ function renderSummaryTable(){
     acc.zero+=r.zero; acc.low+=r.low; acc.ok+=r.ok;
     return acc;
   }, {outlet:0,stock:0,spoQ:0,spiQ:0,spoA:0,spiA:0,voQ:0,viQ:0,voA:0,viA:0,salA:0,dspA:0,dvouA:0,dsalA:0,zero:0,low:0,ok:0});
+  const prevGrand = prevAgg ? Object.values(prevAgg).reduce((acc,x)=>{ Object.keys(acc).forEach(k=>acc[k]+=x[k]); return acc; }, initLB()) : null;
   document.getElementById('summaryTfoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
       <td>Total West Java</td>
       <td>${fmtN(grand.outlet)}</td>
-      <td>${fmtBn(grand.stock)}</td>
+      <td>${fmtBn(grand.stock)}${dk(grand,prevGrand,'stock',true,fmtBn)}</td>
       <td>${fmtN(grand.spoQ)}</td>
       <td>${fmtN(grand.spiQ)}</td>
-      <td>${fmtBn(grand.spoA)}</td>
-      <td>${fmtBn(grand.spiA)}</td>
+      <td>${fmtBn(grand.spoA)}${dk(grand,prevGrand,'spoA',true,fmtBn)}</td>
+      <td>${fmtBn(grand.spiA)}${dk(grand,prevGrand,'spiA',true,fmtBn)}</td>
       <td>${fmtN(grand.voQ)}</td>
       <td>${fmtN(grand.viQ)}</td>
-      <td>${fmtBn(grand.voA)}</td>
-      <td>${fmtBn(grand.viA)}</td>
-      <td>${fmtBn(grand.salA)}</td>
+      <td>${fmtBn(grand.voA)}${dk(grand,prevGrand,'voA',true,fmtBn)}</td>
+      <td>${fmtBn(grand.viA)}${dk(grand,prevGrand,'viA',true,fmtBn)}</td>
+      <td>${fmtBn(grand.salA)}${dk(grand,prevGrand,'salA',true,fmtBn)}</td>
       ${dosCells(grand)}
-      <td>${fmtN(grand.zero)}</td>
-      <td>${fmtN(grand.low)}</td>
-      <td>${fmtN(grand.ok)}</td>
+      <td>${fmtN(grand.zero)}${dk(grand,prevGrand,'zero',false)}</td>
+      <td>${fmtN(grand.low)}${dk(grand,prevGrand,'low',false)}</td>
+      <td>${fmtN(grand.ok)}${dk(grand,prevGrand,'ok',true)}</td>
     </tr>` : '';
 }
 
@@ -2898,6 +3784,8 @@ function handleStockFile(file){
 }
 
 async function finishStockProcessing(data, progressEl){
+  // remember what is about to be replaced, for the Last Week snapshot (see below)
+  const snapOldRows = OUTLETS, snapOldMeta = META, snapOldAsOf = META ? META.asOf : null;
   const masterKeys = Object.keys(MASTER);
   const brandsSet = new Set(), areasSet = new Set(), branchesSet = new Set(), microsSet = new Set();
   masterKeys.forEach(k=>{
@@ -2977,6 +3865,15 @@ async function finishStockProcessing(data, progressEl){
   if(saveOk){
     progressEl.textContent = `Selesai. ${outlets.length.toLocaleString('id-ID')} outlet diperbarui, per ${maxAsOf||'-'}.`;
     await logUpdate('Stock Outlet', maxAsOf||'-', outlets.length);
+    // Last Week snapshot: only when this upload is for a different as-of date than what
+    // it replaces (re-uploading the same day's file must not overwrite the real "previous")
+    if(snapOldRows.length && snapOldMeta && maxAsOf && !sameAsOf(maxAsOf, snapOldAsOf)){
+      const base = progressEl.textContent;
+      progressEl.textContent = base + ' Menyimpan snapshot Last Week…';
+      const asOfMap = {}; snapOldMeta.brands.forEach(b=>asOfMap[b] = snapOldAsOf || null);
+      const okSnap = await snapshotPrev('stock', snapOldRows, snapOldMeta, asOfMap);
+      progressEl.textContent = base + (okSnap ? ' Snapshot Last Week tersimpan.' : ' (Snapshot Last Week gagal disimpan — perbandingan Last Week belum tersedia untuk stock.)');
+    }
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data tidak berhasil disimpan online (koneksi tidak stabil). Data yang tampil di layar mungkin benar, tapi BELUM tentu tersimpan untuk orang lain. Coba upload ulang file ini.`;
   }
@@ -3142,7 +4039,7 @@ function handleMasterFile(file){
           bI[b], aI[mm.area], brI[mm.branch], mI[mm.micro], oid, mm.name||'', cats.indexOf(mm.cat),
           old ? old[IDX_S.rguGa] : 0, old ? old[IDX_S.qsso] : 0, old ? old[IDX_S.sellinSp] : 0,
           old ? old[IDX_S.sellinVou] : 0, old ? old[IDX_S.sellinSaldo] : 0,
-          old ? old[IDX_S.tertiary] : 0, old ? old[IDX_S.secondary] : 0
+          old ? old[IDX_S.tertiary] : 0, old ? old[IDX_S.secondary] : 0, old ? spPcsOf(old) : 0
         ];
       });
       if(SMETA) SMETA = {...SMETA, totalOutlets: SELLIN_OUTLETS.length};
@@ -3171,6 +4068,36 @@ function handleMasterFile(file){
 // ---------- update: Sell In & GA CSV (DSE_PROD) ----------
 const IM3_SI_COLS = {region:'region', branch:'branch', micro:'micro_cluster', id_outlet:'id_outlet', rgu_ga:'rgu_ga', qsso:'qsso', sp:'sellin_sp', vou:'sellin_vou', saldo:'sellin_saldo', tertiary:'tertiary', secondary:'secondary', asOfDt:'as_of_dt'};
 const TID_SI_COLS = {region:'region', branch:'branch', micro:'mc_ts', id_outlet:'id_outlet', rgu_ga:'rgu_ga', qsso:'qsso', sp:'osa_sp', vou:'osa_vou', saldo:'osa_saldo', tertiary:'tertiary', secondary:'secondary', asOfDt:'as_of_dt'};
+
+// The DSE_PROD files carry as_of_dt as just the DAY OF MONTH ("26"), not a date. Left as-is
+// the header read "Sell In per: 26", the "is this a newer upload?" checks confused the 26th
+// of one month with the 26th of the next, and the month couldn't be told apart at all.
+// Rebuild a real YYYY-MM-DD from the mth_id column (IM3) or, failing that, the YYYYMM in the
+// file name (…_202609.csv). Anything that already looks like a full date is left untouched.
+function normAsOfDt(dt, mthId, fileName){
+  if(dt == null) return null;
+  dt = String(dt).trim();
+  if(!dt) return null;
+  if(/^\d{1,2}$/.test(dt)){
+    let ym = null;
+    const m1 = /^(\d{4})(\d{2})$/.exec(String(mthId == null ? '' : mthId).trim());
+    if(m1) ym = m1[1] + '-' + m1[2];
+    if(!ym){ const m2 = /(\d{4})(\d{2})(?=\D*\.csv$)/i.exec(fileName || ''); if(m2) ym = m2[1] + '-' + m2[2]; }
+    if(ym) return ym + '-' + dt.padStart(2, '0');
+  }
+  return dt;
+}
+// Same as-of date? Tolerates data saved before this fix, where the stored value is only
+// the day number ("26") — it counts as equal to any full date ending in that day.
+function sameAsOf(a, b){
+  if(a === b) return true;
+  if(!a || !b) return false;
+  const day = x => /^\d{1,2}$/.test(String(x)) ? String(x).padStart(2,'0') : null;
+  const da = day(a), db = day(b);
+  if(da && !db) return String(b).endsWith('-' + da);
+  if(db && !da) return String(a).endsWith('-' + db);
+  return false;
+}
 
 function handleSellinFile(file){
   return new Promise((resolve) => {
@@ -3228,7 +4155,7 @@ function parseSellinBody(file, brand, colMap, progressEl){
       rowCount++;
       const row = res.data;
       if(row[colMap.region] !== 'WEST JAVA') return;
-      const dt = colMap.asOfDt ? row[colMap.asOfDt] : null;
+      const dt = colMap.asOfDt ? normAsOfDt(row[colMap.asOfDt], row.mth_id, file.name) : null;
       if(dt && (!maxAsOfDt || dt > maxAsOfDt)) maxAsOfDt = dt;
       const oid = normId(row[colMap.id_outlet]);
       const key = brand+'|'+oid;
@@ -3253,6 +4180,32 @@ function parseSellinBody(file, brand, colMap, progressEl){
 
 async function finishSellinProcessing(brand, byKey, progressEl, maxAsOfDt){
   const brandI = META.brands.indexOf(brand);
+  // what this brand's rows looked like before this upload, and as of when — for the
+  // Last Week snapshot. As-of is tracked per brand (SMETA.asOfByBrand) because the two
+  // brands' files are uploaded separately; older saved data only has the single
+  // SMETA.asOf, which is used as the fallback for both.
+  const snapBrandRows = SELLIN_OUTLETS.filter(r=>r[IDX_S.brandIdx]===brandI);
+  const snapOldMap = Object.assign(
+    Object.fromEntries(META.brands.map(b=>[b, SMETA ? (SMETA.asOf || null) : null])),
+    (SMETA && SMETA.asOfByBrand) || {});
+  const snapOldAsOf = snapOldMap[brand] || null;
+  const snapMeta = META;
+  // DSE_PROD is used for SELL IN ONLY (SP, Voucher, Saldo). Everything else in a row keeps the
+  // value the outlet already had: GA (comes from menu #6), Secondary (menu #5) and Tertiary.
+  // QSSO is derived from the GA kept here (GA >= 3). So this file's rgu_ga / tertiary /
+  // secondary / qsso columns are deliberately ignored.
+  const oldRowByOutlet = new Map();
+  snapBrandRows.forEach(r=>oldRowByOutlet.set(r[IDX_S.outletId], r));
+  const oldGaBy = (SMETA && SMETA.gaAsOfByBrand) || {};
+  const newMonth = monthOfDate(maxAsOfDt || (SMETA && SMETA.asOf));
+  // "GA per" date: the date GA was last loaded via menu #6. If GA has never been loaded that
+  // way, the GA on hand is whatever the previous DSE_PROD upload put there, i.e. as of that
+  // upload's date — record it now, before this upload moves the Sell In date forward (data
+  // saved before this change may store only the day number, so rebuild it with this month)
+  let gaDate = oldGaBy[brand] || null;
+  if(!gaDate && snapBrandRows.length && snapOldAsOf){
+    gaDate = /^\d{1,2}$/.test(String(snapOldAsOf)) ? (newMonth ? newMonth + '-' + String(snapOldAsOf).padStart(2,'0') : null) : snapOldAsOf;
+  }
   // keep existing rows for the OTHER brand untouched; rebuild rows for this brand from MASTER + new sellin data
   const keptOther = SELLIN_OUTLETS.filter(r=>r[IDX_S.brandIdx]!==brandI);
   const rebuilt = [];
@@ -3261,12 +4214,13 @@ async function finishSellinProcessing(brand, byKey, progressEl, maxAsOfDt){
     const mm = MASTER[key];
     const oid = key.split('|')[1];
     const s = byKey[key];
+    const old = oldRowByOutlet.get(oid);
     rebuilt.push([
       brandI, META.areas.indexOf(mm.area), META.branches.indexOf(mm.branch), META.micros.indexOf(mm.micro),
       oid, mm.name||'', META.cats.indexOf(mm.cat),
-      s? Math.round(s.rguGa*100)/100 : 0, s? Math.round(s.qsso*100)/100 : 0,
+      old ? old[IDX_S.rguGa] : 0, old ? qssoOf(old[IDX_S.rguGa]) : 0,
       s? Math.round(s.sp) : 0, s? Math.round(s.vou) : 0, s? Math.round(s.saldo) : 0,
-      s? Math.round(s.tertiary) : 0, s? Math.round(s.secondary) : 0
+      old ? old[IDX_S.tertiary] : 0, old ? old[IDX_S.secondary] : 0, old ? spPcsOf(old) : 0
     ]);
   });
   SELLIN_OUTLETS = keptOther.concat(rebuilt);
@@ -3276,15 +4230,566 @@ async function finishSellinProcessing(brand, byKey, progressEl, maxAsOfDt){
   // parseable date, fall back to whichever is later between the two brands' last known
   // dates, so the header still shows something meaningful rather than going blank.
   const newAsOf = maxAsOfDt || oldAsOf || null;
-  SMETA = { fields_sellin: FIELDS_S, asOf: newAsOf, mth: SMETA.mth, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString() };
+  const newGaBy = Object.assign({}, oldGaBy);
+  if(gaDate) newGaBy[brand] = gaDate;
+  const gaMonthNow = (SMETA && SMETA.gaMonth) || monthOfDate(gaDate) || null;
+  SMETA = { fields_sellin: FIELDS_S, asOf: newAsOf, asOfByBrand: Object.assign({}, snapOldMap, {[brand]: newAsOf}),
+    gaAsOfByBrand: newGaBy, gaMonth: gaMonthNow,
+    mth: SMETA.mth, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString() };
 
   progressEl.textContent = `Menyimpan data Sell In & GA online (${SELLIN_OUTLETS.length.toLocaleString('id-ID')} outlet)…`;
   const saveOk = await persistSellin((done,total)=>{ progressEl.textContent = `Menyimpan data Sell In & GA online — bagian ${done}/${total}…`; });
   if(saveOk){
-    progressEl.textContent = `Selesai. Data Sell In & GA ${brand} diperbarui (${rebuilt.length.toLocaleString('id-ID')} outlet).`;
+    progressEl.textContent = `Selesai. Data Sell In & GA ${brand} diperbarui (${rebuilt.length.toLocaleString('id-ID')} outlet).` + ` Hanya Sell In (SP/Voucher/Saldo) yang diambil dari file ini — GA, Tertiary, dan Secondary tetap data sebelumnya.`
+      + (gaDate ? ` GA ${brand} per ${gaDate}.` : ` GA ${brand} belum ada — upload file GA di menu #6.`)
+      + ((gaMonthNow && newMonth && gaMonthNow !== newMonth) ? ` ⚠ GA masih data bulan ${gaMonthNow}, sedangkan Sell In bulan ${newMonth} — upload file GA bulan ${newMonth} di menu #6.` : '');
     await logUpdate('Sell In & GA', brand, rebuilt.length);
+    if(snapBrandRows.length && newAsOf && !sameAsOf(newAsOf, snapOldAsOf)){
+      const base = progressEl.textContent;
+      progressEl.textContent = base + ' Menyimpan snapshot Last Week…';
+      const okSnap = await snapshotPrev('sellin', snapBrandRows, snapMeta, {[brand]: snapOldAsOf});
+      progressEl.textContent = base + (okSnap ? ' Snapshot Last Week tersimpan.' : ' (Snapshot Last Week gagal disimpan — perbandingan Last Week belum tersedia untuk Sell In & GA.)');
+    }
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data ${brand} tidak berhasil disimpan online. Coba upload ulang file ini.`;
+  }
+  refreshHeaderMeta();
+  applyFilters();
+}
+
+// ---------- update: GA from the daily RGUGA files ----------
+// One row per outlet × parameter, with one column per calendar day (dt01…dt31). GA is
+// cumulative (month-to-date), so it is the SUM of the daily columns from day 1 through
+// the last day that actually has data — unlike Stock, which reports a point-in-time
+// value "as of" its latest date and is never summed. Days after the last data day are
+// all zeros in the export, so the last day is found as the last column whose total
+// (across the whole file) is non-zero; that day also becomes the GA "as of" date.
+const GA_ID_COLS = { 'IM3': 'organization_id', '3ID': 'partner_qr_cd' };
+// Row-per-activation exports. Each names its own columns; `keep` (optional) picks which rows are GA.
+//  • "GA per MSISDN": every row is a GA, outlet in tag_outlet (blank = not attributable)
+//  • BigQuery export with a kpi column: ONLY kpi = RET_TAG rows are GA (retailer-tagged activations,
+//    including flag_outlet = 0 ones); kpi = SELLIN rows are SIM sell-in, not GA, and are ignored
+const GA_TX_FORMATS = [
+  { id:'msisdn', need:['msisdn','brand','ga_dt','tag_outlet'], msisdn:'msisdn', date:'ga_dt', outlet:'tag_outlet', keep:null,
+    label:'GA per MSISDN' },
+  { id:'retTag', need:['brand','dt_id','kpi','outlet_id','b_msisdn'], msisdn:'b_msisdn', date:'dt_id', outlet:'outlet_id',
+    keep: row => normKpiValue(row.kpi) === 'RET_TAG', label:'export BigQuery (kpi RET_TAG)' },
+];
+// Tolerant match for the kpi value: ignores case and surrounding spaces and treats space / "-" / "_"
+// as the same, so "RET_TAG", "ret_tag", " Ret Tag " and "RET-TAG" all count as RET_TAG.
+function normKpiValue(v){ return String(v == null ? '' : v).trim().toUpperCase().replace(/[\s\-_]+/g, '_'); }
+const GA_DAY_COLS = Array.from({length:31}, (_,i)=>'dt'+String(i+1).padStart(2,'0'));
+
+// QSSO is not a separate figure — an outlet counts as QSSO (1) when its GA is at least 3,
+// otherwise 0. (Checked against the DSE_PROD files: qsso = 1 for exactly the outlets with
+// rgu_ga >= 3.) It is therefore always derived from GA, never taken from a file.
+function qssoOf(ga){ return ga >= 3 ? 1 : 0; }
+
+// "2026-09-26" → "2026-09"; anything that isn't a full ISO-style date → null (unknown)
+function monthOfDate(d){ const m = /^(\d{4})-(\d{2})/.exec(String(d||'')); return m ? m[1]+'-'+m[2] : null; }
+
+function handleGaFile(file){
+  return new Promise((resolve) => {
+    const progressEl = document.getElementById('gaProgress');
+    if(!MASTER || Object.keys(MASTER).length === 0){
+      progressEl.innerHTML = '<b style="color:var(--red);">Data pairing outlet belum termuat</b> — refresh halaman ini dulu (Ctrl+Shift+R), tunggu sampai selesai loading, baru coba upload lagi.';
+      resolve(); return;
+    }
+    if(!SMETA || !SELLIN_OUTLETS.length){
+      progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In &amp; GA belum ada</b> — upload file DSE_PROD (menu #3) dulu sebelum mengganti data GA.';
+      resolve(); return;
+    }
+    progressEl.textContent = `Membaca header file (${file.name})…`;
+    // the RGUGA files are ';'-separated, the per-MSISDN GA export is ','-separated — look at
+    // the header line to pick the right one before reading the column names
+    file.slice(0, 16384).text().then(txt=>{
+      const head = txt.split(/\r?\n/)[0] || '';
+      const delim = head.split(';').length > head.split(',').length ? ';' : ',';
+      Papa.parse(file, {
+        header: true, delimiter: delim, preview: 1,
+        complete: function(headRes){
+          const cols = headRes.meta.fields || [];
+          const txFmt = GA_TX_FORMATS.find(f=>f.need.every(c=>cols.includes(c)));
+          if(txFmt){
+            parseGaTxBody(file, delim, txFmt, progressEl).then(resolve);
+            return;
+          }
+          const brand = cols.includes('organization_id') ? 'IM3' : (cols.includes('partner_qr_cd') ? '3ID' : null);
+          if(!brand || !cols.includes('region') || !cols.includes('dt01')){
+            progressEl.textContent = `Format file "${file.name}" tidak dikenali. Yang didukung: file RGUGA harian (kolom organization_id / partner_qr_cd, region, dt01…dt31), file GA per MSISDN (kolom msisdn, brand, ga_dt, tag_outlet), atau export BigQuery (kolom brand, dt_id, kpi, outlet_id, b_msisdn).`;
+            resolve(); return;
+          }
+          parseGaBody(file, brand, progressEl).then(resolve);
+        },
+        error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+      });
+    }).catch(err=>{ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); });
+  });
+}
+
+async function handleGaFiles(fileList){
+  const files = Array.from(fileList);
+  const progressEl = document.getElementById('gaProgress');
+  uploadInProgress = true;
+  const results = [];
+  for(let i=0;i<files.length;i++){
+    await handleGaFile(files[i]);
+    results.push(progressEl.textContent);
+  }
+  if(files.length > 1){
+    progressEl.innerHTML = `<b>Semua ${files.length} file selesai diproses:</b><br>` + results.map(r=>'• '+r).join('<br>');
+  }
+  uploadInProgress = false;
+}
+
+function parseGaBody(file, brand, progressEl){
+  return new Promise((resolve) => {
+    const idCol = GA_ID_COLS[brand];
+    const perDayAll = new Array(31).fill(0);   // whole file — decides the last day that has data
+    const byKey = new Map();                   // "brand|outletId" -> Float64Array(31) of per-day sums (WEST JAVA, in pairing)
+    let rowCount = 0, wjRows = 0, matchedRows = 0;
+
+    Papa.parse(file, {
+      header: true, delimiter: ';', skipEmptyLines: true, worker: true,
+      // chunk (not step): this file can have ~480k rows, and one message per row is far too slow
+      chunk: function(res){
+        const rows = res.data;
+        for(let i=0;i<rows.length;i++){
+          const row = rows[i];
+          rowCount++;
+          const isWj = row.region === 'WEST JAVA';
+          let arr = null;
+          if(isWj){
+            wjRows++;
+            const oid = normId(row[idCol] == null ? '' : row[idCol]);
+            const key = brand + '|' + oid;
+            if(oid && MASTER[key]){
+              matchedRows++;
+              arr = byKey.get(key);
+              if(!arr){ arr = new Float64Array(31); byKey.set(key, arr); }
+            }
+          }
+          for(let d=0; d<31; d++){
+            const v = +row[GA_DAY_COLS[d]] || 0;
+            if(v){ perDayAll[d] += v; if(arr) arr[d] += v; }
+          }
+        }
+        if(rowCount % 50000 < rows.length) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris (${brand})…`;
+      },
+      complete: function(){
+        let lastDay = 0;
+        for(let d=30; d>=0; d--){ if(perDayAll[d] > 0){ lastDay = d+1; break; } }
+        if(!lastDay){
+          progressEl.textContent = `Tidak ada data GA di file ini (semua kolom dt01…dt31 bernilai nol).`;
+          resolve(); return;
+        }
+        if(!wjRows){
+          progressEl.textContent = `Tidak ada baris region WEST JAVA di file ini.`;
+          resolve(); return;
+        }
+        // month comes from the file name (…_202609.csv); fall back to the Sell In month
+        const fm = /(\d{4})(\d{2})(?=\D*\.csv$)/i.exec(file.name);
+        const ym = fm ? `${fm[1]}-${fm[2]}` : (monthOfDate(SMETA && SMETA.asOf) || new Date().toISOString().slice(0,7));
+        progressEl.textContent = `Menggabungkan data GA ${brand} (${byKey.size.toLocaleString('id-ID')} outlet punya GA, sampai tgl ${lastDay})…`;
+        setTimeout(()=>(gaSink || finishGaProcessing)(brand, byKey, lastDay, ym, wjRows, progressEl).then(resolve), 30);
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+// GA per MSISDN export: one row = one activation (msisdn, brand, ga_dt, …, tag_outlet).
+// GA of an outlet = number of distinct MSISDNs tagged to it in the latest month of the file
+// (both brands are in the same file; each brand's "as of" = its newest ga_dt). Rows whose
+// tag_outlet is empty can't be attributed to any outlet, so they aren't counted — how many
+// there are is reported after the upload. The counts are shaped exactly like the RGUGA
+// per-day sums (a 31-slot array per outlet) so the same finishGaProcessing() applies them.
+function parseGaTxBody(file, delim, fmt, progressEl){
+  return new Promise((resolve) => {
+    const B = {};   // brand -> { maxDate, seen:Set(msisdn), rowsByMonth:{ym:n}, tagged:{ym:n}, byMonth:{ym: Map(key->Float64Array(31))} }
+    let rowCount = 0, dupRows = 0, badDate = 0, skippedRows = 0;
+    Papa.parse(file, {
+      header: true, delimiter: delim, skipEmptyLines: true, worker: true,
+      chunk: function(res){
+        const rows = res.data;
+        for(let i=0;i<rows.length;i++){
+          const row = rows[i]; rowCount++;
+          const brand = row.brand;
+          if(brand !== 'IM3' && brand !== '3ID') continue;
+          if(fmt.keep && !fmt.keep(row)){ skippedRows++; continue; }   // e.g. kpi = SELLIN → not GA
+          const dt = String(row[fmt.date] || '').trim();
+          const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dt);
+          if(!m){ badDate++; continue; }
+          let b = B[brand];
+          if(!b) b = B[brand] = { maxDate:'', seen:new Set(), rowsByMonth:{}, tagged:{}, matched:{}, byMonth:{} };
+          const date = m[0], ym = m[1]+'-'+m[2], day = +m[3];
+          if(date > b.maxDate) b.maxDate = date;
+          const ms = String(row[fmt.msisdn] || '').trim();
+          if(ms){ if(b.seen.has(ms)){ dupRows++; continue; } b.seen.add(ms); }
+          b.rowsByMonth[ym] = (b.rowsByMonth[ym]||0) + 1;
+          const tagRaw = row[fmt.outlet] == null ? '' : String(row[fmt.outlet]).trim();
+          if(!tagRaw) continue;
+          b.tagged[ym] = (b.tagged[ym]||0) + 1;
+          const key = brand + '|' + normId(tagRaw);
+          if(!MASTER[key]) continue;
+          b.matched[ym] = (b.matched[ym]||0) + 1;
+          let mp = b.byMonth[ym]; if(!mp) mp = b.byMonth[ym] = new Map();
+          let arr = mp.get(key); if(!arr){ arr = new Float64Array(31); mp.set(key, arr); }
+          arr[day-1] += 1;
+        }
+        if(rowCount % 20000 < rows.length) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris…`;
+      },
+      complete: async function(){
+        const brands = Object.keys(B).filter(x=>B[x].maxDate);
+        if(!brands.length){
+          progressEl.textContent = `Tidak ada baris valid di file ini (butuh kolom brand = IM3/3ID dan ga_dt berformat YYYY-MM-DD).`;
+          resolve(); return;
+        }
+        const msgs = [];
+        for(const brand of brands){
+          const b = B[brand];
+          const lastDate = b.maxDate, ym = lastDate.slice(0,7), lastDay = +lastDate.slice(8,10);
+          const total = b.rowsByMonth[ym]||0, tagged = b.tagged[ym]||0, matched = b.matched[ym]||0;
+          const older = Object.keys(b.rowsByMonth).filter(k=>k!==ym).reduce((a,k)=>a+b.rowsByMonth[k],0);
+          const note = ` Dari ${total.toLocaleString('id-ID')} GA di file (${fmt.label}): ${matched.toLocaleString('id-ID')} masuk ke outlet pairing, `
+            + `${(tagged-matched).toLocaleString('id-ID')} untuk outlet yang tidak ada di pairing (PJP/KAM)`
+            + ((total-tagged) ? `, ${(total-tagged).toLocaleString('id-ID')} tanpa outlet (tidak bisa dihubungkan ke outlet)` : '') + '.'
+            + (older ? ` ${older.toLocaleString('id-ID')} baris bulan sebelumnya diabaikan.` : '');
+          progressEl.textContent = `Menggabungkan data GA ${brand} (${(b.byMonth[ym]||new Map()).size.toLocaleString('id-ID')} outlet punya GA, sampai tgl ${lastDay})…`;
+          await (gaSink || finishGaProcessing)(brand, b.byMonth[ym] || new Map(), lastDay, ym, total, progressEl, note);
+          msgs.push(progressEl.textContent);
+        }
+        if(skippedRows) msgs.push(`(${skippedRows.toLocaleString('id-ID')} baris bukan GA — kpi selain RET_TAG, mis. SELLIN — diabaikan.)`);
+        if(dupRows) msgs.push(`(${dupRows.toLocaleString('id-ID')} baris MSISDN ganda dilewati.)`);
+        if(msgs.length > 1) progressEl.innerHTML = msgs.map(r=>'• '+r).join('<br>');
+        resolve();
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl, extraNote){
+  const brandI = META.brands.indexOf(brand);
+  const asOf = `${ym}-${String(lastDay).padStart(2,'0')}`;
+  const brandRows = SELLIN_OUTLETS.filter(r=>r[IDX_S.brandIdx]===brandI);
+  if(!brandRows.length){
+    progressEl.textContent = `Data GA ${brand} dilewati — belum ada data Sell In & GA untuk brand ini (upload DSE_PROD ${brand} dulu, menu #3).`;
+    return;
+  }
+  // rows are edited in place below, so take the pre-change copy for the Last Week snapshot now
+  const prevGaBy = (SMETA && SMETA.gaAsOfByBrand) || {};
+  const snapOldAsOf = prevGaBy[brand] || (SMETA && ((SMETA.asOfByBrand && SMETA.asOfByBrand[brand]) || SMETA.asOf)) || null;
+  const snapRows = brandRows.map(r=>r.slice(0,8));   // dimensions + outlet id/name/category + rguGa
+  const snapMeta = META;
+
+  let updated = 0, totalGa = 0, withGa = 0;
+  brandRows.forEach(r=>{
+    const arr = byKey.get(brand + '|' + r[IDX_S.outletId]);
+    let sum = 0;
+    if(arr){ for(let d=0; d<lastDay; d++) sum += arr[d]; }
+    r[IDX_S.rguGa] = Math.round(sum*100)/100;
+    r[IDX_S.qsso] = qssoOf(r[IDX_S.rguGa]);
+    totalGa += r[IDX_S.rguGa]; if(sum > 0) withGa++;
+    updated++;
+  });
+
+  const gaBy = Object.assign({}, prevGaBy, {[brand]: asOf});
+  const monthWarn = (SMETA.asOf && monthOfDate(SMETA.asOf) && monthOfDate(SMETA.asOf) !== ym)
+    ? ` ⚠ bulan file GA (${ym}) berbeda dari bulan data Sell In (${monthOfDate(SMETA.asOf)}).` : '';
+  SMETA = { ...SMETA, gaAsOfByBrand: gaBy, gaMonth: ym, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString() };
+
+  progressEl.textContent = `Menyimpan data GA ${brand} online (${updated.toLocaleString('id-ID')} outlet)…`;
+  const saveOk = await persistSellin((done,total)=>{ progressEl.textContent = `Menyimpan data GA ${brand} online — bagian ${done}/${total}…`; });
+  if(saveOk){
+    const base = `Selesai. GA ${brand} diganti: ${withGa.toLocaleString('id-ID')} dari ${updated.toLocaleString('id-ID')} outlet punya GA, total ${fmtN(Math.round(totalGa))}, dijumlah tgl 1–${lastDay} (per ${asOf}).${monthWarn}${extraNote||''}`;
+    progressEl.textContent = base;
+    await logUpdate('GA (RGUGA)', `${brand} per ${asOf}`, updated);
+    // Last Week snapshot of the GA column — only when this is a newer as-of date than the
+    // GA it replaces (re-uploading the same file must not overwrite the real "previous")
+    if(!sameAsOf(asOf, snapOldAsOf)){
+      progressEl.textContent = base + ' Menyimpan snapshot Last Week…';
+      const okSnap = await snapshotPrev('ga', snapRows, snapMeta, {[brand]: snapOldAsOf});
+      progressEl.textContent = base + (okSnap ? ' Snapshot Last Week tersimpan.' : ' (Snapshot Last Week GA gagal disimpan — perbandingan Last Week GA belum tersedia.)');
+    }
+  } else {
+    progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — data GA ${brand} tidak berhasil disimpan online. Coba upload ulang file ini.`;
+  }
+  refreshHeaderMeta();
+  applyFilters();
+}
+
+// ---------- update: Sell In (OSA) — replace SP/Voucher/Saldo, last-date-wins per outlet ----------
+// One row per outlet per day per parameter. `osa_sp`/`osa_vou`/`osa_saldo` map straight onto
+// Sell In SP/Voucher/Saldo; the plain `osa` parameter (which is NOT the sum of the other three —
+// checked against real data) is a different figure and is deliberately not used here. For each
+// outlet+field we keep only the value from the LATEST date present, matching how a point-in-time
+// figure (not a daily total) should be read — never summed across days.
+const OSA_PARAM_MAP = { osa_sp: 'sp', osa_vou: 'vou', osa_saldo: 'saldo' };
+
+function handleOsaFile(file){
+  return new Promise((resolve) => {
+    const progressEl = document.getElementById('osaProgress');
+    if(!MASTER || Object.keys(MASTER).length === 0){
+      progressEl.innerHTML = '<b style="color:var(--red);">Data pairing outlet belum termuat</b> — refresh halaman ini dulu (Ctrl+Shift+R), tunggu sampai selesai loading, baru coba upload lagi.';
+      resolve(); return;
+    }
+    progressEl.textContent = `Membaca header file (${file.name})…`;
+    Papa.parse(file, {
+      header: true, preview: 1,
+      complete: function(headRes){
+        const cols = headRes.meta.fields || [];
+        const idCol = cols.includes('qr_code') ? 'qr_code' : (cols.includes('outlet_id') ? 'outlet_id' : null);
+        if(!idCol || !['dt_id','parameter','brand','amt'].every(c=>cols.includes(c))){
+          progressEl.textContent = `Format file "${file.name}" tidak dikenali (butuh kolom dt_id, parameter, brand, amt, qr_code/outlet_id).`;
+          resolve(); return;
+        }
+        parseOsaBody(file, idCol, progressEl).then(resolve);
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+async function handleOsaFiles(fileList){
+  const files = Array.from(fileList), progressEl = document.getElementById('osaProgress'), results = [];
+  uploadInProgress = true;
+  for(const f of files){ await handleOsaFile(f); results.push(progressEl.textContent); }
+  if(files.length > 1) progressEl.innerHTML = `<b>Semua ${files.length} file selesai diproses:</b><br>` + results.map(r=>'• ' + r).join('<br>');
+  uploadInProgress = false;
+}
+
+function parseOsaBody(file, idCol, progressEl){
+  return new Promise((resolve) => {
+    const B = {};   // brand -> { maxDate, byKey: Map(key -> {sp:{d,v}, vou:{d,v}, saldo:{d,v}}) }
+    let rowCount = 0;
+    Papa.parse(file, {
+      header: true, skipEmptyLines: true, worker: true,
+      chunk: function(res){
+        const rows = res.data;
+        for(let i=0;i<rows.length;i++){
+          const row = rows[i]; rowCount++;
+          const brand = row.brand;
+          if(brand !== 'IM3' && brand !== '3ID') continue;
+          const field = OSA_PARAM_MAP[row.parameter];
+          if(!field) continue;   // skips the plain "osa" parameter on purpose
+          const dt = String(row.dt_id || '').trim();
+          if(!/^\d{4}-\d{2}-\d{2}/.test(dt)) continue;
+          let b = B[brand]; if(!b) b = B[brand] = { maxDate:'', byKey:new Map() };
+          if(dt > b.maxDate) b.maxDate = dt;
+          const key = brand + '|' + normId(row[idCol]);
+          if(!MASTER[key]) continue;
+          let e = b.byKey.get(key);
+          if(!e){ e = { sp:{d:'',v:0}, vou:{d:'',v:0}, saldo:{d:'',v:0} }; b.byKey.set(key, e); }
+          const amt = parseFloat(row.amt) || 0;
+          if(dt >= e[field].d) e[field] = { d: dt, v: amt };
+        }
+        if(rowCount % 50000 < rows.length) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris…`;
+      },
+      complete: async function(){
+        const brands = Object.keys(B);
+        if(!brands.length){
+          progressEl.textContent = `Tidak ada baris valid di file ini (brand harus IM3/3ID, parameter osa_sp/osa_vou/osa_saldo).`;
+          resolve(); return;
+        }
+        const msgs = [];
+        for(const brand of brands){
+          const b = B[brand], byKey = {};
+          b.byKey.forEach((e, key)=>{ byKey[key] = { sp: e.sp.v, vou: e.vou.v, saldo: e.saldo.v }; });
+          progressEl.textContent = `Menggabungkan data Sell In (OSA) ${brand} (${b.byKey.size.toLocaleString('id-ID')} outlet, per ${b.maxDate})…`;
+          await finishSellinProcessing(brand, byKey, progressEl, b.maxDate);
+          msgs.push(progressEl.textContent);
+        }
+        if(msgs.length > 1) progressEl.innerHTML = msgs.map(r=>'• ' + r).join('<br>');
+        resolve();
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+// ---------- update: Tertiary (replace-only, summed) ----------
+function handleTertiaryFile(file){
+  return new Promise((resolve) => {
+    const progressEl = document.getElementById('tertiaryProgress');
+    if(!MASTER || Object.keys(MASTER).length === 0){
+      progressEl.innerHTML = '<b style="color:var(--red);">Data pairing outlet belum termuat</b> — refresh halaman ini dulu (Ctrl+Shift+R), tunggu sampai selesai loading, baru coba upload lagi.';
+      resolve(); return;
+    }
+    if(!SMETA || !SELLIN_OUTLETS.length){
+      progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In belum ada</b> — upload data Sell In (menu #3 atau #8) dulu sebelum mengganti Tertiary.';
+      resolve(); return;
+    }
+    progressEl.textContent = `Membaca file (${file.name})…`;
+    const byKey = {};
+    const brandsSeen = new Set();
+    let rowCount = 0, matched = 0;
+    Papa.parse(file, {
+      header: true, skipEmptyLines: true, worker: true,
+      step: function(res){
+        rowCount++;
+        const row = res.data;
+        if(row.region_outlet !== 'WEST JAVA') return;
+        const brand = row.brand;
+        if(brand !== 'IM3' && brand !== '3ID') return;
+        brandsSeen.add(brand);
+        const key = brand + '|' + normId(row.outlet_id);
+        byKey[key] = (byKey[key] || 0) + (parseFloat(row.net_rev) || 0);
+        matched++;
+        if(rowCount % 50000 === 0) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris…`;
+      },
+      complete: function(){
+        if(brandsSeen.size === 0){
+          progressEl.textContent = `Tidak ada baris valid di file ini (cek kolom region_outlet=WEST JAVA, brand=IM3/3ID).`;
+          resolve(); return;
+        }
+        progressEl.textContent = `Menggabungkan data Tertiary (${matched.toLocaleString('id-ID')} baris, ${Object.keys(byKey).length.toLocaleString('id-ID')} outlet)…`;
+        setTimeout(()=>finishTertiaryProcessing(byKey, brandsSeen, progressEl).then(resolve), 30);
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+async function finishTertiaryProcessing(byKey, brandsSeen, progressEl){
+  let totalUpdated = 0;
+  const brandSummaries = [];
+  brandsSeen.forEach(brand=>{
+    const brandI = META.brands.indexOf(brand);
+    if(brandI < 0) return;
+    const hasBrandRows = SELLIN_OUTLETS.some(r=>r[IDX_S.brandIdx]===brandI);
+    if(!hasBrandRows){
+      brandSummaries.push(`${brand}: dilewati (belum ada data Sell In untuk brand ini)`);
+      return;
+    }
+    let updated = 0, total = 0;
+    SELLIN_OUTLETS.forEach(r=>{
+      if(r[IDX_S.brandIdx] !== brandI) return;
+      const v = byKey[brand + '|' + r[IDX_S.outletId]];
+      r[IDX_S.tertiary] = v ? Math.round(v) : 0;
+      total += r[IDX_S.tertiary];
+      updated++;
+    });
+    totalUpdated += updated;
+    brandSummaries.push(`${brand}: ${updated.toLocaleString('id-ID')} outlet, total ${fmtN(Math.round(total))}`);
+  });
+
+  SMETA = { ...SMETA, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString() };
+
+  progressEl.textContent = `Menyimpan data Tertiary online (${totalUpdated.toLocaleString('id-ID')} outlet)…`;
+  const saveOk = await persistSellin((done,total)=>{ progressEl.textContent = `Menyimpan data Tertiary online — bagian ${done}/${total}…`; });
+  if(saveOk){
+    progressEl.textContent = `Selesai. Data Tertiary diganti — ` + brandSummaries.join(' · ') + '.';
+    await logUpdate('Tertiary (replace)', brandSummaries.join(' · '), totalUpdated);
+  } else {
+    progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data Tertiary tidak berhasil disimpan online. Coba upload ulang file ini.`;
+  }
+  refreshHeaderMeta();
+  applyFilters();
+}
+
+// ---------- update: Sell In SP (Pcs) — count of kpi=SELLIN rows, from the same BigQuery
+// export format menu #6 uses (just a different kpi value). Full replace, like Secondary/Tertiary. ----------
+function handleSellinPcsFile(file){
+  return new Promise((resolve) => {
+    const progressEl = document.getElementById('sellinPcsProgress');
+    if(!MASTER || Object.keys(MASTER).length === 0){
+      progressEl.innerHTML = '<b style="color:var(--red);">Data pairing outlet belum termuat</b> — refresh halaman ini dulu (Ctrl+Shift+R), tunggu sampai selesai loading, baru coba upload lagi.';
+      resolve(); return;
+    }
+    if(!SMETA || !SELLIN_OUTLETS.length){
+      progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In belum ada</b> — upload data Sell In (menu #3 atau #8) dulu sebelum mengisi Sell In SP (Pcs).';
+      resolve(); return;
+    }
+    progressEl.textContent = `Membaca header file (${file.name})…`;
+    Papa.parse(file, {
+      header: true, preview: 1,
+      complete: function(headRes){
+        const cols = headRes.meta.fields || [];
+        if(!['brand','dt_id','kpi','outlet_id','b_msisdn'].every(c=>cols.includes(c))){
+          progressEl.textContent = `Format file "${file.name}" tidak dikenali (butuh kolom brand, dt_id, kpi, outlet_id, b_msisdn).`;
+          resolve(); return;
+        }
+        parseSellinPcsBody(file, progressEl).then(resolve);
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+function parseSellinPcsBody(file, progressEl){
+  return new Promise((resolve) => {
+    const seen = {};    // brand -> Set(outlet|msisdn) — guards against a duplicate row being counted twice
+    const byKey = {};
+    const brandsSeen = new Set();
+    let rowCount = 0, matched = 0, skippedOther = 0;
+    Papa.parse(file, {
+      header: true, skipEmptyLines: true, worker: true,
+      chunk: function(res){
+        const rows = res.data;
+        for(let i=0;i<rows.length;i++){
+          const row = rows[i]; rowCount++;
+          if(normKpiValue(row.kpi) !== 'SELLIN'){ skippedOther++; continue; }
+          const brand = row.brand;
+          if(brand !== 'IM3' && brand !== '3ID') continue;
+          brandsSeen.add(brand);
+          const key = brand + '|' + normId(row.outlet_id);
+          if(!MASTER[key]) continue;
+          const ms = brand + '|' + String(row.b_msisdn || '').trim();
+          let s = seen[brand]; if(!s) s = seen[brand] = new Set();
+          if(s.has(ms)) continue;   // same MSISDN counted once, even if it appears more than once
+          s.add(ms);
+          byKey[key] = (byKey[key] || 0) + 1;
+          matched++;
+        }
+        if(rowCount % 50000 < rows.length) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris…`;
+      },
+      complete: function(){
+        if(brandsSeen.size === 0){
+          progressEl.textContent = `Tidak ada baris kpi=SELLIN untuk brand IM3/3ID di file ini.`;
+          resolve(); return;
+        }
+        progressEl.textContent = `Menggabungkan data Sell In SP (Pcs) (${matched.toLocaleString('id-ID')} unit, ${Object.keys(byKey).length.toLocaleString('id-ID')} outlet)…`;
+        setTimeout(()=>finishSellinPcsProcessing(byKey, brandsSeen, progressEl, skippedOther).then(resolve), 30);
+      },
+      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+    });
+  });
+}
+
+async function finishSellinPcsProcessing(byKey, brandsSeen, progressEl, skippedOther){
+  let totalUpdated = 0;
+  const brandSummaries = [];
+  brandsSeen.forEach(brand=>{
+    const brandI = META.brands.indexOf(brand);
+    if(brandI < 0) return;
+    const hasBrandRows = SELLIN_OUTLETS.some(r=>r[IDX_S.brandIdx]===brandI);
+    if(!hasBrandRows){
+      brandSummaries.push(`${brand}: dilewati (belum ada data Sell In untuk brand ini)`);
+      return;
+    }
+    let updated = 0, total = 0;
+    SELLIN_OUTLETS.forEach(r=>{
+      if(r[IDX_S.brandIdx] !== brandI) return;
+      const v = byKey[brand + '|' + r[IDX_S.outletId]];
+      r[IDX_S.sellinSpPcs] = v || 0;
+      total += r[IDX_S.sellinSpPcs];
+      updated++;
+    });
+    totalUpdated += updated;
+    brandSummaries.push(`${brand}: ${updated.toLocaleString('id-ID')} outlet, total ${fmtN(total)} pcs`);
+  });
+
+  SMETA = { ...SMETA, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString() };
+
+  progressEl.textContent = `Menyimpan data Sell In SP (Pcs) online (${totalUpdated.toLocaleString('id-ID')} outlet)…`;
+  const saveOk = await persistSellin((done,total)=>{ progressEl.textContent = `Menyimpan data Sell In SP (Pcs) online — bagian ${done}/${total}…`; });
+  if(saveOk){
+    progressEl.textContent = `Selesai. Data Sell In SP (Pcs) diganti — ` + brandSummaries.join(' · ') + '.'
+      + (skippedOther ? ` (${skippedOther.toLocaleString('id-ID')} baris bukan kpi=SELLIN diabaikan.)` : '');
+    await logUpdate('Sell In SP (Pcs)', brandSummaries.join(' · '), totalUpdated);
+  } else {
+    progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data Sell In SP (Pcs) tidak berhasil disimpan online. Coba upload ulang file ini.`;
   }
   refreshHeaderMeta();
   applyFilters();
@@ -3498,6 +5003,10 @@ function parseSupplyBody(file, progressEl){
 
 async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, progressEl){
   const brandI = META.brands.indexOf(brand);
+  // this brand's rows as they were before the upload, for the Last Week snapshot
+  const snapBrandRows = SUPPLY_OUTLETS.filter(r=>r[IDX_SUP.brandIdx]===brandI);
+  const snapOldAsOf = SUPMETA ? (brand==='IM3' ? SUPMETA.imDate : SUPMETA.tidDate) : null;
+  const snapMeta = META;
   // keep the OTHER brand's rows untouched; rebuild this brand's rows from MASTER + new supply data
   const keptOther = SUPPLY_OUTLETS.filter(r=>r[IDX_SUP.brandIdx]!==brandI);
   const rebuilt = [];
@@ -3543,6 +5052,12 @@ async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, pro
   if(saveOk){
     progressEl.textContent = `Selesai. Data Supply ${brand} diperbarui (${rebuilt.length.toLocaleString('id-ID')} outlet), per ${maxDate||'-'}.`;
     await logUpdate('Supply', brand, rebuilt.length);
+    if(snapBrandRows.length && maxDate && maxDate !== snapOldAsOf){
+      const base = progressEl.textContent;
+      progressEl.textContent = base + ' Menyimpan snapshot Last Week…';
+      const okSnap = await snapshotPrev('supply', snapBrandRows, snapMeta, {[brand]: snapOldAsOf || null});
+      progressEl.textContent = base + (okSnap ? ' Snapshot Last Week tersimpan.' : ' (Snapshot Last Week gagal disimpan — perbandingan Last Week belum tersedia untuk Supply.)');
+    }
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data Supply ${brand} tidak berhasil disimpan online. Coba upload ulang file ini.`;
   }
@@ -3563,7 +5078,12 @@ function refreshHeaderMeta(){
   if(SMETA){
     const sellinDate = SMETA.asOf || '–';
     document.getElementById('metaSellinDate').textContent = sellinDate;
-    document.getElementById('metaGaDate').textContent = sellinDate;
+    // GA can now come from its own RGUGA file with its own as-of date; otherwise it
+    // shares the Sell In file's date like before
+    const gaDates = Object.values(SMETA.gaAsOfByBrand || {}).filter(Boolean).sort().reverse();
+    // data saved before GA got its own date has no gaAsOfByBrand at all — GA then still came
+    // with the Sell In file, so the Sell In date is the right one to show
+    document.getElementById('metaGaDate').textContent = gaDates.length ? gaDates[0] : (SMETA.gaAsOfByBrand === undefined ? sellinDate : '–');
   }
   if(SUPMETA){
     // IM3 and 3ID supply files can be uploaded on different dates — show the later
@@ -3591,17 +5111,19 @@ function renderPetaAll(){
 //              outlet universe (via extra.im3Base/tidBase) — e.g. "8.665 (76.2%)"
 //              meaning 76.2% of IM3's own outlets, not 76.2% of the combined total.
 //              Styled red since these are all alert/gap metrics.
-function statRowSplit(lbl, im3Val, tidVal, mode, extra, totalOverride){
+function statRowSplit(lbl, im3Val, tidVal, mode, extra, totalOverride, cmp){
   extra = extra || {};
-  let im3Cell, tidCell, totalCell, styleAttr = '';
+  let im3Cell, tidCell, totalCell, styleAttr = '', curTotal = null;
   if(mode==='rate'){
     im3Cell = im3Val!=null ? im3Val.toFixed(2) : '–';
     tidCell = tidVal!=null ? tidVal.toFixed(2) : '–';
     totalCell = totalOverride!=null ? totalOverride.toFixed(2) : '–';
+    curTotal = totalOverride;
   } else if(mode==='plain'){
     im3Cell = fmtN(im3Val);
     tidCell = fmtN(tidVal);
     totalCell = fmtN(totalOverride!=null ? totalOverride : (im3Val+tidVal));
+    curTotal = totalOverride!=null ? totalOverride : (im3Val+tidVal);
   } else if(mode==='ownpct'){
     const im3Pct = extra.im3Base>0 ? (im3Val/extra.im3Base*100) : null;
     const tidPct = extra.tidBase>0 ? (tidVal/extra.tidBase*100) : null;
@@ -3611,6 +5133,7 @@ function statRowSplit(lbl, im3Val, tidVal, mode, extra, totalOverride){
     im3Cell = fmtN(im3Val) + (im3Pct!=null ? ` (${im3Pct.toFixed(1)}%)` : '');
     tidCell = fmtN(tidVal) + (tidPct!=null ? ` (${tidPct.toFixed(1)}%)` : '');
     totalCell = fmtN(totVal) + (totPct!=null ? ` (${totPct.toFixed(1)}%)` : '');
+    curTotal = totVal;
     styleAttr = ' style="color:var(--red);font-weight:700;"';
   } else { // 'share' (default)
     const tot = im3Val + tidVal;
@@ -3619,8 +5142,11 @@ function statRowSplit(lbl, im3Val, tidVal, mode, extra, totalOverride){
     im3Cell = fmtN(im3Val) + (im3Pct!=null ? ` (${im3Pct.toFixed(1)}%)` : '');
     tidCell = fmtN(tidVal) + (tidPct!=null ? ` (${tidPct.toFixed(1)}%)` : '');
     totalCell = fmtN(tot);
+    curTotal = tot;
   }
-  return `<tr><td>${lbl}</td><td${styleAttr}>${im3Cell}</td><td${styleAttr}>${tidCell}</td><td${styleAttr}>${totalCell}</td></tr>`;
+  // extra "vs Last Week" cell — only present while the compare toggle is on
+  const cmpCell = compareOn ? `<td>${(cmp && cmp.prev!=null && curTotal!=null) ? dl(curTotal, cmp.prev, cmp.goodUp, cmp.fmt) : ''}</td>` : '';
+  return `<tr><td>${lbl}</td><td${styleAttr}>${im3Cell}</td><td${styleAttr}>${tidCell}</td><td${styleAttr}>${totalCell}</td>${cmpCell}</tr>`;
 }
 
 function renderPetaStatList(){
@@ -3672,29 +5198,61 @@ function renderPetaStatList(){
   const supplyIdx = new Map();
   SUPPLY_OUTLETS.forEach(r=>supplyIdx.set(META.brands[r[IDX_SUP.brandIdx]]+'|'+r[IDX_SUP.outletId], r));
 
-  const red=mk(), lowStock=mk(), noGa=mk(), noSellIn=mk(), noSp=mk(), noVou=mk(), noSalmo=mk(), noSpInj=mk(), noVouInj=mk(), noRebuyCvm=mk();
-  const geoTotal=mk();
-  GEO_POINTS.forEach(p=>{
-    if(brandI>=0 && p[GIDX.brandIdx]!==brandI) return;
-    if(branchI>=0 && p[GIDX.branchIdx]!==branchI) return;
-    if(microI>=0 && p[GIDX.microIdx]!==microI) return;
-    if(areaI>=0 && !(META.branchByArea[areaSel]||[]).includes(META.branches[p[GIDX.branchIdx]])) return;
-    if(catI>=0 && p[GIDX.catIdx]!==catI) return;
-    const brand = META.brands[p[GIDX.brandIdx]];
-    bump(geoTotal, brand, 1);
-    const key = brand+'|'+p[GIDX.outletId];
-    const flags = computeOutletFlags(outletIdx.get(key), sellinIdx.get(key), supplyIdx.get(key));
-    if(flags.isAlert) bump(red, brand, 1);
-    if(flags.lowStockAll) bump(lowStock, brand, 1);
-    if(flags.noGaAll) bump(noGa, brand, 1);
-    if(flags.noSellInAll) bump(noSellIn, brand, 1);
-    if(flags.noSellInSp) bump(noSp, brand, 1);
-    if(flags.noSellInVou) bump(noVou, brand, 1);
-    if(flags.noSellInSalmo) bump(noSalmo, brand, 1);
-    if(flags.noSpInject) bump(noSpInj, brand, 1);
-    if(flags.noVouInject) bump(noVouInj, brand, 1);
-    if(flags.noRebuyCvm) bump(noRebuyCvm, brand, 1);
-  });
+  // The per-outlet "problem flag" counting is a function so the exact same logic can
+  // be run again over the Last Week snapshot for the comparison column.
+  const runFlagPass = (oIdx, sIdx, uIdx) => {
+    const a = { red:mk(), lowStock:mk(), noGa:mk(), noSellIn:mk(), noSp:mk(), noVou:mk(), noSalmo:mk(),
+                noSpInj:mk(), noVouInj:mk(), noRebuyCvm:mk(), geoTotal:mk() };
+    GEO_POINTS.forEach(p=>{
+      if(brandI>=0 && p[GIDX.brandIdx]!==brandI) return;
+      if(branchI>=0 && p[GIDX.branchIdx]!==branchI) return;
+      if(microI>=0 && p[GIDX.microIdx]!==microI) return;
+      if(areaI>=0 && !(META.branchByArea[areaSel]||[]).includes(META.branches[p[GIDX.branchIdx]])) return;
+      if(catI>=0 && p[GIDX.catIdx]!==catI) return;
+      const brand = META.brands[p[GIDX.brandIdx]];
+      bump(a.geoTotal, brand, 1);
+      const key = brand+'|'+p[GIDX.outletId];
+      const flags = computeOutletFlags(oIdx.get(key), sIdx.get(key), uIdx.get(key));
+      if(flags.isAlert) bump(a.red, brand, 1);
+      if(flags.lowStockAll) bump(a.lowStock, brand, 1);
+      if(flags.noGaAll) bump(a.noGa, brand, 1);
+      if(flags.noSellInAll) bump(a.noSellIn, brand, 1);
+      if(flags.noSellInSp) bump(a.noSp, brand, 1);
+      if(flags.noSellInVou) bump(a.noVou, brand, 1);
+      if(flags.noSellInSalmo) bump(a.noSalmo, brand, 1);
+      if(flags.noSpInject) bump(a.noSpInj, brand, 1);
+      if(flags.noVouInject) bump(a.noVouInj, brand, 1);
+      if(flags.noRebuyCvm) bump(a.noRebuyCvm, brand, 1);
+    });
+    return a;
+  };
+  const curFlags = runFlagPass(outletIdx, sellinIdx, supplyIdx);
+  const {red, lowStock, noGa, noSellIn, noSp, noVou, noSalmo, noSpInj, noVouInj, noRebuyCvm, geoTotal} = curFlags;
+
+  // ---- Last Week values for the comparison column (only computed while toggle is on) ----
+  let pv = {};
+  let prevFlags = null;
+  if(compareOn){
+    if(PREV.stock){
+      const ps = PREV_FILTERED.stock;
+      let st=0, dm=0, lb=0;
+      ps.forEach(r=>{ st += stockAmt(r); dm += totalDemandAmt(r); const o = outletStatus(r[IDX.salAmt]); if(o==='zero'||o==='low') lb++; });
+      pv.outlets = ps.length; pv.stock = st; pv.dos = dm>0 ? st/dm : null; pv.lowBal = lb;
+    }
+    if(PREV.sellin){
+      let ga=0, si=0;
+      PREV_FILTERED.sellin.forEach(r=>{ ga += r[IDX_S.rguGa]; si += r[IDX_S.sellinSp]+r[IDX_S.sellinVou]+r[IDX_S.sellinSaldo]; });
+      if(sellinMetricOk('ga')) pv.ga = ga;
+      if(sellinMetricOk('sp')) pv.sellin = si;
+    }
+    // the outlet-flag rows depend on all three datasets together — only compare them
+    // when a Last Week snapshot exists for each, otherwise the numbers would be skewed
+    if(PREV.stock && PREV.sellin && PREV.supply && sellinMetricOk('ga') && sellinMetricOk('sp')){
+      const mkIdx = rows => { const m = new Map(); rows.forEach(r=>m.set(META.brands[r[0]]+'|'+r[4], r)); return m; };
+      prevFlags = runFlagPass(mkIdx(PREV.stock.rows), mkIdx(PREV.sellin.rows), mkIdx(PREV.supply.rows));
+    }
+  }
+  const pf = k => prevFlags ? prevFlags[k].total : null;
 
   const n = filtered.length;
   const outletsIm3 = filtered.filter(r=>META.brands[r[IDX.brandIdx]]==='IM3').length;
@@ -3709,25 +5267,27 @@ function renderPetaStatList(){
     else if(b==='3ID'){ branchSetTid.add(r[IDX.branchIdx]); microSetTid.add(r[IDX.microIdx]); }
   });
 
+  document.getElementById('petaCmpTh').style.display = compareOn ? '' : 'none';
+  document.getElementById('petaCmpTh').textContent = compareMode === 'lmtd' ? 'vs LMTD' : 'vs LW';
   document.getElementById('petaStatList').innerHTML = [
-    statRowSplit('Total Outlet (sesuai filter)', outletsIm3, outletsTid, 'share'),
+    statRowSplit('Total Outlet (sesuai filter)', outletsIm3, outletsTid, 'share', null, null, {prev:pv.outlets, goodUp:true}),
     statRowSplit('Jumlah Branch tercakup', branchSetIm3.size, branchSetTid.size, 'plain', null, branchesInView.length),
     statRowSplit('Jumlah Micro Cluster tercakup', microSetIm3.size, microSetTid.size, 'plain', null, microSet.size),
-    statRowSplit('Total Stock Amount', stockTotal.im3, stockTotal.tid, 'share'),
-    statRowSplit('Total GA (MTD)', gaTotal.im3, gaTotal.tid, 'share'),
-    statRowSplit('Total Sell In Amount', sellinTotal.im3, sellinTotal.tid, 'share'),
-    statRowSplit('Rata-rata DOS All Product', avgDosIm3, avgDosTid, 'rate', null, avgDos),
-    statRowSplit('Low Balance Salmo (&lt;100K)', lowBal.im3, lowBal.tid, 'ownpct', {im3Base:outletsIm3, tidBase:outletsTid}),
-    statRowSplit('Low Stock All (&lt;100K)', lowStock.im3, lowStock.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
-    statRowSplit('Outlet No GA', noGa.im3, noGa.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
-    statRowSplit('Outlet No Sell In All', noSellIn.im3, noSellIn.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
-    statRowSplit('Outlet No Sell In SP', noSp.im3, noSp.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
-    statRowSplit('Outlet No Sell In Voucher', noVou.im3, noVou.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
-    statRowSplit('Outlet No Sell In Salmo', noSalmo.im3, noSalmo.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
-    statRowSplit('Outlet No SP Inject', noSpInj.im3, noSpInj.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
-    statRowSplit('Outlet No Voucher Inject', noVouInj.im3, noVouInj.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
-    statRowSplit('Outlet No Rebuy CVM', noRebuyCvm.im3, noRebuyCvm.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
-    statRowSplit('Outlet Alert (No Stock All + No Sell In All + No GA)', red.im3, red.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}),
+    statRowSplit('Total Stock Amount', stockTotal.im3, stockTotal.tid, 'share', null, null, {prev:pv.stock, goodUp:true}),
+    statRowSplit('Total GA (MTD)', gaTotal.im3, gaTotal.tid, 'share', null, null, {prev:pv.ga, goodUp:true}),
+    statRowSplit('Total Sell In Amount', sellinTotal.im3, sellinTotal.tid, 'share', null, null, {prev:pv.sellin, goodUp:true}),
+    statRowSplit('Rata-rata DOS All Product', avgDosIm3, avgDosTid, 'rate', null, avgDos, {prev:pv.dos, goodUp:true}),
+    statRowSplit('Low Balance Salmo (&lt;100K)', lowBal.im3, lowBal.tid, 'ownpct', {im3Base:outletsIm3, tidBase:outletsTid}, null, {prev:pv.lowBal, goodUp:false}),
+    statRowSplit('Low Stock All (&lt;100K)', lowStock.im3, lowStock.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}, null, {prev:pf('lowStock'), goodUp:false}),
+    statRowSplit('Outlet No GA', noGa.im3, noGa.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}, null, {prev:pf('noGa'), goodUp:false}),
+    statRowSplit('Outlet No Sell In All', noSellIn.im3, noSellIn.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}, null, {prev:pf('noSellIn'), goodUp:false}),
+    statRowSplit('Outlet No Sell In SP', noSp.im3, noSp.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}, null, {prev:pf('noSp'), goodUp:false}),
+    statRowSplit('Outlet No Sell In Voucher', noVou.im3, noVou.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}, null, {prev:pf('noVou'), goodUp:false}),
+    statRowSplit('Outlet No Sell In Salmo', noSalmo.im3, noSalmo.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}, null, {prev:pf('noSalmo'), goodUp:false}),
+    statRowSplit('Outlet No SP Inject', noSpInj.im3, noSpInj.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}, null, {prev:pf('noSpInj'), goodUp:false}),
+    statRowSplit('Outlet No Voucher Inject', noVouInj.im3, noVouInj.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}, null, {prev:pf('noVouInj'), goodUp:false}),
+    statRowSplit('Outlet No Rebuy CVM', noRebuyCvm.im3, noRebuyCvm.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}, null, {prev:pf('noRebuyCvm'), goodUp:false}),
+    statRowSplit('Outlet Alert (No Stock All + No Sell In All + No GA)', red.im3, red.tid, 'ownpct', {im3Base:geoTotal.im3, tidBase:geoTotal.tid}, null, {prev:pf('red'), goodUp:false}),
   ].join('');
 }
 
@@ -4394,6 +5954,8 @@ function bindEvents(){
     }
   });
 
+  document.getElementById('cmpToggle').addEventListener('change', ()=>onCompareToggle('week'));
+  document.getElementById('cmpToggleLmtd').addEventListener('change', ()=>onCompareToggle('lmtd'));
   document.getElementById('fBrand').addEventListener('change', applyFilters);
   document.getElementById('fArea').addEventListener('change', ()=>{ refreshBranchOptions(); refreshMicroOptions(); applyFilters(); });
   document.getElementById('fBranch').addEventListener('change', ()=>{ refreshMicroOptions(); applyFilters(); });
@@ -4468,6 +6030,11 @@ function bindEvents(){
   document.getElementById('sellinFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleSellinFiles(e.target.files); });
   document.getElementById('supplyFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleSupplyFiles(e.target.files); });
   document.getElementById('secondaryFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleSecondaryFile(e.target.files[0]); });
+  document.getElementById('gaFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleGaFiles(e.target.files); });
+  document.getElementById('lmtdFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleLmtdFiles(e.target.files); });
+  document.getElementById('osaFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleOsaFiles(e.target.files); });
+  document.getElementById('tertiaryFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleTertiaryFile(e.target.files[0]); });
+  document.getElementById('sellinPcsFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleSellinPcsFile(e.target.files[0]); });
 
   document.querySelectorAll('.tab-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
