@@ -720,7 +720,7 @@
   </details>
 
   <footer class="note">
-    Sell In bersumber dari file DSE_PROD (SP/Voucher/Saldo), GA dari file GA (per MSISDN / RGUGA, menu #6), dan Secondary dari export BigQuery (menu #5), semuanya bulan berjalan, dicocokkan ke outlet pairing yang sama dengan tab Low Balance. Nilai GA adalah akumulasi month-to-date sampai tanggal data terakhir.
+    Sell In bersumber dari file OSA (SP/Voucher/Saldo, menu #7), GA dari file GA (per MSISDN / RGUGA / BigQuery, menu #5), dan Secondary dari export BigQuery (menu #4), semuanya bulan berjalan, dicocokkan ke outlet pairing yang sama dengan tab Low Balance. Nilai GA adalah akumulasi month-to-date sampai tanggal data terakhir.
   </footer>
 
 </div>
@@ -988,31 +988,24 @@
     </div>
 
     <div class="upload-block">
-      <h4>3. Data Sell In &amp; GA — DSE_PROD (CSV, per brand)</h4>
-      <p class="hint">Upload file IM3_DSE_PROD dan/atau 3ID_DSE_PROD bulan berjalan (region difilter otomatis ke WEST JAVA). Brand terdeteksi otomatis dari struktur kolom file. Bisa pilih 2 file (IM3 + 3ID) sekaligus — diproses satu per satu otomatis. <b>Dari file ini hanya data Sell In (SP, Voucher, Saldo) yang diambil.</b> Kolom rgu_ga, tertiary, dan secondary di file diabaikan: GA diisi lewat menu #6, Secondary lewat menu #5, dan keduanya (juga Tertiary) tetap memakai data sebelumnya.</p>
-      <input type="file" id="sellinFile" accept=".csv" multiple>
-      <div class="progress-line" id="sellinProgress"></div>
-    </div>
-
-    <div class="upload-block">
-      <h4>4. Data Supply — SUPPLY_PROD (CSV, per brand)</h4>
+      <h4>3. Data Supply — SUPPLY_PROD (CSV, per brand)</h4>
       <p class="hint">Upload file SUPPLY_PROD bulan berjalan (kolom brand, dt_id, sales_area, ret_qr_cd atau outlet_id, category, product_name, hit, rev — nama kolom Outlet ID boleh beda antara IM3/3ID). Brand dibaca langsung dari kolom "brand" di file. Bisa pilih 2 file (IM3 + 3ID) sekaligus.</p>
       <input type="file" id="supplyFile" accept=".csv" multiple>
       <div class="progress-line" id="supplyProgress"></div>
     </div>
 
     <div class="upload-block">
-      <h4>5. Update Secondary (replace) — BigQuery export (CSV)</h4>
+      <h4>4. Update Secondary (replace) — BigQuery export (CSV)</h4>
       <p class="hint">Ganti kolom Secondary di data Sell In &amp; GA yang sudah ada, dari file transaksi mentah (kolom brand, region, outlet_id, parameter, rev, dst — 1 file berisi IM3+3ID sekaligus). Baris difilter otomatis ke region=WEST JAVA dan parameter=SECONDARY, lalu nilai <b>rev</b> dijumlahkan per outlet. Hanya kolom Secondary yang diganti — GA/Sell In SP/Voucher/Saldo/Tertiary tidak disentuh. Outlet yang tidak muncul di file ini akan di-set Secondary = 0 (dianggap tidak ada transaksi Secondary bulan tsb). Perlu data Sell In &amp; GA (menu #3) sudah pernah diupload dulu.</p>
       <input type="file" id="secondaryFile" accept=".csv">
       <div class="progress-line" id="secondaryProgress"></div>
     </div>
 
     <div class="upload-block">
-      <h4>6. Update GA — file RGUGA atau file GA per MSISDN (CSV)</h4>
+      <h4>5. Update GA — file RGUGA atau file GA per MSISDN (CSV)</h4>
       <p class="hint">Ganti angka <b>GA (MTD)</b> di data Sell In &amp; GA. Format file dikenali otomatis (bisa pilih beberapa file sekaligus):<br>
       • <b>RGUGA harian</b> — <code>IM3_OUTLET_RGUGA_YYYYMM.csv</code> / <code>3ID_OUTLET_RGUGA_YYYYMM.csv</code> (⚠ angka RGUGA 3ID jauh lebih besar dari GA di DSE_PROD dan GA per MSISDN — untuk 3ID sebaiknya pakai export BigQuery atau file GA per MSISDN): kolom <b>dt01…dt31 dijumlahkan</b> dari tanggal 1 sampai <b>tanggal terakhir yang ada datanya</b> (kolom hari setelahnya yang nol semua diabaikan), semua baris &amp; parameter per outlet dijumlah, hanya region WEST JAVA.<br>
-      • <b>Export BigQuery</b> — file berkolom <code>brand, dt_id, kpi, outlet_id, b_msisdn</code>: <b>hanya baris kpi = RET_TAG yang dihitung sebagai GA</b> (huruf besar/kecil dan spasi tidak masalah; semua <code>flag_outlet</code>, termasuk 0); baris kpi = SELLIN adalah sell-in SIM, bukan GA, dan diabaikan. GA outlet = jumlah MSISDN unik per <code>outlet_id</code> di bulan terakhir pada file; IM3 &amp; 3ID sekaligus, tanggal terakhir = <code>dt_id</code> terbaru per brand.<br>
+      • <b>Export BigQuery</b> — file berkolom <code>brand, dt_id, kpi, outlet_id, b_msisdn</code>: <b>hanya baris kpi = RET_TAG yang dihitung sebagai GA</b> (huruf besar/kecil dan spasi tidak masalah; semua <code>flag_outlet</code>, termasuk 0). GA outlet = jumlah MSISDN unik per <code>outlet_id</code> di bulan terakhir pada file; IM3 &amp; 3ID sekaligus, tanggal terakhir = <code>dt_id</code> terbaru per brand. <b>File ini juga otomatis mengisi Sell In SP (Pcs)</b> dari baris kpi = SELLIN yang ada di file yang sama — tidak perlu upload terpisah ke menu #9 lagi.<br>
       • <b>GA per MSISDN</b> — file berkolom <code>msisdn, brand, ga_dt, tag_outlet</code>: 1 baris = 1 aktivasi, <b>GA outlet = jumlah baris (MSISDN unik) per <code>tag_outlet</code></b> di bulan terakhir pada file; IM3 &amp; 3ID sekaligus dalam 1 file, tanggal terakhir = <code>ga_dt</code> terbaru per brand. Baris yang <code>tag_outlet</code>-nya kosong tidak bisa dihubungkan ke outlet, jadi tidak dihitung (jumlahnya ditampilkan setelah upload).<br>
       Outlet yang tidak muncul di file dianggap GA = 0. Hanya kolom GA yang diganti — Sell In, Tertiary, Secondary tidak disentuh. Berbeda dengan data Stock, yang memakai nilai <i>as of</i> tanggal terakhir (tidak dijumlah). Perlu data Sell In &amp; GA (menu #3) sudah pernah diupload dulu. File 3ID besar (~150 MB), prosesnya bisa 1–2 menit.</p>
       <input type="file" id="gaFile" accept=".csv" multiple>
@@ -1020,32 +1013,32 @@
     </div>
 
     <div class="upload-block">
-      <h4>7. Data pembanding LMTD (bulan lalu)</h4>
-      <p class="hint">Upload file <b>BULAN LALU</b> untuk dipakai sebagai pembanding <b>Compare LMTD</b> (Last Month To Date = 1 sampai tanggal yang sama di bulan lalu). Format file sama seperti menu #1–#6 dan dikenali otomatis; bisa pilih beberapa file sekaligus. <b>Data yang sedang tampil tidak berubah.</b><br>
-      • <b>GA, Secondary, Supply</b> (punya tanggal di tiap baris): otomatis dipotong di tanggal yang sama dengan data sekarang — mis. data sekarang per 28 Sep, maka dihitung 1–28 Agu.<br>
-      • <b>Stock</b>: dipakai nilai terakhir pada tanggal ≤ tanggal itu (tidak dijumlah). <b>Sell In DSE_PROD</b>: dipakai apa adanya (kumulatif per tanggal cetak) — kalau tanggal filenya bukan tanggal yang sama, ada peringatan dan tanggal aslinya tampil di banner.<br>
-      • Tertiary belum punya sumber LMTD. Hanya kolom yang filenya sudah diupload yang mendapat pembanding.</p>
+      <h4>6. Data pembanding LMTD (bulan lalu)</h4>
+      <p class="hint">Upload file <b>BULAN LALU</b> untuk dipakai sebagai pembanding <b>Compare LMTD</b> (Last Month To Date = 1 sampai tanggal yang sama di bulan lalu). Format file (Stock, DSE_PROD/OSA, GA, Tertiary, Secondary, Supply) dikenali otomatis dari kolomnya, sama seperti menu-menu upload lainnya; bisa pilih beberapa file sekaligus. <b>Data yang sedang tampil tidak berubah.</b><br>
+      • <b>GA, Tertiary, Secondary, Supply</b> (punya tanggal di tiap baris): otomatis dipotong di tanggal yang sama dengan data sekarang — mis. data sekarang per 28 Sep, maka dihitung 1–28 Agu.<br>
+      • <b>Stock</b>: dipakai nilai terakhir pada tanggal ≤ tanggal itu (tidak dijumlah). <b>Sell In (DSE_PROD/OSA)</b>: dipakai apa adanya (kumulatif/nilai per tanggal cetak) — kalau tanggal filenya bukan tanggal yang sama, ada peringatan dan tanggal aslinya tampil di banner.<br>
+      • Sell In SP (Pcs) belum punya sumber LMTD. Hanya kolom yang filenya sudah diupload yang mendapat pembanding.</p>
       <input type="file" id="lmtdFile" accept=".csv" multiple>
       <div class="progress-line" id="lmtdProgress"></div>
     </div>
 
     <div class="upload-block">
-      <h4>8. Update Sell In (OSA) — file OSA_IM3 / OSA_3ID (CSV)</h4>
+      <h4>7. Update Sell In (OSA) — file OSA_IM3 / OSA_3ID (CSV)</h4>
       <p class="hint">Ganti <b>Sell In SP, Voucher, Saldo</b> dari file OSA (kolom dt_id, qr_code/outlet_id, parameter, brand, amt — 1 baris per outlet per hari per parameter). Untuk tiap outlet, dipakai nilai di <b>tanggal paling akhir yang ada di file (tidak dijumlah)</b>: <code>osa_sp</code> → Sell In SP, <code>osa_vou</code> → Sell In Voucher, <code>osa_saldo</code> → Sell In Saldo. Baris <code>osa</code> polos tidak dipakai. Bisa pilih 2 file (IM3 + 3ID) sekaligus. GA, Tertiary, dan Secondary tidak disentuh — cara kerjanya sama seperti upload DSE_PROD (menu #3), cuma sumber datanya beda.</p>
       <input type="file" id="osaFile" accept=".csv" multiple>
       <div class="progress-line" id="osaProgress"></div>
     </div>
 
     <div class="upload-block">
-      <h4>9. Update Tertiary — file Tertiary (CSV)</h4>
+      <h4>8. Update Tertiary — file Tertiary (CSV)</h4>
       <p class="hint">Ganti kolom <b>Tertiary</b> dari file transaksi (kolom brand, dt_id, outlet_id, region_outlet, net_rev). Baris difilter ke region_outlet=WEST JAVA, lalu <b>net_rev dijumlahkan</b> per outlet (beda dengan OSA di atas yang pakai tanggal terakhir — Tertiary dijumlah). Hanya kolom Tertiary yang diganti — Sell In, GA, dan Secondary tidak disentuh. Perlu data Sell In sudah pernah diupload dulu.</p>
       <input type="file" id="tertiaryFile" accept=".csv">
       <div class="progress-line" id="tertiaryProgress"></div>
     </div>
 
     <div class="upload-block">
-      <h4>10. Update Sell In SP (Pcs) — export BigQuery (kpi SELLIN)</h4>
-      <p class="hint">Isi field baru <b>Sell In SP (Pcs)</b> — jumlah unit SP terjual, bukan Rupiah — dari file export BigQuery yang sama dengan menu #6 (kolom brand, dt_id, kpi, outlet_id, b_msisdn). Kali ini baris yang dipakai <b>kpi = SELLIN</b> (bukan RET_TAG). Nilainya = <b>jumlah baris/MSISDN unik per outlet</b> (1 baris = 1 unit SP). Hanya field ini yang diganti — Sell In (Rp), GA, Tertiary, Secondary tidak disentuh.</p>
+      <h4>9. Update Sell In SP (Pcs) — export BigQuery (kpi SELLIN)</h4>
+      <p class="hint"><b>Biasanya tidak perlu dipakai lagi</b> — upload file export BigQuery ke menu #5 (Update GA) sekarang otomatis sekalian mengisi field ini dari baris kpi = SELLIN di file yang sama. Menu ini masih berguna kalau Anda mau mengganti <b>Sell In SP (Pcs)</b> saja tanpa menyentuh GA (kolom brand, dt_id, kpi, outlet_id, b_msisdn; nilainya = jumlah baris/MSISDN unik kpi=SELLIN per outlet). Hanya field ini yang diganti — Sell In (Rp), GA, Tertiary, Secondary tidak disentuh.</p>
       <input type="file" id="sellinPcsFile" accept=".csv">
       <div class="progress-line" id="sellinPcsProgress"></div>
     </div>
@@ -1148,7 +1141,7 @@ function rebuildMasterFromOutlets(){
 const FIELDS_S = ['brandIdx','areaIdx','branchIdx','microIdx','outletId','outletName','catIdx',
   'rguGa','qsso','sellinSp','sellinVou','sellinSaldo','tertiary','secondary','sellinSpPcs'];
 // sellinSpPcs (SP Sell In, satuan Pcs — jumlah baris kpi=SELLIN unik per outlet dari export
-// BigQuery, menu #10) was added after everything above it; rows saved before this feature
+// BigQuery, menu #9) was added after everything above it; rows saved before this feature
 // existed are 1 element shorter, so any read of this field falls back to 0 (see spPcsOf()).
 function spPcsOf(row){ const v = row[IDX_S.sellinSpPcs]; return v == null ? 0 : v; }
 const IDX_S = Object.fromEntries(FIELDS_S.map((k,i)=>[k,i]));
@@ -1487,7 +1480,7 @@ async function loadSellinFromStorageOrSeed(){
       if(dd.removed > 0){
         // Display-only — see note in loadFromStorageOrSeed on why we don't auto-persist here.
         console.warn(`[dedupe] ${dd.removed} baris Sell In & GA duplikat ditemukan saat load — disembunyikan dari tampilan (tidak disimpan otomatis).`);
-        setTimeout(()=>showToast(`Ditemukan ${dd.removed} baris Sell In & GA duplikat — disembunyikan dari tampilan. Upload ulang file DSE_PROD untuk membersihkannya permanen.`), 1200);
+        setTimeout(()=>showToast(`Ditemukan ${dd.removed} baris Sell In & GA duplikat — disembunyikan dari tampilan. Upload ulang data Sell In (menu #7, OSA) untuk membersihkannya permanen.`), 1200);
       }
     }
     else if(outlets.length > 0){
@@ -1829,8 +1822,8 @@ function sellinMetricOk(key){
   if(!a) return true;
   const grp = ({ ga:'ga', wGa:'ga', s0:'ga', s1:'ga', s2:'ga', s3:'ga', s4:'ga',
     sp:'dse', vou:'dse', saldo:'dse', wSp:'dse', wVou:'dse', wSaldo:'dse',
-    secondary:'secondary', tertiary:'tertiary',   // 'tertiary' part is populated once menu #7's Tertiary file has been uploaded
-    sellinSpPcs:'spPcs' })[key];   // Sell In SP (Pcs, menu #10) has no LMTD source yet — always hidden under Compare LMTD
+    secondary:'secondary', tertiary:'tertiary',   // 'tertiary' part is populated once menu #6's Tertiary file has been uploaded
+    sellinSpPcs:'spPcs' })[key];   // Sell In SP (Pcs, menu #9) has no LMTD source yet — always hidden under Compare LMTD
   return grp ? !!a[grp] : true;
 }
 
@@ -1900,7 +1893,7 @@ async function setCompare(mode){
     compareOn = false;
     compareMode = prevMode;
     showToast(mode === 'lmtd'
-      ? 'Belum ada data LMTD — upload file bulan lalu lewat Perbarui data → menu #7 dulu.'
+      ? 'Belum ada data LMTD — upload file bulan lalu lewat Perbarui data → menu #6 dulu.'
       : 'Belum ada data Last Week untuk di-compare — akan tersedia otomatis setelah ada upload data baru berikutnya.');
     refreshCompareBanner();
     applyFilters();
@@ -1921,7 +1914,7 @@ function onCompareToggle(which){
 
 // ---------- LMTD (Last Month To Date) baseline ----------
 // LMTD compares this month so far with the SAME PERIOD last month (day 1 through the same day
-// of the month). The baseline comes from last month's own files, uploaded through menu #7 and
+// of the month). The baseline comes from last month's own files, uploaded through menu #6 and
 // stored under lmtd_* keys — the live data is never touched. Files with a date on every row
 // (GA, Supply, Secondary) are cut at the same day-of-month as the live data's "as of" date;
 // point-in-time files (Stock, DSE_PROD Sell In) are used as they are, and the date they really
@@ -2348,7 +2341,7 @@ function lmtdParseTertiary(file, progressEl){
   });
 }
 
-// ---- menu #7: figure out what kind of file it is, then hand it to the right reader ----
+// ---- menu #6: figure out what kind of file it is, then hand it to the right reader ----
 async function handleLmtdFile(file, progressEl){
   if(!MASTER || Object.keys(MASTER).length === 0){
     progressEl.innerHTML = '<b style="color:var(--red);">Data pairing outlet belum termuat</b> — refresh halaman ini dulu (Ctrl+Shift+R), tunggu sampai selesai loading, baru coba upload lagi.';
@@ -2390,6 +2383,38 @@ async function handleLmtdFiles(fileList){
     console.error('LMTD upload failed', e);
     progressEl.textContent = 'Gagal memproses file LMTD: ' + (e && e.message || e);
   } finally { uploadInProgress = false; gaSink = null; }
+}
+
+
+// Whenever an upload replaces data with a NEWER-MONTH as-of date, the data being replaced is
+// ALSO saved as the Compare LMTD baseline for that brand — so from the following month on,
+// LMTD works with zero extra uploads, using whatever was live at the end of this month.
+// Re-uploading again within the SAME month must not disturb an already-saved baseline, so this
+// only fires on a genuine month change (checked here, not by the caller).
+async function autoLmtdOnMonthChange(kind, oldRows, oldMeta, oldAsOf, newAsOf, brand){
+  if(monthOfDate(oldAsOf) === null || monthOfDate(newAsOf) === null || monthOfDate(oldAsOf) === monthOfDate(newAsOf)) return null;
+  const bi = oldMeta.brands.indexOf(brand);
+  if(bi < 0) return null;
+  const rows = oldRows.filter(r=>r[0]===bi).map(r=>r.slice());
+  if(!rows.length) return null;
+  return lmtdWriteBaseline(kind, brand, rows, { asOf: oldAsOf });
+}
+// Same idea, but for one PART of the Sell In LMTD baseline (dse = SP/Voucher/Saldo, ga = GA/qsso)
+// — merges into whatever other parts already exist, exactly like the manual menu #6 uploads do.
+async function autoLmtdSellinPart(partKey, brand, oldRows, oldMeta, oldAsOf, newAsOf, fieldIdxs){
+  if(monthOfDate(oldAsOf) === null || monthOfDate(newAsOf) === null || monthOfDate(oldAsOf) === monthOfDate(newAsOf)) return null;
+  const bi = oldMeta.brands.indexOf(brand);
+  if(bi < 0) return null;
+  const oldByOutlet = new Map();
+  oldRows.forEach(r=>{ if(r[0]===bi) oldByOutlet.set(r[IDX_S.outletId], r); });
+  if(!oldByOutlet.size) return null;
+  const bl = await lmtdSellinBaseline(brand);
+  bl.rows.forEach(r=>{
+    const old = oldByOutlet.get(r[IDX_S.outletId]);
+    fieldIdxs.forEach(idx=>{ r[idx] = old ? old[idx] : 0; });
+  });
+  bl.parts[partKey] = { asOf: oldAsOf };
+  return lmtdSaveSellin(brand, bl.rows, bl.parts);
 }
 
 // ---------- filtering ----------
@@ -3873,6 +3898,9 @@ async function finishStockProcessing(data, progressEl){
       const asOfMap = {}; snapOldMeta.brands.forEach(b=>asOfMap[b] = snapOldAsOf || null);
       const okSnap = await snapshotPrev('stock', snapOldRows, snapOldMeta, asOfMap);
       progressEl.textContent = base + (okSnap ? ' Snapshot Last Week tersimpan.' : ' (Snapshot Last Week gagal disimpan — perbandingan Last Week belum tersedia untuk stock.)');
+      let lmtdAuto = false;
+      for(const b2 of snapOldMeta.brands){ if(await autoLmtdOnMonthChange('stock', snapOldRows, snapOldMeta, snapOldAsOf, maxAsOf, b2)) lmtdAuto = true; }
+      if(lmtdAuto) progressEl.textContent = base + ' Data LMTD bulan depan otomatis tersimpan.';
     }
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data tidak berhasil disimpan online (koneksi tidak stabil). Data yang tampil di layar mungkin benar, tapi BELUM tentu tersimpan untuk orang lain. Coba upload ulang file ini.`;
@@ -4191,14 +4219,14 @@ async function finishSellinProcessing(brand, byKey, progressEl, maxAsOfDt){
   const snapOldAsOf = snapOldMap[brand] || null;
   const snapMeta = META;
   // DSE_PROD is used for SELL IN ONLY (SP, Voucher, Saldo). Everything else in a row keeps the
-  // value the outlet already had: GA (comes from menu #6), Secondary (menu #5) and Tertiary.
+  // value the outlet already had: GA (comes from menu #5), Secondary (menu #4) and Tertiary.
   // QSSO is derived from the GA kept here (GA >= 3). So this file's rgu_ga / tertiary /
   // secondary / qsso columns are deliberately ignored.
   const oldRowByOutlet = new Map();
   snapBrandRows.forEach(r=>oldRowByOutlet.set(r[IDX_S.outletId], r));
   const oldGaBy = (SMETA && SMETA.gaAsOfByBrand) || {};
   const newMonth = monthOfDate(maxAsOfDt || (SMETA && SMETA.asOf));
-  // "GA per" date: the date GA was last loaded via menu #6. If GA has never been loaded that
+  // "GA per" date: the date GA was last loaded via menu #5. If GA has never been loaded that
   // way, the GA on hand is whatever the previous DSE_PROD upload put there, i.e. as of that
   // upload's date — record it now, before this upload moves the Sell In date forward (data
   // saved before this change may store only the day number, so rebuild it with this month)
@@ -4241,14 +4269,17 @@ async function finishSellinProcessing(brand, byKey, progressEl, maxAsOfDt){
   const saveOk = await persistSellin((done,total)=>{ progressEl.textContent = `Menyimpan data Sell In & GA online — bagian ${done}/${total}…`; });
   if(saveOk){
     progressEl.textContent = `Selesai. Data Sell In & GA ${brand} diperbarui (${rebuilt.length.toLocaleString('id-ID')} outlet).` + ` Hanya Sell In (SP/Voucher/Saldo) yang diambil dari file ini — GA, Tertiary, dan Secondary tetap data sebelumnya.`
-      + (gaDate ? ` GA ${brand} per ${gaDate}.` : ` GA ${brand} belum ada — upload file GA di menu #6.`)
-      + ((gaMonthNow && newMonth && gaMonthNow !== newMonth) ? ` ⚠ GA masih data bulan ${gaMonthNow}, sedangkan Sell In bulan ${newMonth} — upload file GA bulan ${newMonth} di menu #6.` : '');
+      + (gaDate ? ` GA ${brand} per ${gaDate}.` : ` GA ${brand} belum ada — upload file GA di menu #5.`)
+      + ((gaMonthNow && newMonth && gaMonthNow !== newMonth) ? ` ⚠ GA masih data bulan ${gaMonthNow}, sedangkan Sell In bulan ${newMonth} — upload file GA bulan ${newMonth} di menu #5.` : '');
     await logUpdate('Sell In & GA', brand, rebuilt.length);
     if(snapBrandRows.length && newAsOf && !sameAsOf(newAsOf, snapOldAsOf)){
       const base = progressEl.textContent;
       progressEl.textContent = base + ' Menyimpan snapshot Last Week…';
       const okSnap = await snapshotPrev('sellin', snapBrandRows, snapMeta, {[brand]: snapOldAsOf});
       progressEl.textContent = base + (okSnap ? ' Snapshot Last Week tersimpan.' : ' (Snapshot Last Week gagal disimpan — perbandingan Last Week belum tersedia untuk Sell In & GA.)');
+      if(await autoLmtdSellinPart('dse', brand, snapBrandRows, snapMeta, snapOldAsOf, newAsOf, [IDX_S.sellinSp, IDX_S.sellinVou, IDX_S.sellinSaldo])){
+        progressEl.textContent = base + ' Data LMTD Sell In bulan depan otomatis tersimpan.';
+      }
     }
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data ${brand} tidak berhasil disimpan online. Coba upload ulang file ini.`;
@@ -4296,7 +4327,7 @@ function handleGaFile(file){
       resolve(); return;
     }
     if(!SMETA || !SELLIN_OUTLETS.length){
-      progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In &amp; GA belum ada</b> — upload file DSE_PROD (menu #3) dulu sebelum mengganti data GA.';
+      progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In &amp; GA belum ada</b> — upload data Sell In (menu #7, OSA) dulu sebelum mengganti data GA.';
       resolve(); return;
     }
     progressEl.textContent = `Membaca header file (${file.name})…`;
@@ -4407,6 +4438,12 @@ function parseGaBody(file, brand, progressEl){
 function parseGaTxBody(file, delim, fmt, progressEl){
   return new Promise((resolve) => {
     const B = {};   // brand -> { maxDate, seen:Set(msisdn), rowsByMonth:{ym:n}, tagged:{ym:n}, byMonth:{ym: Map(key->Float64Array(31))} }
+    // The BigQuery export (fmt.id==='retTag') has BOTH kpi=RET_TAG (GA) and kpi=SELLIN rows in the
+    // SAME file — so a live (non-LMTD) upload of it also derives Sell In SP (Pcs) from the very same
+    // pass, with no separate upload needed. (LMTD mode skips this — gaSink is set — since that field
+    // has no LMTD baseline yet.)
+    const wantSpPcs = fmt.id === 'retTag' && !gaSink;
+    const SP = {};  // brand -> { seen:Set(msisdn), byKey:{key:count} }
     let rowCount = 0, dupRows = 0, badDate = 0, skippedRows = 0;
     Papa.parse(file, {
       header: true, delimiter: delim, skipEmptyLines: true, worker: true,
@@ -4416,7 +4453,18 @@ function parseGaTxBody(file, delim, fmt, progressEl){
           const row = rows[i]; rowCount++;
           const brand = row.brand;
           if(brand !== 'IM3' && brand !== '3ID') continue;
-          if(fmt.keep && !fmt.keep(row)){ skippedRows++; continue; }   // e.g. kpi = SELLIN → not GA
+          if(fmt.keep && !fmt.keep(row)){
+            if(wantSpPcs && normKpiValue(row.kpi) === 'SELLIN'){
+              let sb = SP[brand]; if(!sb) sb = SP[brand] = { seen:new Set(), byKey:{} };
+              const ms = String(row[fmt.msisdn] || '').trim();
+              if(!ms || !sb.seen.has(ms)){
+                if(ms) sb.seen.add(ms);
+                const key = brand + '|' + normId(row[fmt.outlet] == null ? '' : row[fmt.outlet]);
+                if(MASTER[key]) sb.byKey[key] = (sb.byKey[key] || 0) + 1;
+              }
+            } else { skippedRows++; }
+            continue;   // not a GA row (kpi = SELLIN, or something else entirely)
+          }
           const dt = String(row[fmt.date] || '').trim();
           const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dt);
           if(!m){ badDate++; continue; }
@@ -4459,7 +4507,15 @@ function parseGaTxBody(file, delim, fmt, progressEl){
           await (gaSink || finishGaProcessing)(brand, b.byMonth[ym] || new Map(), lastDay, ym, total, progressEl, note);
           msgs.push(progressEl.textContent);
         }
-        if(skippedRows) msgs.push(`(${skippedRows.toLocaleString('id-ID')} baris bukan GA — kpi selain RET_TAG, mis. SELLIN — diabaikan.)`);
+        if(wantSpPcs){
+          const spBrands = new Set(Object.keys(SP));
+          if(spBrands.size){
+            const combined = {};
+            Object.values(SP).forEach(sb=>Object.assign(combined, sb.byKey));
+            await finishSellinPcsProcessing(combined, spBrands, progressEl, 0);
+            msgs.push(progressEl.textContent);
+          }
+        } else if(skippedRows) msgs.push(`(${skippedRows.toLocaleString('id-ID')} baris bukan GA — kpi selain RET_TAG diabaikan.)`);
         if(dupRows) msgs.push(`(${dupRows.toLocaleString('id-ID')} baris MSISDN ganda dilewati.)`);
         if(msgs.length > 1) progressEl.innerHTML = msgs.map(r=>'• '+r).join('<br>');
         resolve();
@@ -4474,7 +4530,7 @@ async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl,
   const asOf = `${ym}-${String(lastDay).padStart(2,'0')}`;
   const brandRows = SELLIN_OUTLETS.filter(r=>r[IDX_S.brandIdx]===brandI);
   if(!brandRows.length){
-    progressEl.textContent = `Data GA ${brand} dilewati — belum ada data Sell In & GA untuk brand ini (upload DSE_PROD ${brand} dulu, menu #3).`;
+    progressEl.textContent = `Data GA ${brand} dilewati — belum ada data Sell In untuk brand ini (upload data Sell In ${brand} dulu, menu #7).`;
     return;
   }
   // rows are edited in place below, so take the pre-change copy for the Last Week snapshot now
@@ -4511,6 +4567,9 @@ async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl,
       progressEl.textContent = base + ' Menyimpan snapshot Last Week…';
       const okSnap = await snapshotPrev('ga', snapRows, snapMeta, {[brand]: snapOldAsOf});
       progressEl.textContent = base + (okSnap ? ' Snapshot Last Week tersimpan.' : ' (Snapshot Last Week GA gagal disimpan — perbandingan Last Week GA belum tersedia.)');
+      if(await autoLmtdSellinPart('ga', brand, snapRows, snapMeta, snapOldAsOf, asOf, [IDX_S.rguGa, IDX_S.qsso])){
+        progressEl.textContent = base + ' Data LMTD GA bulan depan otomatis tersimpan.';
+      }
     }
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — data GA ${brand} tidak berhasil disimpan online. Coba upload ulang file ini.`;
@@ -4617,7 +4676,7 @@ function handleTertiaryFile(file){
       resolve(); return;
     }
     if(!SMETA || !SELLIN_OUTLETS.length){
-      progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In belum ada</b> — upload data Sell In (menu #3 atau #8) dulu sebelum mengganti Tertiary.';
+      progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In belum ada</b> — upload data Sell In (menu #7, OSA) dulu sebelum mengganti Tertiary.';
       resolve(); return;
     }
     progressEl.textContent = `Membaca file (${file.name})…`;
@@ -4689,7 +4748,7 @@ async function finishTertiaryProcessing(byKey, brandsSeen, progressEl){
 }
 
 // ---------- update: Sell In SP (Pcs) — count of kpi=SELLIN rows, from the same BigQuery
-// export format menu #6 uses (just a different kpi value). Full replace, like Secondary/Tertiary. ----------
+// export format menu #5 uses (just a different kpi value). Full replace, like Secondary/Tertiary. ----------
 function handleSellinPcsFile(file){
   return new Promise((resolve) => {
     const progressEl = document.getElementById('sellinPcsProgress');
@@ -4698,7 +4757,7 @@ function handleSellinPcsFile(file){
       resolve(); return;
     }
     if(!SMETA || !SELLIN_OUTLETS.length){
-      progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In belum ada</b> — upload data Sell In (menu #3 atau #8) dulu sebelum mengisi Sell In SP (Pcs).';
+      progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In belum ada</b> — upload data Sell In (menu #7, OSA) dulu sebelum mengisi Sell In SP (Pcs).';
       resolve(); return;
     }
     progressEl.textContent = `Membaca header file (${file.name})…`;
@@ -4810,7 +4869,7 @@ function handleSecondaryFile(file){
       return;
     }
     if(!SMETA || !SELLIN_OUTLETS.length){
-      progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In &amp; GA belum ada</b> — upload file DSE_PROD (menu #3) dulu sebelum mengganti data Secondary.';
+      progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In &amp; GA belum ada</b> — upload data Sell In (menu #7, OSA) dulu sebelum mengganti data Secondary.';
       resolve();
       return;
     }
@@ -5057,6 +5116,9 @@ async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, pro
       progressEl.textContent = base + ' Menyimpan snapshot Last Week…';
       const okSnap = await snapshotPrev('supply', snapBrandRows, snapMeta, {[brand]: snapOldAsOf || null});
       progressEl.textContent = base + (okSnap ? ' Snapshot Last Week tersimpan.' : ' (Snapshot Last Week gagal disimpan — perbandingan Last Week belum tersedia untuk Supply.)');
+      if(await autoLmtdOnMonthChange('supply', snapBrandRows, snapMeta, snapOldAsOf, maxDate, brand)){
+        progressEl.textContent = base + ' Data LMTD Supply bulan depan otomatis tersimpan.';
+      }
     }
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data Supply ${brand} tidak berhasil disimpan online. Coba upload ulang file ini.`;
@@ -5072,9 +5134,8 @@ function refreshHeaderMeta(){
   // (last-updated timestamp intentionally not shown in the header anymore — it was
   // confusing next to the per-dataset dates above; still tracked internally in
   // META.lastUpdated and visible in the "Riwayat Update" log instead)
-  // Sell In and GA come from the same source file (DSE_PROD per brand), so they
-  // share the same "as of" date — shown separately anyway since they're
-  // conceptually different metrics people ask about individually.
+  // Sell In (OSA) and GA (menu #5) are now separate uploads with their own dates —
+  // shown separately, which also makes it obvious when one is stale relative to the other.
   if(SMETA){
     const sellinDate = SMETA.asOf || '–';
     document.getElementById('metaSellinDate').textContent = sellinDate;
@@ -6027,7 +6088,6 @@ function bindEvents(){
 
   document.getElementById('stockFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleStockFile(e.target.files[0]); });
   document.getElementById('masterFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleMasterFile(e.target.files[0]); });
-  document.getElementById('sellinFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleSellinFiles(e.target.files); });
   document.getElementById('supplyFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleSupplyFiles(e.target.files); });
   document.getElementById('secondaryFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleSecondaryFile(e.target.files[0]); });
   document.getElementById('gaFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleGaFiles(e.target.files); });
