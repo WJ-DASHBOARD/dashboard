@@ -277,6 +277,7 @@
     <button class="tab-btn" data-tab="lowbalance">Low Balance</button>
     <button class="tab-btn" data-tab="sellin">Sell In &amp; GA</button>
     <button class="tab-btn" data-tab="supply">Supply</button>
+    <button class="tab-btn" data-tab="comparison">Comparison</button>
   </div>
 </div>
 
@@ -884,6 +885,43 @@
     Data Supply bersumber dari file SUPPLY_PROD bulan berjalan (kolom category dikelompokkan jadi SP: SIM/SIM Zero/SIM Ori, Rebuy: CVM/ATL/Pulsa, Voucher: eVoucher/SPV/SPV Ori), dicocokkan ke outlet pairing yang sama dengan tab lain via ret_qr_cd. "Hit" = jumlah transaksi, "Rev" = nilai revenue.
   </footer>
 
+</div>
+
+
+<div id="tabComparison" class="tab-panel hidden">
+  <div class="section-title">Comparison <div class="line"></div></div>
+  <p style="color:var(--muted);font-size:12.5px;margin:0 0 14px;">Drill-down Area &rarr; Branch &rarr; Micro Cluster, dibandingkan dengan Last Week atau LMTD (pilih di toggle bar filter atas). Mengikuti filter Brand/Area/Branch/Micro Cluster/Kategori/pencarian yang sedang aktif.</p>
+  <div id="cmpPlaceholder" style="padding:40px 20px;text-align:center;color:var(--muted);background:#fff;border:1px solid var(--border);border-radius:10px;">
+    Aktifkan <b>Compare Last Week</b> atau <b>Compare LMTD</b> di bar filter atas untuk melihat perbandingan di tab ini.
+  </div>
+  <div id="cmpContent" style="display:none;">
+    <div id="cmpMetricPanels"></div>
+
+    <div class="panel">
+      <h3 style="margin:0 0 8px;">Sell In per Kategori</h3>
+      <table class="summary" id="cmpCatTable">
+        <thead><tr><th style="text-align:left;">Kategori</th><th id="cmpCatColCur">Sekarang</th><th id="cmpCatColPrev">Pembanding</th><th>Growth</th></tr></thead>
+        <tbody id="cmpCatBody"></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+        <h3 style="margin:0;">Detail Outlet — Comparison</h3>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+          <span id="cmpPageInfo">–</span>
+          <button id="cmpPrevPage" class="btn btn-ghost btn-sm">&lsaquo; Sebelumnya</button>
+          <button id="cmpNextPage" class="btn btn-ghost btn-sm">Berikutnya &rsaquo;</button>
+        </div>
+      </div>
+      <div style="overflow:auto;max-height:560px;">
+      <table class="summary" id="cmpDetailTable">
+        <thead id="cmpDetailHead"></thead>
+        <tbody id="cmpDetailBody"></tbody>
+      </table>
+      </div>
+    </div>
+  </div>
 </div>
 
 </div>
@@ -2401,6 +2439,203 @@ async function autoLmtdSellinPart(partKey, brand, oldRows, oldMeta, oldAsOf, new
   return lmtdSaveSellin(brand, bl.rows, bl.parts);
 }
 
+// ---------- Comparison tab ----------
+// A dedicated, no-slabs, drill-down (Area -> Branch -> Micro Cluster) view of the same
+// Compare Last Week / Compare LMTD numbers already used elsewhere, for people who just want
+// the comparison itself without wading through the full Low Balance / Sell In & GA / Supply
+// tabs. Reuses the SAME global compareOn/compareMode/PREV state — the toggle lives once, in
+// the filter bar, and applies here too.
+
+const CMP_METRICS = [
+  { key:'stock',     label:'Stock Amount (Saldo)',                   fmt:fmtBn, goodUp:true },
+  { key:'ga',        label:'GA (MTD)',                                fmt:fmtN,  goodUp:true },
+  { key:'sellin',    label:'Sell In Amount (SP + Voucher + Saldo)',   fmt:fmtBn, goodUp:true },
+  { key:'supply',    label:'Supply Revenue',                          fmt:fmtBn, goodUp:true },
+  { key:'secondary', label:'Secondary',                               fmt:fmtBn, goodUp:true },
+  { key:'tertiary',  label:'Tertiary',                                fmt:fmtBn, goodUp:true },
+];
+
+let expandedCmp = {};   // metricKey -> { areas:Set(areaIdx), branches:Set("areaIdx|branchIdx") }
+function cmpState(key){
+  if(!expandedCmp[key]) expandedCmp[key] = { areas:new Set(), branches:new Set() };
+  return expandedCmp[key];
+}
+let cmpPage = 1;
+const CMP_PAGE_SIZE = 60;
+
+const cmpSupplyVal = r => SUP_CAT_FIELDS.reduce((a,c)=>a+r[IDX_SUP[c+'Rev']], 0);
+
+// One place that says which dataset/field/availability each metric key uses — everything
+// else (the hierarchy table, the category table, the detail table) reads through this.
+function cmpSource(key){
+  if(key==='stock') return { cur:filtered, prev:PREV_FILTERED.stock, idx:IDX,
+    avail: prevAvail('stock'), val: stockAmt };
+  if(key==='ga') return { cur:filteredSellin, prev:PREV_FILTERED.sellin, idx:IDX_S,
+    avail: prevAvail('sellin') && sellinMetricOk('ga'), val: r=>r[IDX_S.rguGa] };
+  if(key==='sellin') return { cur:filteredSellin, prev:PREV_FILTERED.sellin, idx:IDX_S,
+    avail: prevAvail('sellin') && sellinMetricOk('sp'), val: r=>r[IDX_S.sellinSp]+r[IDX_S.sellinVou]+r[IDX_S.sellinSaldo] };
+  if(key==='supply') return { cur:filteredSupply, prev:PREV_FILTERED.supply, idx:IDX_SUP,
+    avail: prevAvail('supply'), val: cmpSupplyVal };
+  if(key==='secondary') return { cur:filteredSellin, prev:PREV_FILTERED.sellin, idx:IDX_S,
+    avail: prevAvail('sellin') && sellinMetricOk('secondary'), val: r=>r[IDX_S.secondary] };
+  if(key==='tertiary') return { cur:filteredSellin, prev:PREV_FILTERED.sellin, idx:IDX_S,
+    avail: prevAvail('sellin') && sellinMetricOk('tertiary'), val: r=>r[IDX_S.tertiary] };
+}
+
+function cmpAggTree(rows, idx, valueFn){
+  const tree = {};
+  rows.forEach(r=>{
+    const a=r[idx.areaIdx], br=r[idx.branchIdx], mi=r[idx.microIdx], v=valueFn(r)||0;
+    if(!tree[a]) tree[a] = { total:0, branches:{} };
+    tree[a].total += v;
+    if(!tree[a].branches[br]) tree[a].branches[br] = { total:0, micros:{} };
+    tree[a].branches[br].total += v;
+    tree[a].branches[br].micros[mi] = (tree[a].branches[br].micros[mi]||0) + v;
+  });
+  return tree;
+}
+
+function ensureCmpPanels(){
+  const el = document.getElementById('cmpMetricPanels');
+  if(el.dataset.built) return;
+  el.innerHTML = CMP_METRICS.map(m=>`
+    <div class="panel" style="margin-bottom:16px;">
+      <h3 style="margin:0 0 8px;">${m.label}</h3>
+      <div style="overflow:auto;">
+      <table class="summary" id="cmpTable_${m.key}">
+        <thead><tr><th style="text-align:left;">Area / Branch / Micro Cluster</th><th id="cmpColCur_${m.key}">Sekarang</th><th id="cmpColPrev_${m.key}">Pembanding</th><th>Growth</th></tr></thead>
+        <tbody id="cmpBody_${m.key}"></tbody>
+        <tfoot id="cmpFoot_${m.key}"></tfoot>
+      </table>
+      </div>
+    </div>`).join('');
+  el.dataset.built = '1';
+}
+
+function renderCmpMetric(m){
+  const src = cmpSource(m.key);
+  const st = cmpState(m.key);
+  const curTree = cmpAggTree(src.cur, src.idx, src.val);
+  const prevTree = src.avail ? cmpAggTree(src.prev, src.idx, src.val) : null;
+  const areaKeys = Object.keys(curTree).sort((a,b)=>curTree[b].total-curTree[a].total);
+  let grandCur=0, grandPrev=0, anyPrev=false, html='';
+
+  areaKeys.forEach(ak=>{
+    const c = curTree[ak];
+    const p = prevTree ? (prevTree[ak] || { total:0, branches:{} }) : null;
+    grandCur += c.total; if(prevTree){ grandPrev += p.total; anyPrev = true; }
+    const aOpen = st.areas.has(ak);
+    html += `<tr>
+      <td><span class="expand-toggle" data-scope="cmp-area" data-key="${m.key}|${ak}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${aOpen?'⊟':'⊞'}</span><b>${META.areas[ak]}</b></td>
+      <td>${m.fmt(c.total)}</td><td>${prevTree ? m.fmt(p.total) : '–'}</td><td>${prevTree ? dl(c.total, p.total, m.goodUp, m.fmt) : ''}</td>
+    </tr>`;
+    if(!aOpen) return;
+    const brKeys = Object.keys(c.branches).sort((x,y)=>c.branches[y].total-c.branches[x].total);
+    brKeys.forEach(bk=>{
+      const cb = c.branches[bk];
+      const pb = p ? (p.branches[bk] || { total:0, micros:{} }) : null;
+      const bKey = ak+'|'+bk;
+      const bOpen = st.branches.has(bKey);
+      html += `<tr style="background:#FAFAF8;">
+        <td style="padding-left:24px;"><span class="expand-toggle" data-scope="cmp-branch" data-key="${m.key}|${bKey}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${bOpen?'⊟':'⊞'}</span>${META.branches[bk]}</td>
+        <td>${m.fmt(cb.total)}</td><td>${p ? m.fmt(pb.total) : '–'}</td><td>${p ? dl(cb.total, pb.total, m.goodUp, m.fmt) : ''}</td>
+      </tr>`;
+      if(!bOpen) return;
+      const miKeys = Object.keys(cb.micros).sort((x,y)=>cb.micros[y]-cb.micros[x]);
+      miKeys.forEach(mik=>{
+        const cv = cb.micros[mik];
+        const pv = pb ? (pb.micros[mik] || 0) : null;
+        html += `<tr style="background:#F5F4F1;">
+          <td style="padding-left:44px;color:var(--ink-soft);font-size:11.5px;">${META.micros[mik]}</td>
+          <td>${m.fmt(cv)}</td><td>${pb ? m.fmt(pv) : '–'}</td><td>${pb ? dl(cv, pv, m.goodUp, m.fmt) : ''}</td>
+        </tr>`;
+      });
+    });
+  });
+
+  document.getElementById('cmpBody_'+m.key).innerHTML = html || `<tr><td colspan="4" style="color:var(--muted);">Tidak ada data.</td></tr>`;
+  document.getElementById('cmpFoot_'+m.key).innerHTML = areaKeys.length ? `<tr style="font-weight:700;background:#FAF9F7;">
+    <td>Total</td><td>${m.fmt(grandCur)}</td><td>${anyPrev?m.fmt(grandPrev):'–'}</td><td>${anyPrev?dl(grandCur,grandPrev,m.goodUp,m.fmt):''}</td>
+  </tr>` : '';
+  document.getElementById('cmpColPrev_'+m.key).textContent = cmpName();
+}
+
+function renderCmpCategory(){
+  const src = cmpSource('sellin');
+  const curAgg = {}, prevAgg = {};
+  filteredSellin.forEach(r=>{ const c=r[IDX_S.catIdx]; curAgg[c]=(curAgg[c]||0)+src.val(r); });
+  if(src.avail) PREV_FILTERED.sellin.forEach(r=>{ const c=r[IDX_S.catIdx]; prevAgg[c]=(prevAgg[c]||0)+src.val(r); });
+  const cats = META.cats.map((c,i)=>i).filter(i=>(curAgg[i]||0) > 0 || (prevAgg[i]||0) > 0);
+  let gc=0, gp=0;
+  let html = cats.map(ci=>{
+    const cv=curAgg[ci]||0, pv=prevAgg[ci]||0;
+    gc+=cv; if(src.avail) gp+=pv;
+    return `<tr><td><span class="badge ${META.cats[ci]}">${META.cats[ci]}</span></td><td>${fmtBn(cv)}</td><td>${src.avail?fmtBn(pv):'–'}</td><td>${src.avail?dl(cv,pv,true,fmtBn):''}</td></tr>`;
+  }).join('');
+  html += `<tr style="font-weight:700;background:#FAF9F7;"><td>Total</td><td>${fmtBn(gc)}</td><td>${src.avail?fmtBn(gp):'–'}</td><td>${src.avail?dl(gc,gp,true,fmtBn):''}</td></tr>`;
+  document.getElementById('cmpCatBody').innerHTML = cats.length ? html : '<tr><td colspan="4" style="color:var(--muted);">Tidak ada data.</td></tr>';
+  document.getElementById('cmpCatColPrev').textContent = cmpName();
+}
+
+function renderCmpDetail(){
+  const sellinIdxCur = new Map(); filteredSellin.forEach(r=>sellinIdxCur.set(META.brands[r[IDX_S.brandIdx]]+'|'+r[IDX_S.outletId], r));
+  const supplyIdxCur = new Map(); filteredSupply.forEach(r=>supplyIdxCur.set(META.brands[r[IDX_SUP.brandIdx]]+'|'+r[IDX_SUP.outletId], r));
+  const sellinIdxPrev = new Map(); if(prevAvail('sellin')) PREV_FILTERED.sellin.forEach(r=>sellinIdxPrev.set(META.brands[r[IDX_S.brandIdx]]+'|'+r[IDX_S.outletId], r));
+  const supplyIdxPrev = new Map(); if(prevAvail('supply')) PREV_FILTERED.supply.forEach(r=>supplyIdxPrev.set(META.brands[r[IDX_SUP.brandIdx]]+'|'+r[IDX_SUP.outletId], r));
+  const stockIdxPrev = new Map(); if(prevAvail('stock')) PREV_FILTERED.stock.forEach(r=>stockIdxPrev.set(META.brands[r[IDX.brandIdx]]+'|'+r[IDX.outletId], r));
+
+  const cLabel = cmpName();
+  document.getElementById('cmpDetailHead').innerHTML = `
+    <tr>
+      <th rowspan="2" style="text-align:left;">Brand</th><th rowspan="2" style="text-align:left;">Branch</th><th rowspan="2" style="text-align:left;">Micro Cluster</th>
+      <th rowspan="2" style="text-align:left;">Outlet ID</th><th rowspan="2" style="text-align:left;">Nama</th><th rowspan="2">Kategori</th>
+      ${CMP_METRICS.map(m=>`<th colspan="3">${m.label}</th>`).join('')}
+    </tr>
+    <tr>${CMP_METRICS.map(()=>`<th style="font-weight:500;">Sekarang</th><th style="font-weight:500;">${cLabel}</th><th style="font-weight:500;">Growth</th>`).join('')}</tr>`;
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / CMP_PAGE_SIZE));
+  if(cmpPage > totalPages) cmpPage = totalPages;
+  const startIdx = (cmpPage-1) * CMP_PAGE_SIZE;
+  const pageRows = filtered.slice(startIdx, startIdx + CMP_PAGE_SIZE);
+
+  const cellsFor = (r) => {
+    const key = META.brands[r[IDX.brandIdx]]+'|'+r[IDX.outletId];
+    const sc = sellinIdxCur.get(key), su = supplyIdxCur.get(key);
+    const sp = sellinIdxPrev.get(key), sup2 = supplyIdxPrev.get(key), stp = stockIdxPrev.get(key);
+    return CMP_METRICS.map(m=>{
+      let cv=0, pv=null, avail=false;
+      if(m.key==='stock'){ cv = stockAmt(r); avail = prevAvail('stock'); pv = avail ? (stp?stockAmt(stp):0) : null; }
+      else if(m.key==='ga'){ cv = sc?sc[IDX_S.rguGa]:0; avail = prevAvail('sellin')&&sellinMetricOk('ga'); pv = avail?(sp?sp[IDX_S.rguGa]:0):null; }
+      else if(m.key==='sellin'){ cv = sc?(sc[IDX_S.sellinSp]+sc[IDX_S.sellinVou]+sc[IDX_S.sellinSaldo]):0; avail = prevAvail('sellin')&&sellinMetricOk('sp'); pv = avail?(sp?(sp[IDX_S.sellinSp]+sp[IDX_S.sellinVou]+sp[IDX_S.sellinSaldo]):0):null; }
+      else if(m.key==='supply'){ cv = su?cmpSupplyVal(su):0; avail = prevAvail('supply'); pv = avail?(sup2?cmpSupplyVal(sup2):0):null; }
+      else if(m.key==='secondary'){ cv = sc?sc[IDX_S.secondary]:0; avail = prevAvail('sellin')&&sellinMetricOk('secondary'); pv = avail?(sp?sp[IDX_S.secondary]:0):null; }
+      else if(m.key==='tertiary'){ cv = sc?sc[IDX_S.tertiary]:0; avail = prevAvail('sellin')&&sellinMetricOk('tertiary'); pv = avail?(sp?sp[IDX_S.tertiary]:0):null; }
+      return `<td>${m.fmt(cv)}</td><td>${avail?m.fmt(pv):'–'}</td><td>${avail?dl(cv,pv,m.goodUp,m.fmt):''}</td>`;
+    }).join('');
+  };
+
+  const colCount = 6 + CMP_METRICS.length*3;
+  document.getElementById('cmpDetailBody').innerHTML = pageRows.length ? pageRows.map(r=>
+    `<tr><td>${META.brands[r[IDX.brandIdx]]}</td><td>${META.branches[r[IDX.branchIdx]]}</td><td>${META.micros[r[IDX.microIdx]]}</td><td>${r[IDX.outletId]}</td><td>${r[IDX.outletName]}</td><td>${META.cats[r[IDX.catIdx]]}</td>${cellsFor(r)}</tr>`
+  ).join('') : `<tr><td colspan="${colCount}" style="color:var(--muted);">Tidak ada data.</td></tr>`;
+
+  document.getElementById('cmpPageInfo').textContent = `Halaman ${cmpPage} / ${totalPages} (${fmtN(filtered.length)} outlet)`;
+  document.getElementById('cmpPrevPage').disabled = cmpPage<=1;
+  document.getElementById('cmpNextPage').disabled = cmpPage>=totalPages;
+}
+
+function renderComparisonAll(){
+  const ph = document.getElementById('cmpPlaceholder'), content = document.getElementById('cmpContent');
+  if(!ph || !content) return;
+  if(!compareOn){ ph.style.display=''; content.style.display='none'; return; }
+  ph.style.display='none'; content.style.display='';
+  ensureCmpPanels();
+  CMP_METRICS.forEach(renderCmpMetric);
+  renderCmpCategory();
+  renderCmpDetail();
+}
+
+
 // ---------- filtering ----------
 function applyFilters(){
   const brand = document.getElementById('fBrand').value;
@@ -2449,6 +2684,7 @@ function applyFilters(){
   renderAll();
   renderSellinAll();
   if(activeTab==='supply') renderSupplyAll();
+  if(activeTab==='comparison') renderComparisonAll();
   if(GEO_POINTS.length) renderPetaAll();
 
   // let the person know clearly when their search text doesn't match anything at all,
@@ -5996,6 +6232,16 @@ function bindEvents(){
     } else if(t.dataset.scope==='sup'){
       if(expandedBranchesSup.has(key)) expandedBranchesSup.delete(key); else expandedBranchesSup.add(key);
       renderSupplySummaryTable();
+    } else if(t.dataset.scope==='cmp-area'){
+      const [mKey, ak] = key.split('|');
+      const st = cmpState(mKey);
+      if(st.areas.has(ak)) st.areas.delete(ak); else st.areas.add(ak);
+      renderCmpMetric(CMP_METRICS.find(m=>m.key===mKey));
+    } else if(t.dataset.scope==='cmp-branch'){
+      const i = key.indexOf('|'); const mKey = key.slice(0,i); const bKey = key.slice(i+1);
+      const st = cmpState(mKey);
+      if(st.branches.has(bKey)) st.branches.delete(bKey); else st.branches.add(bKey);
+      renderCmpMetric(CMP_METRICS.find(m=>m.key===mKey));
     }
   });
 
@@ -6033,6 +6279,8 @@ function bindEvents(){
   });
 
   document.getElementById('prevPage').addEventListener('click', ()=>{ if(page>1){page--; renderTable();} });
+  document.getElementById('cmpPrevPage').addEventListener('click', ()=>{ if(cmpPage>1){cmpPage--; renderCmpDetail();} });
+  document.getElementById('cmpNextPage').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filtered.length/CMP_PAGE_SIZE)); if(cmpPage<tp){cmpPage++; renderCmpDetail();} });
   document.getElementById('nextPage').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)); if(page<tp){page++; renderTable();} });
   document.getElementById('siPrevPage').addEventListener('click', ()=>{ if(siPage>1){siPage--; renderSellinTable();} });
   document.getElementById('siNextPage').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filteredSellin.length/PAGE_SIZE)); if(siPage<tp){siPage++; renderSellinTable();} });
@@ -6088,8 +6336,10 @@ function bindEvents(){
       document.getElementById('tabLowBalance').classList.toggle('hidden', activeTab!=='lowbalance');
       document.getElementById('tabSellin').classList.toggle('hidden', activeTab!=='sellin');
       document.getElementById('tabSupply').classList.toggle('hidden', activeTab!=='supply');
+      document.getElementById('tabComparison').classList.toggle('hidden', activeTab!=='comparison');
       if(activeTab==='sellin') renderSellinAll();
       if(activeTab==='supply') renderSupplyAll();
+      if(activeTab==='comparison') renderComparisonAll();
       if(activeTab==='peta'){ renderPetaAll(); setTimeout(()=>{ if(mapInstance) mapInstance.invalidateSize(); }, 50); }
     });
   });
