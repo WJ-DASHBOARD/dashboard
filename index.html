@@ -261,13 +261,6 @@
     <div class="search-wrap">
       <input type="text" id="fSearch" placeholder="Cari Outlet ID / Nama / Branch (mis. &quot;cell abc kuningan&quot;)…" style="min-width:260px;">
     </div>
-    <label class="cmp-toggle" id="cmpToggleWrap" title="Compare angka sekarang dengan data Last Week (data sebelum upload terakhir)">
-      <input type="checkbox" id="cmpToggle"> <span>Compare Last Week</span>
-    </label>
-    <label class="cmp-toggle" id="cmpToggleLmtdWrap" title="Compare angka sekarang dengan LMTD: 1 sampai tanggal yang sama di bulan lalu (Last Month To Date)">
-      <input type="checkbox" id="cmpToggleLmtd"> <span>Compare LMTD</span>
-    </label>
-    <div class="cmp-banner" id="cmpBanner" style="display:none;"></div>
   </div>
 </div>
 
@@ -277,7 +270,7 @@
     <button class="tab-btn" data-tab="lowbalance">Low Balance</button>
     <button class="tab-btn" data-tab="sellin">Sell In &amp; GA</button>
     <button class="tab-btn" data-tab="supply">Supply</button>
-    <button class="tab-btn" data-tab="comparison">Comparison</button>
+    <button class="tab-btn" data-tab="comparison">Performance WoW/MoM</button>
   </div>
 </div>
 
@@ -889,10 +882,19 @@
 
 
 <div id="tabComparison" class="tab-panel hidden">
-  <div class="section-title">Comparison <div class="line"></div></div>
-  <p style="color:var(--muted);font-size:12.5px;margin:0 0 14px;">Drill-down Area &rarr; Branch &rarr; Micro Cluster, dibandingkan dengan Last Week atau LMTD (pilih di toggle bar filter atas). Mengikuti filter Brand/Area/Branch/Micro Cluster/Kategori/pencarian yang sedang aktif.</p>
+  <div class="section-title">Performance WoW/MoM <div class="line"></div></div>
+  <p style="color:var(--muted);font-size:12.5px;margin:0 0 14px;">Drill-down Area &rarr; Branch &rarr; Micro Cluster, dibandingkan dengan WoW (Week over Week) atau MoM (Month over Month) — pilih di toggle di atas. Mengikuti filter Brand/Area/Branch/Micro Cluster/Kategori/pencarian yang sedang aktif.</p>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+    <label class="cmp-toggle" id="cmpToggleWrap" title="WoW (Week over Week) — bandingkan angka sekarang dengan data sebelum upload terakhir">
+      <input type="checkbox" id="cmpToggle"> <span>WoW</span>
+    </label>
+    <label class="cmp-toggle" id="cmpToggleLmtdWrap" title="MoM (Month over Month) — bandingkan angka sekarang (1 s/d tanggal berjalan) dengan periode yang sama di bulan lalu">
+      <input type="checkbox" id="cmpToggleLmtd"> <span>MoM</span>
+    </label>
+  </div>
+  <div class="cmp-banner" id="cmpBanner" style="display:none;margin-bottom:8px;"></div>
   <div id="cmpPlaceholder" style="padding:40px 20px;text-align:center;color:var(--muted);background:#fff;border:1px solid var(--border);border-radius:10px;">
-    Aktifkan <b>Compare Last Week</b> atau <b>Compare LMTD</b> di bar filter atas untuk melihat perbandingan di tab ini.
+    Aktifkan <b>WoW</b> atau <b>MoM</b> di atas untuk melihat perbandingan.
   </div>
   <div id="cmpContent" style="display:none;">
     <div id="cmpMetricPanels"></div>
@@ -907,7 +909,7 @@
 
     <div class="panel">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-        <h3 style="margin:0;">Detail Outlet — Comparison</h3>
+        <h3 style="margin:0;">Detail Outlet — Performance WoW/MoM</h3>
         <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
           <span id="cmpPageInfo">–</span>
           <button id="cmpPrevPage" class="btn btn-ghost btn-sm">&lsaquo; Sebelumnya</button>
@@ -1697,7 +1699,7 @@ const prevLoadPromises = { week:null, lmtd:null };
 let PREV_FILTERED = { stock:[], sellin:[], supply:[] };     // PREV rows passing the current filters
 let lastPasses = null;                                      // the filter predicate from the latest applyFilters()
 
-function cmpName(mode){ return (mode || compareMode) === 'lmtd' ? 'LMTD' : 'Last Week'; }
+function cmpName(mode){ return (mode || compareMode) === 'lmtd' ? 'MoM' : 'WoW'; }
 // Last Week baselines are stored as prev_<kind>_<brand>_…; LMTD ones as lmtd_<kind>_<brand>_…
 function prevKey(kind, brand, mode){ return `${mode==='lmtd' ? 'lmtd' : 'prev'}_${kind}_${brand}`; }
 
@@ -1865,7 +1867,12 @@ function dl(cur, prev, goodUp, fmt){
 // KPI cards set their numbers with textContent/innerHTML on every render, so the chip
 // is appended INSIDE the value element (as an inline span) after the number is set —
 // it disappears by itself on the next render when compare is off.
+// KPI-card chips (▲▼) are now shown ONLY in the Performance tab — Low Balance, Sell In & GA,
+// and Supply went back to plain numbers, per request. Performance itself never calls this
+// function (it writes its own cells with dl() directly), so gating it here turns every one of
+// those old call sites off in one place, without touching each of them individually.
 function appendKpiDelta(elId, html){
+  return;
   const el = document.getElementById(elId);
   if(!el || !html) return;
   el.insertAdjacentHTML('beforeend', html.replace(/^<div/, '<span style="margin-left:6px;vertical-align:middle;"').replace(/<\/div>$/, '</span>'));
@@ -1890,10 +1897,10 @@ function refreshCompareBanner(){
     const s = PREV.sellin, dates = {dse:[], ga:[], secondary:[], tertiary:[]};
     if(s) Object.values(s.parts || {}).forEach(pt=>{ ['dse','ga','secondary','tertiary'].forEach(k=>{ if(pt[k] && pt[k].asOf) dates[k].push(pt[k].asOf); }); });
     const lab = k => dates[k].length ? dates[k].sort()[0] : 'belum ada';
-    el.textContent = `Compare LMTD (bulan lalu s/d tanggal yang sama) — Stock: ${prevDateLabel('stock')} · Sell In: ${lab('dse')} · GA: ${lab('ga')} · Tertiary: ${lab('tertiary')} · Secondary: ${lab('secondary')} · Supply: ${prevDateLabel('supply')}. ${tail}`;
+    el.textContent = `MoM (bulan lalu s/d tanggal yang sama) — Stock: ${prevDateLabel('stock')} · Sell In: ${lab('dse')} · GA: ${lab('ga')} · Tertiary: ${lab('tertiary')} · Secondary: ${lab('secondary')} · Supply: ${prevDateLabel('supply')}. ${tail}`;
     return;
   }
-  el.textContent = `Compare Last Week — Stock: ${prevDateLabel('stock')} · Sell In & GA: ${prevDateLabel('sellin')} · Supply: ${prevDateLabel('supply')}. ${tail}`;
+  el.textContent = `WoW — Stock: ${prevDateLabel('stock')} · Sell In & GA: ${prevDateLabel('sellin')} · Supply: ${prevDateLabel('supply')}. ${tail}`;
 }
 
 // Both checkboxes are mutually exclusive: every cell can only show ONE change figure.
@@ -1915,8 +1922,8 @@ async function setCompare(mode){
     compareOn = false;
     compareMode = prevMode;
     showToast(mode === 'lmtd'
-      ? 'Belum ada data LMTD — baseline-nya tersimpan otomatis begitu ada upload yang tanggalnya beda bulan (lihat catatan di panel Compare LMTD).'
-      : 'Belum ada data Last Week untuk di-compare — akan tersedia otomatis setelah ada upload data baru berikutnya.');
+      ? 'Belum ada data MoM — baseline-nya tersimpan otomatis begitu ada upload yang tanggalnya beda bulan.'
+      : 'Belum ada data WoW untuk di-compare — akan tersedia otomatis setelah ada upload data baru berikutnya.');
     refreshCompareBanner();
     applyFilters();
     return;
@@ -2974,7 +2981,7 @@ function renderSupplySummaryTable(){
     return agg;
   };
   // Last Week comparison (toggle on + a Supply snapshot exists)
-  const cmpOn = prevAvail('supply');
+  const cmpOn = false && prevAvail('supply');   // chips moved to the Performance tab
   const dk = (r, p, k, good, fmt) => (cmpOn && p) ? dl(r[k], p[k], good, fmt) : '';
   const rowCells = (r, p) => `
       <td>${fmtN(r.outlet)}</td>
@@ -3223,7 +3230,7 @@ function renderSellinCatSummary(){
   const rows = META.cats.map((c,i)=>({idx:i, name:c, ...agg[i]})).filter(r=>r.outlet>0).sort((a,b)=>b.ga-a.ga);
 
   // Last Week comparison — same per-category totals over the snapshot
-  const cmpOn = prevAvail('sellin');
+  const cmpOn = false && prevAvail('sellin');   // chips moved to the Performance tab
   const prevAgg = {};
   if(cmpOn){
     META.cats.forEach((c,i)=>prevAgg[i] = {outlet:0, ga:0, sp:0, vou:0, saldo:0, tertiary:0, secondary:0, wSp:0, wVou:0, wSaldo:0, wGa:0});
@@ -3307,7 +3314,7 @@ function renderSellinSummaryTable(){
 
   const pct = (w,t) => t? (w/t*100).toFixed(0)+'%' : '–';
   // Last Week comparison (toggle on + a Sell In & GA snapshot exists)
-  const cmpOn = prevAvail('sellin');
+  const cmpOn = false && prevAvail('sellin');   // chips moved to the Performance tab
   const dk = (r, p, k, good, fmt) => (cmpOn && p && sellinMetricOk(k)) ? dl(r[k], p[k], good, fmt) : '';
   const rowCells = (r, p) => `
       <td>${fmtN(r.outlet)}</td><td>${fmtN(r.ga)}${dk(r,p,'ga',true)}</td>
@@ -3630,7 +3637,7 @@ function renderSummaryTable(){
   };
   // Last Week comparison (only when the toggle is on AND a stock snapshot exists):
   // a small ▲/▼ chip under the main amount / slab columns
-  const cmpOn = prevAvail('stock');
+  const cmpOn = false && prevAvail('stock');   // chips moved to the Performance tab
   const dk = (r, p, k, good, fmt) => (cmpOn && p) ? dl(r[k], p[k], good, fmt) : '';
   const rowCells = (r, p) => `
       <td>${fmtN(r.outlet)}</td>
@@ -4114,13 +4121,13 @@ async function finishStockProcessing(data, progressEl){
     // it replaces (re-uploading the same day's file must not overwrite the real "previous")
     if(snapOldRows.length && snapOldMeta && maxAsOf && !sameAsOf(maxAsOf, snapOldAsOf)){
       const base = progressEl.textContent;
-      progressEl.textContent = base + ' Menyimpan snapshot Last Week…';
+      progressEl.textContent = base + ' Menyimpan snapshot WoW…';
       const asOfMap = {}; snapOldMeta.brands.forEach(b=>asOfMap[b] = snapOldAsOf || null);
       const okSnap = await snapshotPrev('stock', snapOldRows, snapOldMeta, asOfMap);
-      progressEl.textContent = base + (okSnap ? ' Snapshot Last Week tersimpan.' : ' (Snapshot Last Week gagal disimpan — perbandingan Last Week belum tersedia untuk stock.)');
+      progressEl.textContent = base + (okSnap ? ' Snapshot WoW tersimpan.' : ' (Snapshot WoW gagal disimpan — perbandingan WoW belum tersedia untuk stock.)');
       let lmtdAuto = false;
       for(const b2 of snapOldMeta.brands){ if(await autoLmtdOnMonthChange('stock', snapOldRows, snapOldMeta, snapOldAsOf, maxAsOf, b2)) lmtdAuto = true; }
-      if(lmtdAuto) progressEl.textContent = base + ' Data LMTD bulan depan otomatis tersimpan.';
+      if(lmtdAuto) progressEl.textContent = base + ' Data MoM bulan depan otomatis tersimpan.';
     }
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data tidak berhasil disimpan online (koneksi tidak stabil). Data yang tampil di layar mungkin benar, tapi BELUM tentu tersimpan untuk orang lain. Coba upload ulang file ini.`;
@@ -4494,11 +4501,11 @@ async function finishSellinProcessing(brand, byKey, progressEl, maxAsOfDt){
     await logUpdate('Sell In & GA', brand, rebuilt.length);
     if(snapBrandRows.length && newAsOf && !sameAsOf(newAsOf, snapOldAsOf)){
       const base = progressEl.textContent;
-      progressEl.textContent = base + ' Menyimpan snapshot Last Week…';
+      progressEl.textContent = base + ' Menyimpan snapshot WoW…';
       const okSnap = await snapshotPrev('sellin', snapBrandRows, snapMeta, {[brand]: snapOldAsOf});
-      progressEl.textContent = base + (okSnap ? ' Snapshot Last Week tersimpan.' : ' (Snapshot Last Week gagal disimpan — perbandingan Last Week belum tersedia untuk Sell In & GA.)');
+      progressEl.textContent = base + (okSnap ? ' Snapshot WoW tersimpan.' : ' (Snapshot WoW gagal disimpan — perbandingan WoW belum tersedia untuk Sell In & GA.)');
       if(await autoLmtdSellinPart('dse', brand, snapBrandRows, snapMeta, snapOldAsOf, newAsOf, [IDX_S.sellinSp, IDX_S.sellinVou, IDX_S.sellinSaldo])){
-        progressEl.textContent = base + ' Data LMTD Sell In bulan depan otomatis tersimpan.';
+        progressEl.textContent = base + ' Data MoM Sell In bulan depan otomatis tersimpan.';
       }
     }
   } else {
@@ -4784,11 +4791,11 @@ async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl,
     // Last Week snapshot of the GA column — only when this is a newer as-of date than the
     // GA it replaces (re-uploading the same file must not overwrite the real "previous")
     if(!sameAsOf(asOf, snapOldAsOf)){
-      progressEl.textContent = base + ' Menyimpan snapshot Last Week…';
+      progressEl.textContent = base + ' Menyimpan snapshot WoW…';
       const okSnap = await snapshotPrev('ga', snapRows, snapMeta, {[brand]: snapOldAsOf});
-      progressEl.textContent = base + (okSnap ? ' Snapshot Last Week tersimpan.' : ' (Snapshot Last Week GA gagal disimpan — perbandingan Last Week GA belum tersedia.)');
+      progressEl.textContent = base + (okSnap ? ' Snapshot WoW tersimpan.' : ' (Snapshot WoW GA gagal disimpan — perbandingan WoW GA belum tersedia.)');
       if(await autoLmtdSellinPart('ga', brand, snapRows, snapMeta, snapOldAsOf, asOf, [IDX_S.rguGa, IDX_S.qsso])){
-        progressEl.textContent = base + ' Data LMTD GA bulan depan otomatis tersimpan.';
+        progressEl.textContent = base + ' Data MoM GA bulan depan otomatis tersimpan.';
       }
     }
   } else {
@@ -5333,11 +5340,11 @@ async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, pro
     await logUpdate('Supply', brand, rebuilt.length);
     if(snapBrandRows.length && maxDate && maxDate !== snapOldAsOf){
       const base = progressEl.textContent;
-      progressEl.textContent = base + ' Menyimpan snapshot Last Week…';
+      progressEl.textContent = base + ' Menyimpan snapshot WoW…';
       const okSnap = await snapshotPrev('supply', snapBrandRows, snapMeta, {[brand]: snapOldAsOf || null});
-      progressEl.textContent = base + (okSnap ? ' Snapshot Last Week tersimpan.' : ' (Snapshot Last Week gagal disimpan — perbandingan Last Week belum tersedia untuk Supply.)');
+      progressEl.textContent = base + (okSnap ? ' Snapshot WoW tersimpan.' : ' (Snapshot WoW gagal disimpan — perbandingan WoW belum tersedia untuk Supply.)');
       if(await autoLmtdOnMonthChange('supply', snapBrandRows, snapMeta, snapOldAsOf, maxDate, brand)){
-        progressEl.textContent = base + ' Data LMTD Supply bulan depan otomatis tersimpan.';
+        progressEl.textContent = base + ' Data MoM Supply bulan depan otomatis tersimpan.';
       }
     }
   } else {
@@ -5426,7 +5433,7 @@ function statRowSplit(lbl, im3Val, tidVal, mode, extra, totalOverride, cmp){
     curTotal = tot;
   }
   // extra "vs Last Week" cell — only present while the compare toggle is on
-  const cmpCell = compareOn ? `<td>${(cmp && cmp.prev!=null && curTotal!=null) ? dl(curTotal, cmp.prev, cmp.goodUp, cmp.fmt) : ''}</td>` : '';
+  const cmpCell = false && compareOn ? `<td>${(cmp && cmp.prev!=null && curTotal!=null) ? dl(curTotal, cmp.prev, cmp.goodUp, cmp.fmt) : ''}</td>` : '';   // chips moved to the Performance tab
   return `<tr><td>${lbl}</td><td${styleAttr}>${im3Cell}</td><td${styleAttr}>${tidCell}</td><td${styleAttr}>${totalCell}</td>${cmpCell}</tr>`;
 }
 
@@ -5548,8 +5555,7 @@ function renderPetaStatList(){
     else if(b==='3ID'){ branchSetTid.add(r[IDX.branchIdx]); microSetTid.add(r[IDX.microIdx]); }
   });
 
-  document.getElementById('petaCmpTh').style.display = compareOn ? '' : 'none';
-  document.getElementById('petaCmpTh').textContent = compareMode === 'lmtd' ? 'vs LMTD' : 'vs LW';
+  document.getElementById('petaCmpTh').style.display = 'none';   // chips moved to the Performance tab
   document.getElementById('petaStatList').innerHTML = [
     statRowSplit('Total Outlet (sesuai filter)', outletsIm3, outletsTid, 'share', null, null, {prev:pv.outlets, goodUp:true}),
     statRowSplit('Jumlah Branch tercakup', branchSetIm3.size, branchSetTid.size, 'plain', null, branchesInView.length),
