@@ -883,12 +883,12 @@
 
 <div id="tabComparison" class="tab-panel hidden">
   <div class="section-title">Performance WoW/MoM <div class="line"></div></div>
-  <p style="color:var(--muted);font-size:12.5px;margin:0 0 14px;">Drill-down Area &rarr; Branch &rarr; Micro Cluster. WoW (vs Last Week) dan MoM (vs LMTD, bulan lalu s/d tanggal yang sama) ditampilkan sekaligus, tanpa perlu pilih toggle. Mengikuti filter Brand/Area/Branch/Micro Cluster/Kategori/pencarian yang sedang aktif.</p>
   <div class="cmp-banner" id="cmpBanner" style="margin-bottom:8px;"></div>
+  <div id="cmpLoading" style="padding:20px;text-align:center;color:var(--muted);display:none;">Memuat data WoW/MoM…</div>
   <div id="cmpPlaceholder" style="padding:40px 20px;text-align:center;color:var(--muted);background:#fff;border:1px solid var(--border);border-radius:10px;display:none;">
     Belum ada data WoW maupun MoM untuk dibandingkan.
   </div>
-  <div id="cmpContent">
+  <div id="cmpContent" style="display:none;">
     <div id="cmpMetricPanels"></div>
 
     <div class="panel">
@@ -2718,9 +2718,20 @@ function refreshCmpBanner(){
 }
 
 async function renderComparisonAll(){
-  const ph = document.getElementById('cmpPlaceholder'), content = document.getElementById('cmpContent');
+  const ph = document.getElementById('cmpPlaceholder'), content = document.getElementById('cmpContent'), loading = document.getElementById('cmpLoading');
   if(!ph || !content) return;
-  const [anyWeek, anyLmtd] = await Promise.all([ensurePrevLoaded('week'), ensurePrevLoaded('lmtd')]);
+  ph.style.display = 'none'; content.style.display = 'none'; loading.style.display = '';
+  let anyWeek = false, anyLmtd = false;
+  try{
+    [anyWeek, anyLmtd] = await Promise.all([ensurePrevLoaded('week'), ensurePrevLoaded('lmtd')]);
+  }catch(e){
+    console.error('renderComparisonAll: failed to load WoW/MoM data', e);
+    loading.style.display = 'none';
+    ph.style.display = '';
+    ph.textContent = 'Gagal memuat data WoW/MoM (koneksi tidak stabil) — coba refresh halaman ini.';
+    return;
+  }
+  loading.style.display = 'none';
   const any = anyWeek || anyLmtd;
   ph.style.display = any ? 'none' : '';
   content.style.display = any ? '' : 'none';
