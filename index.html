@@ -1357,12 +1357,28 @@ function chunkRows(rows){
 // chunks that a reader might still pick up). onProgress(done, total) is optional.
 async function saveChunked(prefix, rows, previousNumChunks, onProgress){
   const chunks = chunkRows(rows);
-  let allOk = true;
+  const failed = [];
   for(let i=0;i<chunks.length;i++){
     if(onProgress) onProgress(i+1, chunks.length);
     const ok = await storageSetWithRetry(prefix+i, chunks[i]);
-    if(!ok) allOk = false;
+    if(!ok) failed.push(i);
   }
+  // storageSetWithRetry already retries each chunk up to 5 times with backoff — if a chunk
+  // is STILL failing after that, the connection had a genuinely rough patch right then, not
+  // just a one-off blip. Rather than immediately reporting the whole save as failed (forcing
+  // the person to notice and re-upload the ENTIRE file), give the specific chunks that
+  // didn't make it one more full round after a longer pause — most of the time a bad patch
+  // has passed by then.
+  if(failed.length){
+    await new Promise(r=>setTimeout(r, 4000));
+    for(let k=failed.length-1; k>=0; k--){
+      const i = failed[k];
+      if(onProgress) onProgress(chunks.length, chunks.length);
+      const ok = await storageSetWithRetry(prefix+i, chunks[i]);
+      if(ok) failed.splice(k,1);
+    }
+  }
+  const allOk = failed.length === 0;
   if(allOk && previousNumChunks){
     for(let i=chunks.length;i<previousNumChunks;i++){
       await storageSet(prefix+i, null).catch(()=>{}); // best-effort cleanup, not fatal if it fails
