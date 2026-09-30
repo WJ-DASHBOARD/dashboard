@@ -1371,23 +1371,47 @@ async function saveChunked(prefix, rows, previousNumChunks, onProgress){
   return { allOk, numChunks: chunks.length };
 }
 
-// Reads and concatenates `${prefix}0` .. `${prefix}(numChunks-1)`.
+// Reads several keys in ONE call — used for the big chunked datasets (outlets,
+// sell-in, supply — each split into dozens of "prefix0".."prefixN" keys). Fetching
+// those one HTTP request per chunk works, but every request pays Apps Script's own
+// per-invocation overhead (typically a few hundred ms just to spin up), and browsers
+// only run ~6 requests to the same origin at once — so 75 chunks queues in waves and
+// can add up to real time. Batching them into one request removes almost all of that.
+async function storageGetMulti(keys){
+  if(!keys.length) return {};
+  try{
+    const res = await fetchWithTimeout(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'getMulti', keys })
+    }, 25000);
+    const data = await res.json();
+    if(!data || !data.ok) return {};
+    const out = {};
+    Object.keys(data.values || {}).forEach(k=>{
+      try{ out[k] = JSON.parse(data.values[k]); }catch(e){ out[k] = null; }
+    });
+    return out;
+  }catch(e){ console.error('storageGetMulti failed', e); return {}; }
+}
+
+// Reads and concatenates `${prefix}0` .. `${prefix}(numChunks-1)` — as ONE batched
+// request rather than one request per chunk (see storageGetMulti above).
 async function loadChunked(prefix, numChunks){
   if(!numChunks || numChunks<1) return [];
-  let parts = await Promise.all(Array.from({length:numChunks}, (_,i)=>storageGet(prefix+i)));
-  // storageGet already retries once per key on failure, but under a genuinely flaky
-  // connection (e.g. an unstable VPN) several chunks out of a large batch can still
-  // come back null even after that. Rather than accept a silently incomplete result,
-  // retry just the missing indices (not the whole batch) a couple more times with a
-  // short pause — this targets exactly the intermittent-loss pattern instead of
-  // re-fetching dozens of chunks that already succeeded.
+  const keys = Array.from({length:numChunks}, (_,i)=>prefix+i);
+  let got = await storageGetMulti(keys);
+  let parts = keys.map(k=> got[k] !== undefined ? got[k] : null);
+  // Same targeted-retry idea as before: under a genuinely flaky connection a few
+  // chunks can still come back missing even after the batched call — retry just
+  // those (as another small batch), not the whole thing.
   for(let attempt=0; attempt<2; attempt++){
-    const missing = [];
-    parts.forEach((c,i)=>{ if(c===null) missing.push(i); });
-    if(missing.length===0) break;
+    const missingKeys = [];
+    parts.forEach((c,i)=>{ if(c===null) missingKeys.push(keys[i]); });
+    if(missingKeys.length===0) break;
     await new Promise(r=>setTimeout(r, 1000));
-    const retried = await Promise.all(missing.map(i=>storageGet(prefix+i)));
-    missing.forEach((idx,k)=>{ parts[idx] = retried[k]; });
+    const retried = await storageGetMulti(missingKeys);
+    keys.forEach((k,i)=>{ if(parts[i]===null && retried[k]!==undefined) parts[i]=retried[k]; });
   }
   let rows = [];
   parts.forEach(c=>{ if(c) rows = rows.concat(c); });
