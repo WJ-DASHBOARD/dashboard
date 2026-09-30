@@ -889,7 +889,16 @@
     Belum ada data WoW maupun MoM untuk dibandingkan.
   </div>
   <div id="cmpContent" style="display:none;">
-    <div id="cmpMetricPanels"></div>
+    <div class="panel">
+      <h3 style="margin:0 0 8px;">Summary per Area / Branch / Micro Cluster</h3>
+      <div style="overflow:auto;">
+      <table class="summary" id="cmpMetricTable">
+        <thead id="cmpMetricHead"></thead>
+        <tbody id="cmpMetricBody"></tbody>
+        <tfoot id="cmpMetricFoot"></tfoot>
+      </table>
+      </div>
+    </div>
 
     <div class="panel">
       <h3 style="margin:0 0 8px;">Sell In per Kategori</h3>
@@ -2499,11 +2508,7 @@ const CMP_METRICS = [
   { key:'tertiary',  label:'Tertiary',                                fmt:fmtBn, goodUp:true },
 ];
 
-let expandedCmp = {};   // metricKey -> { areas:Set(areaIdx), branches:Set("areaIdx|branchIdx") }
-function cmpState(key){
-  if(!expandedCmp[key]) expandedCmp[key] = { areas:new Set(), branches:new Set() };
-  return expandedCmp[key];
-}
+let expandedCmp = { areas:new Set(), branches:new Set() };   // shared by every metric now that they're one table
 let cmpDetailPage = { week:1, lmtd:1 };
 const CMP_PAGE_SIZE = 60;
 
@@ -2558,28 +2563,18 @@ function cmpAggTree(rows, idx, valueFn){
   return tree;
 }
 
-function ensureCmpPanels(){
-  const el = document.getElementById('cmpMetricPanels');
-  if(el.dataset.built) return;
-  el.innerHTML = CMP_METRICS.map(m=>`
-    <div class="panel" style="margin-bottom:16px;">
-      <h3 style="margin:0 0 8px;">${m.label}</h3>
-      <div style="overflow:auto;">
-      <table class="summary" id="cmpTable_${m.key}">
-        <thead>
-          <tr><th rowspan="2" style="text-align:left;">Area / Branch / Micro Cluster</th><th rowspan="2">MTD</th><th colspan="2">WoW</th><th colspan="2">MoM</th></tr>
-          <tr><th style="font-weight:500;">Last Week</th><th style="font-weight:500;">Growth</th><th style="font-weight:500;">LMTD</th><th style="font-weight:500;">Growth</th></tr>
-        </thead>
-        <tbody id="cmpBody_${m.key}"></tbody>
-        <tfoot id="cmpFoot_${m.key}"></tfoot>
-      </table>
-      </div>
-    </div>`).join('');
-  el.dataset.built = '1';
+// One place per metric that hands back {cur, week, lmtd} trees — used to build the single
+// combined summary table below (row = Area/Branch/Micro, column-groups = the 6 metrics).
+function cmpMetricTrees(m){
+  const base = cmpBase(m.key);
+  const cur = cmpAggTree(base.curArr, base.idx, base.val);
+  const weekArr = cmpPrevArrFor(m.key, 'week');
+  const lmtdArr = cmpPrevArrFor(m.key, 'lmtd');
+  return { cur, week: weekArr ? cmpAggTree(weekArr, base.idx, base.val) : null, lmtd: lmtdArr ? cmpAggTree(lmtdArr, base.idx, base.val) : null };
 }
 
-// One row's worth of cells: current value + WoW pair + MoM pair, given the matching tree
-// nodes (or null when that node/branch doesn't exist in that comparison's tree at all).
+// One metric's worth of cells for one row: current value + WoW pair + MoM pair, given the
+// matching tree nodes (or null when that node/branch doesn't exist in that tree at all).
 function cmpRowCells(fmt, goodUp, curVal, weekTree, weekNode, lmtdTree, lmtdNode){
   const wv = weekNode ? weekNode.total : (weekTree ? 0 : null);
   const lv = lmtdNode ? lmtdNode.total : (lmtdTree ? 0 : null);
@@ -2588,59 +2583,93 @@ function cmpRowCells(fmt, goodUp, curVal, weekTree, weekNode, lmtdTree, lmtdNode
     + `<td>${lmtdTree ? fmt(lv) : '–'}</td><td>${lmtdTree ? dl(curVal, lv, goodUp, fmt) : ''}</td>`;
 }
 
-function renderCmpMetric(m){
-  const base = cmpBase(m.key);
-  const st = cmpState(m.key);
-  const curTree = cmpAggTree(base.curArr, base.idx, base.val);
-  const weekArr = cmpPrevArrFor(m.key, 'week');
-  const lmtdArr = cmpPrevArrFor(m.key, 'lmtd');
-  const weekTree = weekArr ? cmpAggTree(weekArr, base.idx, base.val) : null;
-  const lmtdTree = lmtdArr ? cmpAggTree(lmtdArr, base.idx, base.val) : null;
+// All 6 metrics share the exact same Area → Branch → Micro Cluster hierarchy and the exact
+// same 5-column shape (MTD | Last Week | Growth | LMTD | Growth) — so instead of 6 separate
+// panels, they're one table: one set of hierarchy rows, with each metric as its own group of
+// columns. This matches how Detail Outlet already puts every metric side by side per outlet.
+function renderCmpMetricsTable(){
+  const T = {}; CMP_METRICS.forEach(m=>{ T[m.key] = cmpMetricTrees(m); });
+  document.getElementById('cmpMetricHead').innerHTML =
+    `<tr><th rowspan="2" style="text-align:left;">Area / Branch / Micro Cluster</th>${CMP_METRICS.map(m=>`<th colspan="5">${m.label}</th>`).join('')}</tr>`
+    + `<tr>${CMP_METRICS.map(()=>`<th style="font-weight:500;">MTD</th><th style="font-weight:500;">Last Week</th><th style="font-weight:500;">Growth</th><th style="font-weight:500;">LMTD</th><th style="font-weight:500;">Growth</th>`).join('')}</tr>`;
 
-  const areaKeys = Object.keys(curTree).sort((a,b)=>curTree[b].total-curTree[a].total);
-  let gCur=0, gW=0, gL=0, html='';
+  // canonical area/branch/micro list = the union across every metric's current tree, ordered
+  // by total Stock (falls back to whichever metric actually has data if Stock doesn't)
+  const areaKeysSet = new Set();
+  CMP_METRICS.forEach(m=>Object.keys(T[m.key].cur).forEach(ak=>areaKeysSet.add(ak)));
+  const areaTotal = ak => CMP_METRICS.reduce((s,m)=>s + ((T[m.key].cur[ak]||{}).total||0), 0);
+  const areaKeys = Array.from(areaKeysSet).sort((a,b)=>areaTotal(b)-areaTotal(a));
 
+  const grandCur = {}, grandW = {}, grandL = {};
+  let html = '';
   areaKeys.forEach(ak=>{
-    const c = curTree[ak];
-    const wA = weekTree ? weekTree[ak] : undefined;
-    const lA = lmtdTree ? lmtdTree[ak] : undefined;
-    gCur += c.total; if(weekTree) gW += (wA?wA.total:0); if(lmtdTree) gL += (lA?lA.total:0);
-    const aOpen = st.areas.has(ak);
+    const aOpen = expandedCmp.areas.has(ak);
+    let rowCells = '';
+    CMP_METRICS.forEach(m=>{
+      const c = T[m.key].cur[ak] || { total:0, branches:{} };
+      const w = T[m.key].week ? (T[m.key].week[ak] || { total:0, branches:{} }) : null;
+      const l = T[m.key].lmtd ? (T[m.key].lmtd[ak] || { total:0, branches:{} }) : null;
+      grandCur[m.key] = (grandCur[m.key]||0) + c.total;
+      if(T[m.key].week) grandW[m.key] = (grandW[m.key]||0) + w.total;
+      if(T[m.key].lmtd) grandL[m.key] = (grandL[m.key]||0) + l.total;
+      rowCells += cmpRowCells(m.fmt, m.goodUp, c.total, T[m.key].week, w, T[m.key].lmtd, l);
+    });
     html += `<tr>
-      <td><span class="expand-toggle" data-scope="cmp-area" data-key="${m.key}|${ak}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${aOpen?'⊟':'⊞'}</span><b>${META.areas[ak]}</b></td>
-      ${cmpRowCells(m.fmt, m.goodUp, c.total, weekTree, wA, lmtdTree, lA)}
+      <td><span class="expand-toggle" data-scope="cmp-area" data-key="${ak}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${aOpen?'⊟':'⊞'}</span><b>${META.areas[ak]}</b></td>
+      ${rowCells}
     </tr>`;
     if(!aOpen) return;
-    const brKeys = Object.keys(c.branches).sort((x,y)=>c.branches[y].total-c.branches[x].total);
+    const brKeysSet = new Set();
+    CMP_METRICS.forEach(m=>Object.keys((T[m.key].cur[ak]||{}).branches||{}).forEach(bk=>brKeysSet.add(bk)));
+    const branchTotal = bk => CMP_METRICS.reduce((s,m)=>s + (((T[m.key].cur[ak]||{}).branches||{})[bk]?.total||0), 0);
+    const brKeys = Array.from(brKeysSet).sort((x,y)=>branchTotal(y)-branchTotal(x));
     brKeys.forEach(bk=>{
-      const cb = c.branches[bk];
-      const wB = wA ? wA.branches[bk] : undefined;
-      const lB = lA ? lA.branches[bk] : undefined;
       const bKey = ak+'|'+bk;
-      const bOpen = st.branches.has(bKey);
+      const bOpen = expandedCmp.branches.has(bKey);
+      let bRowCells = '';
+      CMP_METRICS.forEach(m=>{
+        const cb = (T[m.key].cur[ak]||{}).branches?.[bk] || { total:0, micros:{} };
+        const wA = T[m.key].week ? T[m.key].week[ak] : null;
+        const lA = T[m.key].lmtd ? T[m.key].lmtd[ak] : null;
+        const wb = wA ? (wA.branches[bk] || { total:0, micros:{} }) : null;
+        const lb = lA ? (lA.branches[bk] || { total:0, micros:{} }) : null;
+        bRowCells += cmpRowCells(m.fmt, m.goodUp, cb.total, T[m.key].week, wb, T[m.key].lmtd, lb);
+      });
       html += `<tr style="background:#FAFAF8;">
-        <td style="padding-left:24px;"><span class="expand-toggle" data-scope="cmp-branch" data-key="${m.key}|${bKey}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${bOpen?'⊟':'⊞'}</span>${META.branches[bk]}</td>
-        ${cmpRowCells(m.fmt, m.goodUp, cb.total, weekTree, wB, lmtdTree, lB)}
+        <td style="padding-left:24px;"><span class="expand-toggle" data-scope="cmp-branch" data-key="${bKey}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${bOpen?'⊟':'⊞'}</span>${META.branches[bk]}</td>
+        ${bRowCells}
       </tr>`;
       if(!bOpen) return;
-      const miKeys = Object.keys(cb.micros).sort((x,y)=>cb.micros[y]-cb.micros[x]);
+      const miKeysSet = new Set();
+      CMP_METRICS.forEach(m=>Object.keys(((T[m.key].cur[ak]||{}).branches?.[bk]||{}).micros||{}).forEach(mik=>miKeysSet.add(mik)));
+      const microTotal = mik => CMP_METRICS.reduce((s,m)=>s + ((((T[m.key].cur[ak]||{}).branches?.[bk]||{}).micros||{})[mik]||0), 0);
+      const miKeys = Array.from(miKeysSet).sort((x,y)=>microTotal(y)-microTotal(x));
       miKeys.forEach(mik=>{
-        const cv = cb.micros[mik];
-        const wv = wB ? (wB.micros[mik]||0) : (wB!==undefined ? 0 : null);
-        const lv = lB ? (lB.micros[mik]||0) : (lB!==undefined ? 0 : null);
+        let miRowCells = '';
+        CMP_METRICS.forEach(m=>{
+          const cb = (T[m.key].cur[ak]||{}).branches?.[bk] || { micros:{} };
+          const cv = cb.micros[mik] || 0;
+          const wA = T[m.key].week ? T[m.key].week[ak] : null;
+          const wb = wA ? wA.branches[bk] : null;
+          const lA = T[m.key].lmtd ? T[m.key].lmtd[ak] : null;
+          const lb = lA ? lA.branches[bk] : null;
+          const wv = wb ? (wb.micros[mik]||0) : (wb!==undefined && wb!==null ? 0 : null);
+          const lv = lb ? (lb.micros[mik]||0) : (lb!==undefined && lb!==null ? 0 : null);
+          miRowCells += `<td>${m.fmt(cv)}</td>`
+            + `<td>${T[m.key].week ? m.fmt(wv) : '–'}</td><td>${T[m.key].week ? dl(cv, wv, m.goodUp, m.fmt) : ''}</td>`
+            + `<td>${T[m.key].lmtd ? m.fmt(lv) : '–'}</td><td>${T[m.key].lmtd ? dl(cv, lv, m.goodUp, m.fmt) : ''}</td>`;
+        });
         html += `<tr style="background:#F5F4F1;">
           <td style="padding-left:44px;color:var(--ink-soft);font-size:11.5px;">${META.micros[mik]}</td>
-          <td>${m.fmt(cv)}</td>
-          <td>${weekTree ? m.fmt(wv) : '–'}</td><td>${weekTree ? dl(cv, wv, m.goodUp, m.fmt) : ''}</td>
-          <td>${lmtdTree ? m.fmt(lv) : '–'}</td><td>${lmtdTree ? dl(cv, lv, m.goodUp, m.fmt) : ''}</td>
+          ${miRowCells}
         </tr>`;
       });
     });
   });
 
-  document.getElementById('cmpBody_'+m.key).innerHTML = html || `<tr><td colspan="6" style="color:var(--muted);">Tidak ada data.</td></tr>`;
-  document.getElementById('cmpFoot_'+m.key).innerHTML = areaKeys.length ? `<tr style="font-weight:700;background:#FAF9F7;">
-    <td>Total</td>${cmpRowCells(m.fmt, m.goodUp, gCur, weekTree, weekTree?{total:gW}:null, lmtdTree, lmtdTree?{total:gL}:null)}
+  document.getElementById('cmpMetricBody').innerHTML = html || `<tr><td colspan="${1+CMP_METRICS.length*5}" style="color:var(--muted);">Tidak ada data.</td></tr>`;
+  document.getElementById('cmpMetricFoot').innerHTML = areaKeys.length ? `<tr style="font-weight:700;background:#FAF9F7;">
+    <td>Total</td>${CMP_METRICS.map(m=>cmpRowCells(m.fmt, m.goodUp, grandCur[m.key]||0, T[m.key].week, T[m.key].week?{total:grandW[m.key]||0}:null, T[m.key].lmtd, T[m.key].lmtd?{total:grandL[m.key]||0}:null)).join('')}
   </tr>` : '';
 }
 
@@ -2763,8 +2792,7 @@ async function renderComparisonAll(){
   content.style.display = any ? '' : 'none';
   refreshCmpBanner();
   if(!any) return;
-  ensureCmpPanels();
-  CMP_METRICS.forEach(renderCmpMetric);
+  renderCmpMetricsTable();
   renderCmpCategory();
   renderCmpDetailOne('week', 'Week');
   renderCmpDetailOne('lmtd', 'Lmtd');
@@ -6625,15 +6653,11 @@ function bindEvents(){
       if(expandedBranchesSup.has(key)) expandedBranchesSup.delete(key); else expandedBranchesSup.add(key);
       renderSupplySummaryTable();
     } else if(t.dataset.scope==='cmp-area'){
-      const [mKey, ak] = key.split('|');
-      const st = cmpState(mKey);
-      if(st.areas.has(ak)) st.areas.delete(ak); else st.areas.add(ak);
-      renderCmpMetric(CMP_METRICS.find(m=>m.key===mKey));
+      if(expandedCmp.areas.has(key)) expandedCmp.areas.delete(key); else expandedCmp.areas.add(key);
+      renderCmpMetricsTable();
     } else if(t.dataset.scope==='cmp-branch'){
-      const i = key.indexOf('|'); const mKey = key.slice(0,i); const bKey = key.slice(i+1);
-      const st = cmpState(mKey);
-      if(st.branches.has(bKey)) st.branches.delete(bKey); else st.branches.add(bKey);
-      renderCmpMetric(CMP_METRICS.find(m=>m.key===mKey));
+      if(expandedCmp.branches.has(key)) expandedCmp.branches.delete(key); else expandedCmp.branches.add(key);
+      renderCmpMetricsTable();
     }
   });
 
