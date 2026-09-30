@@ -51,7 +51,13 @@
   .btn-sm{padding:6px 12px;font-size:12.5px;border-radius:6px;}
 
   .filterbar{background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20;box-shadow:0 1px 0 rgba(0,0,0,.02);}
-  .filterbar-inner{max-width:1400px;margin:0 auto;padding:14px 20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .filterbar-inner{max-width:1400px;margin:0 auto;padding:14px 20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;}
+  /* Filters/chips stay grouped tightly together and wrap AMONG THEMSELVES if the window is
+     narrow. search-wrap is a separate item at the top level: on a wide screen space-between
+     pushes it to the far right of the same row as this group; if it doesn't fit and wraps
+     to its own row, being the only item left on that row means space-between naturally
+     places it at the start (flush left) instead of stranding it off to the right. */
+  .filter-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
   select, input[type=text]{
     font-family:inherit;font-size:13.5px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;
     background:#fff;color:var(--ink);min-width:140px;
@@ -66,7 +72,7 @@
   .chip[data-cat="KAM"].active{background:#7A2E8C;border-color:#7A2E8C;}
   .chip[data-cat="KRO"].active{background:var(--red);border-color:var(--red);}
   .chip[data-cat="PJP"].active{background:#2A6FB0;border-color:#2A6FB0;}
-  .search-wrap{margin-left:auto;display:flex;gap:8px;align-items:center;}
+  .search-wrap{display:flex;gap:8px;align-items:center;}
   .refresh-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:6px;}
 
   .tabbar{background:var(--card);border-bottom:1px solid var(--border);}
@@ -248,15 +254,17 @@
 
 <div class="filterbar">
   <div class="filterbar-inner">
-    <select id="fBrand"><option value="">Semua Brand</option></select>
-    <select id="fArea"><option value="">Semua Area</option></select>
-    <select id="fBranch"><option value="">Semua Branch</option></select>
-    <select id="fMicro"><option value="">Semua Micro Cluster</option></select>
-    <div class="chip-row" id="catChips">
-      <div class="chip active" data-cat="">Semua Outlet</div>
-      <div class="chip" data-cat="KAM">KAM</div>
-      <div class="chip" data-cat="KRO">KRO</div>
-      <div class="chip" data-cat="PJP">PJP</div>
+    <div class="filter-controls">
+      <select id="fBrand"><option value="">Semua Brand</option></select>
+      <select id="fArea"><option value="">Semua Area</option></select>
+      <select id="fBranch"><option value="">Semua Branch</option></select>
+      <select id="fMicro"><option value="">Semua Micro Cluster</option></select>
+      <div class="chip-row" id="catChips">
+        <div class="chip active" data-cat="">Semua Outlet</div>
+        <div class="chip" data-cat="KAM">KAM</div>
+        <div class="chip" data-cat="KRO">KRO</div>
+        <div class="chip" data-cat="PJP">PJP</div>
+      </div>
     </div>
     <div class="search-wrap">
       <input type="text" id="fSearch" placeholder="Cari Outlet ID / Nama / Branch (mis. &quot;cell abc kuningan&quot;)…" style="min-width:260px;">
