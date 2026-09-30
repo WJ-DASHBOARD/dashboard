@@ -901,53 +901,30 @@
     </div>
 
     <div class="panel">
-      <h3 style="margin:0 0 8px;">Sell In per Kategori</h3>
+      <h3 style="margin:0 0 8px;">Summary per Kategori</h3>
       <div style="overflow:auto;">
       <table class="summary" id="cmpCatTable">
-        <thead>
-          <tr><th rowspan="2" style="text-align:left;">Kategori</th><th rowspan="2">MTD</th><th colspan="2">WoW</th><th colspan="2">MoM</th></tr>
-          <tr><th style="font-weight:500;">Last Week</th><th style="font-weight:500;">Growth</th><th style="font-weight:500;">LMTD</th><th style="font-weight:500;">Growth</th></tr>
-        </thead>
+        <thead id="cmpCatHead"></thead>
         <tbody id="cmpCatBody"></tbody>
       </table>
       </div>
     </div>
 
     <div class="panel">
-      <div id="cmpDetailToggleWeek" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;">
-        <h3 style="margin:0;"><span id="cmpDetailArrowWeek">▸</span> Detail Outlet — WoW (vs Last Week)</h3>
+      <div id="cmpDetailToggle" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;">
+        <h3 style="margin:0;"><span id="cmpDetailArrow">▸</span> Detail Outlet</h3>
         <span style="color:var(--muted);font-size:12px;">klik untuk buka</span>
       </div>
-      <div id="cmpDetailWrapWeek" style="display:none;margin-top:8px;">
+      <div id="cmpDetailWrap" style="display:none;margin-top:8px;">
         <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;font-size:12px;margin-bottom:6px;">
-          <span id="cmpPageInfoWeek">–</span>
-          <button id="cmpPrevPageWeek" class="btn btn-ghost btn-sm">&lsaquo; Sebelumnya</button>
-          <button id="cmpNextPageWeek" class="btn btn-ghost btn-sm">Berikutnya &rsaquo;</button>
+          <span id="cmpPageInfo">–</span>
+          <button id="cmpPrevPage" class="btn btn-ghost btn-sm">&lsaquo; Sebelumnya</button>
+          <button id="cmpNextPage" class="btn btn-ghost btn-sm">Berikutnya &rsaquo;</button>
         </div>
         <div style="overflow:auto;max-height:520px;">
-        <table class="summary" id="cmpDetailTableWeek">
-          <thead id="cmpDetailHeadWeek"></thead>
-          <tbody id="cmpDetailBodyWeek"></tbody>
-        </table>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div id="cmpDetailToggleLmtd" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;">
-        <h3 style="margin:0;"><span id="cmpDetailArrowLmtd">▸</span> Detail Outlet — MoM (vs LMTD)</h3>
-        <span style="color:var(--muted);font-size:12px;">klik untuk buka</span>
-      </div>
-      <div id="cmpDetailWrapLmtd" style="display:none;margin-top:8px;">
-        <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;font-size:12px;margin-bottom:6px;">
-          <span id="cmpPageInfoLmtd">–</span>
-          <button id="cmpPrevPageLmtd" class="btn btn-ghost btn-sm">&lsaquo; Sebelumnya</button>
-          <button id="cmpNextPageLmtd" class="btn btn-ghost btn-sm">Berikutnya &rsaquo;</button>
-        </div>
-        <div style="overflow:auto;max-height:520px;">
-        <table class="summary" id="cmpDetailTableLmtd">
-          <thead id="cmpDetailHeadLmtd"></thead>
-          <tbody id="cmpDetailBodyLmtd"></tbody>
+        <table class="summary" id="cmpDetailTable">
+          <thead id="cmpDetailHead"></thead>
+          <tbody id="cmpDetailBody"></tbody>
         </table>
         </div>
       </div>
@@ -2515,8 +2492,9 @@ const CMP_METRICS = [
 ];
 
 let expandedCmp = { areas:new Set(), branches:new Set() };   // shared by every metric now that they're one table
-let cmpDetailPage = { week:1, lmtd:1 };
-let cmpDetailOpen = { week:false, lmtd:false };   // Detail Outlet starts collapsed so the Summary table is visible without scrolling past it
+let cmpDefaultExpanded = false;   // the first render auto-expands every Area down to Branch level (see renderCmpMetricsTable)
+let cmpDetailPage = 1;
+let cmpDetailOpen = false;   // Detail Outlet starts collapsed so the Summary table is visible without scrolling past it
 const CMP_PAGE_SIZE = 60;
 
 const cmpSupplyVal = r => SUP_CAT_FIELDS.reduce((a,c)=>a+r[IDX_SUP[c+'Rev']], 0);
@@ -2607,6 +2585,10 @@ function renderCmpMetricsTable(){
   const areaTotal = ak => CMP_METRICS.reduce((s,m)=>s + ((T[m.key].cur[ak]||{}).total||0), 0);
   const areaKeys = Array.from(areaKeysSet).sort((a,b)=>areaTotal(b)-areaTotal(a));
 
+  // First time this renders, expand every Area so Branches are visible immediately — no
+  // clicking needed to see "all branch". Collapsing afterward is still remembered as usual.
+  if(!cmpDefaultExpanded){ areaKeys.forEach(ak=>expandedCmp.areas.add(ak)); cmpDefaultExpanded = true; }
+
   const grandCur = {}, grandW = {}, grandL = {};
   let html = '';
   areaKeys.forEach(ak=>{
@@ -2680,87 +2662,120 @@ function renderCmpMetricsTable(){
   </tr>` : '';
 }
 
+// Same idea as the Summary table above, but grouped by Kategori (PJP/KAM/KRO) instead of
+// Area/Branch/Micro — every metric side by side, so this isn't just Sell In anymore.
 function renderCmpCategory(){
-  const base = cmpBase('sellin');
-  const curAgg = {}, weekAgg = {}, lmtdAgg = {};
-  filteredSellin.forEach(r=>{ const c=r[IDX_S.catIdx]; curAgg[c]=(curAgg[c]||0)+base.val(r); });
-  const weekArr = cmpPrevArrFor('sellin', 'week');
-  const lmtdArr = cmpPrevArrFor('sellin', 'lmtd');
-  if(weekArr) weekArr.forEach(r=>{ const c=r[IDX_S.catIdx]; weekAgg[c]=(weekAgg[c]||0)+base.val(r); });
-  if(lmtdArr) lmtdArr.forEach(r=>{ const c=r[IDX_S.catIdx]; lmtdAgg[c]=(lmtdAgg[c]||0)+base.val(r); });
-  const cats = META.cats.map((c,i)=>i).filter(i=>(curAgg[i]||0)>0 || (weekAgg[i]||0)>0 || (lmtdAgg[i]||0)>0);
-  let gc=0, gw=0, gl=0;
+  document.getElementById('cmpCatHead').innerHTML =
+    `<tr><th rowspan="2" style="text-align:left;">Kategori</th>${CMP_METRICS.map(m=>`<th colspan="5">${m.label}</th>`).join('')}</tr>`
+    + `<tr>${CMP_METRICS.map(()=>`<th style="font-weight:500;">MTD</th><th style="font-weight:500;">Last Week</th><th style="font-weight:500;">Growth</th><th style="font-weight:500;">LMTD</th><th style="font-weight:500;">Growth</th>`).join('')}</tr>`;
+
+  const aggByCat = (rows, idx, valueFn) => { const agg = {}; rows.forEach(r=>{ const c=r[idx.catIdx]; agg[c]=(agg[c]||0)+(valueFn(r)||0); }); return agg; };
+  const T = {};
+  CMP_METRICS.forEach(m=>{
+    const base = cmpBase(m.key);
+    const weekArr = cmpPrevArrFor(m.key, 'week'), lmtdArr = cmpPrevArrFor(m.key, 'lmtd');
+    T[m.key] = { cur: aggByCat(base.curArr, base.idx, base.val),
+      week: weekArr ? aggByCat(weekArr, base.idx, base.val) : null,
+      lmtd: lmtdArr ? aggByCat(lmtdArr, base.idx, base.val) : null };
+  });
+  const catsSet = new Set();
+  CMP_METRICS.forEach(m=>Object.keys(T[m.key].cur).forEach(c=>{ if(T[m.key].cur[c]>0) catsSet.add(c); }));
+  const cats = Array.from(catsSet).sort((a,b)=>a-b);
+
+  const grand = {};
   let html = cats.map(ci=>{
-    const cv=curAgg[ci]||0, wv=weekAgg[ci]||0, lv=lmtdAgg[ci]||0;
-    gc+=cv; if(weekArr) gw+=wv; if(lmtdArr) gl+=lv;
-    return `<tr><td><span class="badge ${META.cats[ci]}">${META.cats[ci]}</span></td><td>${fmtBn(cv)}</td>`
-      + `<td>${weekArr?fmtBn(wv):'–'}</td><td>${weekArr?dl(cv,wv,true,fmtBn):''}</td>`
-      + `<td>${lmtdArr?fmtBn(lv):'–'}</td><td>${lmtdArr?dl(cv,lv,true,fmtBn):''}</td></tr>`;
+    let cells = '';
+    CMP_METRICS.forEach(m=>{
+      const cv = T[m.key].cur[ci]||0, wv = T[m.key].week ? (T[m.key].week[ci]||0) : null, lv = T[m.key].lmtd ? (T[m.key].lmtd[ci]||0) : null;
+      grand[m.key] = grand[m.key] || {c:0,w:0,l:0};
+      grand[m.key].c += cv; if(T[m.key].week) grand[m.key].w += wv; if(T[m.key].lmtd) grand[m.key].l += lv;
+      cells += `<td>${m.fmt(cv)}</td><td>${T[m.key].week?m.fmt(wv):'–'}</td><td>${T[m.key].week?dl(cv,wv,m.goodUp,m.fmt):''}</td>`
+        + `<td>${T[m.key].lmtd?m.fmt(lv):'–'}</td><td>${T[m.key].lmtd?dl(cv,lv,m.goodUp,m.fmt):''}</td>`;
+    });
+    return `<tr><td><span class="badge ${META.cats[ci]}">${META.cats[ci]}</span></td>${cells}</tr>`;
   }).join('');
-  html += `<tr style="font-weight:700;background:#FAF9F7;"><td>Total</td><td>${fmtBn(gc)}</td>`
-    + `<td>${weekArr?fmtBn(gw):'–'}</td><td>${weekArr?dl(gc,gw,true,fmtBn):''}</td>`
-    + `<td>${lmtdArr?fmtBn(gl):'–'}</td><td>${lmtdArr?dl(gc,gl,true,fmtBn):''}</td></tr>`;
-  document.getElementById('cmpCatBody').innerHTML = cats.length ? html : '<tr><td colspan="6" style="color:var(--muted);">Tidak ada data.</td></tr>';
+  let totalCells = '';
+  CMP_METRICS.forEach(m=>{
+    const g = grand[m.key] || {c:0,w:0,l:0};
+    totalCells += `<td>${m.fmt(g.c)}</td><td>${T[m.key].week?m.fmt(g.w):'–'}</td><td>${T[m.key].week?dl(g.c,g.w,m.goodUp,m.fmt):''}</td>`
+      + `<td>${T[m.key].lmtd?m.fmt(g.l):'–'}</td><td>${T[m.key].lmtd?dl(g.c,g.l,m.goodUp,m.fmt):''}</td>`;
+  });
+  html += `<tr style="font-weight:700;background:#FAF9F7;"><td>Total</td>${totalCells}</tr>`;
+  document.getElementById('cmpCatBody').innerHTML = cats.length ? html : `<tr><td colspan="${1+CMP_METRICS.length*5}" style="color:var(--muted);">Tidak ada data.</td></tr>`;
 }
 
-// Detail Outlet — ONE mode at a time (this table stays the simpler 3-column-per-metric shape;
-// WoW and MoM are two separate stacked tables rather than one very wide merged one).
-function toggleCmpDetail(mode, tag){
-  cmpDetailOpen[mode] = !cmpDetailOpen[mode];
-  document.getElementById('cmpDetailWrap'+tag).style.display = cmpDetailOpen[mode] ? '' : 'none';
-  document.getElementById('cmpDetailArrow'+tag).textContent = cmpDetailOpen[mode] ? '▾' : '▸';
-  if(cmpDetailOpen[mode]) renderCmpDetailOne(mode, tag);   // lazy: only build the table the first time it's opened
+// Detail Outlet — ONE merged table, WoW and MoM side by side per metric (same shape as the
+// Summary table above), so there's only one list of outlets to scroll through, not two.
+function toggleCmpDetail(){
+  cmpDetailOpen = !cmpDetailOpen;
+  document.getElementById('cmpDetailWrap').style.display = cmpDetailOpen ? '' : 'none';
+  document.getElementById('cmpDetailArrow').textContent = cmpDetailOpen ? '▾' : '▸';
+  if(cmpDetailOpen) renderCmpDetail();   // lazy: only build the table the first time it's opened
 }
 
-function renderCmpDetailOne(mode, tag){
-  if(!cmpDetailOpen[mode]) return;   // collapsed — skip the (fairly heavy) render until the person opens it
+function renderCmpDetail(){
+  if(!cmpDetailOpen) return;   // collapsed — skip the (fairly heavy) render until the person opens it
   const sellinIdxCur = new Map(); filteredSellin.forEach(r=>sellinIdxCur.set(META.brands[r[IDX_S.brandIdx]]+'|'+r[IDX_S.outletId], r));
   const supplyIdxCur = new Map(); filteredSupply.forEach(r=>supplyIdxCur.set(META.brands[r[IDX_SUP.brandIdx]]+'|'+r[IDX_SUP.outletId], r));
-  const sellinArr = cmpPrevArrFor('ga', mode);  // ga/secondary/tertiary/sellin all key off the same sellin snapshot rows
-  const supplyArr = cmpPrevArrFor('supply', mode);
-  const stockArr  = cmpPrevArrFor('stock', mode);
-  const sellinIdxPrev = new Map(); if(sellinArr) sellinArr.forEach(r=>sellinIdxPrev.set(META.brands[r[IDX_S.brandIdx]]+'|'+r[IDX_S.outletId], r));
-  const supplyIdxPrev = new Map(); if(supplyArr) supplyArr.forEach(r=>supplyIdxPrev.set(META.brands[r[IDX_SUP.brandIdx]]+'|'+r[IDX_SUP.outletId], r));
-  const stockIdxPrev = new Map(); if(stockArr) stockArr.forEach(r=>stockIdxPrev.set(META.brands[r[IDX.brandIdx]]+'|'+r[IDX.outletId], r));
+  const idxFor = (kind, mode) => {
+    const arr = cmpPrevArrFor(kind==='ga'?'ga':kind, mode);
+    const idx = kind==='stock' ? IDX : (kind==='supply' ? IDX_SUP : IDX_S);
+    const m = new Map(); if(arr) arr.forEach(r=>m.set(META.brands[r[idx.brandIdx]]+'|'+r[idx.outletId], r));
+    return { arr, map: m };
+  };
+  const sellinW = idxFor('ga','week'), sellinL = idxFor('ga','lmtd');
+  const supplyW = idxFor('supply','week'), supplyL = idxFor('supply','lmtd');
+  const stockW = idxFor('stock','week'), stockL = idxFor('stock','lmtd');
 
-  const cLabel = mode==='lmtd' ? 'LMTD' : 'Last Week';
-  document.getElementById('cmpDetailHead'+tag).innerHTML = `
+  document.getElementById('cmpDetailHead').innerHTML = `
     <tr>
       <th rowspan="2" style="text-align:left;">Brand</th><th rowspan="2" style="text-align:left;">Branch</th><th rowspan="2" style="text-align:left;">Micro Cluster</th>
       <th rowspan="2" style="text-align:left;">Outlet ID</th><th rowspan="2" style="text-align:left;">Nama</th><th rowspan="2">Kategori</th>
-      ${CMP_METRICS.map(m=>`<th colspan="3">${m.label}</th>`).join('')}
+      ${CMP_METRICS.map(m=>`<th colspan="5">${m.label}</th>`).join('')}
     </tr>
-    <tr>${CMP_METRICS.map(()=>`<th style="font-weight:500;">MTD</th><th style="font-weight:500;">${cLabel}</th><th style="font-weight:500;">Growth</th>`).join('')}</tr>`;
+    <tr>${CMP_METRICS.map(()=>`<th style="font-weight:500;">MTD</th><th style="font-weight:500;">Last Week</th><th style="font-weight:500;">Growth</th><th style="font-weight:500;">LMTD</th><th style="font-weight:500;">Growth</th>`).join('')}</tr>`;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / CMP_PAGE_SIZE));
-  if(cmpDetailPage[mode] > totalPages) cmpDetailPage[mode] = totalPages;
-  const startIdx = (cmpDetailPage[mode]-1) * CMP_PAGE_SIZE;
+  if(cmpDetailPage > totalPages) cmpDetailPage = totalPages;
+  const startIdx = (cmpDetailPage-1) * CMP_PAGE_SIZE;
   const pageRows = filtered.slice(startIdx, startIdx + CMP_PAGE_SIZE);
 
   const cellsFor = (r) => {
     const key = META.brands[r[IDX.brandIdx]]+'|'+r[IDX.outletId];
     const sc = sellinIdxCur.get(key), su = supplyIdxCur.get(key);
-    const sp = sellinIdxPrev.get(key), sup2 = supplyIdxPrev.get(key), stp = stockIdxPrev.get(key);
     return CMP_METRICS.map(m=>{
-      let cv=0, pv=null, avail=false;
-      if(m.key==='stock'){ cv = stockAmt(r); avail = !!stockArr; pv = avail ? (stp?stockAmt(stp):0) : null; }
-      else if(m.key==='ga'){ cv = sc?sc[IDX_S.rguGa]:0; avail = !!sellinArr && cmpPartOk('ga',mode); pv = avail?(sp?sp[IDX_S.rguGa]:0):null; }
-      else if(m.key==='sellin'){ cv = sc?(sc[IDX_S.sellinSp]+sc[IDX_S.sellinVou]+sc[IDX_S.sellinSaldo]):0; avail = !!sellinArr && cmpPartOk('sellin',mode); pv = avail?(sp?(sp[IDX_S.sellinSp]+sp[IDX_S.sellinVou]+sp[IDX_S.sellinSaldo]):0):null; }
-      else if(m.key==='supply'){ cv = su?cmpSupplyVal(su):0; avail = !!supplyArr; pv = avail?(sup2?cmpSupplyVal(sup2):0):null; }
-      else if(m.key==='secondary'){ cv = sc?sc[IDX_S.secondary]:0; avail = !!sellinArr && cmpPartOk('secondary',mode); pv = avail?(sp?sp[IDX_S.secondary]:0):null; }
-      else if(m.key==='tertiary'){ cv = sc?sc[IDX_S.tertiary]:0; avail = !!sellinArr && cmpPartOk('tertiary',mode); pv = avail?(sp?sp[IDX_S.tertiary]:0):null; }
-      return `<td>${m.fmt(cv)}</td><td>${avail?m.fmt(pv):'–'}</td><td>${avail?dl(cv,pv,m.goodUp,m.fmt):''}</td>`;
+      let cv=0, wv=null, lv=null, wOk=false, lOk=false;
+      if(m.key==='stock'){
+        cv = stockAmt(r);
+        wOk = !!stockW.arr; const wr = stockW.map.get(key); wv = wOk ? (wr?stockAmt(wr):0) : null;
+        lOk = !!stockL.arr; const lr = stockL.map.get(key); lv = lOk ? (lr?stockAmt(lr):0) : null;
+      } else if(m.key==='supply'){
+        cv = su?cmpSupplyVal(su):0;
+        wOk = !!supplyW.arr; const wr = supplyW.map.get(key); wv = wOk ? (wr?cmpSupplyVal(wr):0) : null;
+        lOk = !!supplyL.arr; const lr = supplyL.map.get(key); lv = lOk ? (lr?cmpSupplyVal(lr):0) : null;
+      } else {
+        const fIdx = m.key==='ga' ? IDX_S.rguGa : m.key==='sellin' ? null : m.key==='secondary' ? IDX_S.secondary : IDX_S.tertiary;
+        const curVal = m.key==='sellin' ? (sc?(sc[IDX_S.sellinSp]+sc[IDX_S.sellinVou]+sc[IDX_S.sellinSaldo]):0) : (sc?sc[fIdx]:0);
+        cv = curVal;
+        const partKey = m.key==='sellin' ? 'sellin' : m.key;
+        wOk = !!sellinW.arr && cmpPartOk(partKey,'week'); const wr = sellinW.map.get(key);
+        wv = wOk ? (wr ? (m.key==='sellin' ? (wr[IDX_S.sellinSp]+wr[IDX_S.sellinVou]+wr[IDX_S.sellinSaldo]) : wr[fIdx]) : 0) : null;
+        lOk = !!sellinL.arr && cmpPartOk(partKey,'lmtd'); const lr = sellinL.map.get(key);
+        lv = lOk ? (lr ? (m.key==='sellin' ? (lr[IDX_S.sellinSp]+lr[IDX_S.sellinVou]+lr[IDX_S.sellinSaldo]) : lr[fIdx]) : 0) : null;
+      }
+      return `<td>${m.fmt(cv)}</td><td>${wOk?m.fmt(wv):'–'}</td><td>${wOk?dl(cv,wv,m.goodUp,m.fmt):''}</td>`
+        + `<td>${lOk?m.fmt(lv):'–'}</td><td>${lOk?dl(cv,lv,m.goodUp,m.fmt):''}</td>`;
     }).join('');
   };
 
-  const colCount = 6 + CMP_METRICS.length*3;
-  document.getElementById('cmpDetailBody'+tag).innerHTML = pageRows.length ? pageRows.map(r=>
+  const colCount = 6 + CMP_METRICS.length*5;
+  document.getElementById('cmpDetailBody').innerHTML = pageRows.length ? pageRows.map(r=>
     `<tr><td>${META.brands[r[IDX.brandIdx]]}</td><td>${META.branches[r[IDX.branchIdx]]}</td><td>${META.micros[r[IDX.microIdx]]}</td><td>${r[IDX.outletId]}</td><td>${r[IDX.outletName]}</td><td>${META.cats[r[IDX.catIdx]]}</td>${cellsFor(r)}</tr>`
   ).join('') : `<tr><td colspan="${colCount}" style="color:var(--muted);">Tidak ada data.</td></tr>`;
 
-  document.getElementById('cmpPageInfo'+tag).textContent = `Halaman ${cmpDetailPage[mode]} / ${totalPages} (${fmtN(filtered.length)} outlet)`;
-  document.getElementById('cmpPrevPage'+tag).disabled = cmpDetailPage[mode]<=1;
-  document.getElementById('cmpNextPage'+tag).disabled = cmpDetailPage[mode]>=totalPages;
+  document.getElementById('cmpPageInfo').textContent = `Halaman ${cmpDetailPage} / ${totalPages} (${fmtN(filtered.length)} outlet)`;
+  document.getElementById('cmpPrevPage').disabled = cmpDetailPage<=1;
+  document.getElementById('cmpNextPage').disabled = cmpDetailPage>=totalPages;
 }
 
 function cmpDateLabel(kind, mode){
@@ -2809,8 +2824,7 @@ async function renderComparisonAll(){
   if(!any) return;
   renderCmpMetricsTable();
   renderCmpCategory();
-  renderCmpDetailOne('week', 'Week');
-  renderCmpDetailOne('lmtd', 'Lmtd');
+  renderCmpDetail();
 }
 
 // ---------- filtering ----------
@@ -6708,12 +6722,9 @@ function bindEvents(){
   });
 
   document.getElementById('prevPage').addEventListener('click', ()=>{ if(page>1){page--; renderTable();} });
-  document.getElementById('cmpDetailToggleWeek').addEventListener('click', ()=>toggleCmpDetail('week','Week'));
-  document.getElementById('cmpDetailToggleLmtd').addEventListener('click', ()=>toggleCmpDetail('lmtd','Lmtd'));
-  document.getElementById('cmpPrevPageWeek').addEventListener('click', ()=>{ if(cmpDetailPage.week>1){cmpDetailPage.week--; renderCmpDetailOne('week','Week');} });
-  document.getElementById('cmpNextPageWeek').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filtered.length/CMP_PAGE_SIZE)); if(cmpDetailPage.week<tp){cmpDetailPage.week++; renderCmpDetailOne('week','Week');} });
-  document.getElementById('cmpPrevPageLmtd').addEventListener('click', ()=>{ if(cmpDetailPage.lmtd>1){cmpDetailPage.lmtd--; renderCmpDetailOne('lmtd','Lmtd');} });
-  document.getElementById('cmpNextPageLmtd').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filtered.length/CMP_PAGE_SIZE)); if(cmpDetailPage.lmtd<tp){cmpDetailPage.lmtd++; renderCmpDetailOne('lmtd','Lmtd');} });
+  document.getElementById('cmpDetailToggle').addEventListener('click', toggleCmpDetail);
+  document.getElementById('cmpPrevPage').addEventListener('click', ()=>{ if(cmpDetailPage>1){cmpDetailPage--; renderCmpDetail();} });
+  document.getElementById('cmpNextPage').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filtered.length/CMP_PAGE_SIZE)); if(cmpDetailPage<tp){cmpDetailPage++; renderCmpDetail();} });
   document.getElementById('nextPage').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)); if(page<tp){page++; renderTable();} });
   document.getElementById('siPrevPage').addEventListener('click', ()=>{ if(siPage>1){siPage--; renderSellinTable();} });
   document.getElementById('siNextPage').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filteredSellin.length/PAGE_SIZE)); if(siPage<tp){siPage++; renderSellinTable();} });
