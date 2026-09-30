@@ -6239,8 +6239,12 @@ async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, pro
     }
     // WoW baseline from WITHIN this same file: Supply revenue is a running MTD sum, so
     // "~7 days ago" is the same sum truncated to rows dated on/before that day.
+    // Constrained to the SAME MONTH as maxDate: outletAggByDate can hold an earlier
+    // month's dates too (used for the MoM baseline below), and a plain "d > weekTarget"
+    // string compare would otherwise also sweep in an entire earlier month's total.
     if(maxDate){
       const weekTarget = shiftDateBack(maxDate, 7);
+      const curYmW = maxDate.slice(0,7);
       if(weekTarget){
         const weekRows = [];
         Object.keys(MASTER).forEach(key=>{
@@ -6254,7 +6258,7 @@ async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, pro
           ];
           const totals = {};
           if(byDate) Object.keys(byDate).forEach(d=>{
-            if(d > weekTarget) return;
+            if(d.slice(0,7) !== curYmW || d > weekTarget) return;
             const dayAgg = byDate[d];
             Object.keys(dayAgg).forEach(f=>{
               if(!totals[f]) totals[f] = [0,0];
