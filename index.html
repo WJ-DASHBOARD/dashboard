@@ -1377,8 +1377,13 @@ async function saveChunked(prefix, rows, previousNumChunks, onProgress){
 // per-invocation overhead (typically a few hundred ms just to spin up), and browsers
 // only run ~6 requests to the same origin at once — so 75 chunks queues in waves and
 // can add up to real time. Batching them into one request removes almost all of that.
+// Returns null (not {}) specifically when the BACKEND doesn't recognize this action —
+// e.g. index.html was updated on GitHub before Kode.gs was redeployed with it — so the
+// caller can fall back to the one-by-one method instead of quietly returning no data.
+let gaBatchSupported = true;   // flips to false the first time the backend reports it doesn't know getMulti
 async function storageGetMulti(keys){
   if(!keys.length) return {};
+  if(!gaBatchSupported) return null;
   try{
     const res = await fetchWithTimeout(GAS_URL, {
       method: 'POST',
@@ -1386,7 +1391,17 @@ async function storageGetMulti(keys){
       body: JSON.stringify({ action: 'getMulti', keys })
     }, 25000);
     const data = await res.json();
-    if(!data || !data.ok) return {};
+    if(!data || !data.ok){
+      if(data && /unknown action/i.test(data.error || '')){
+        // The deployed Apps Script is an older version that predates getMulti — this
+        // isn't a transient failure, it will never succeed until redeployed, so stop
+        // trying it for the rest of this session and let callers fall back instead.
+        gaBatchSupported = false;
+        console.warn('storageGetMulti: backend does not support getMulti yet (Kode.gs needs redeploying) — falling back to one-by-one loads.');
+        return null;
+      }
+      return {};
+    }
     const out = {};
     Object.keys(data.values || {}).forEach(k=>{
       try{ out[k] = JSON.parse(data.values[k]); }catch(e){ out[k] = null; }
@@ -1396,11 +1411,28 @@ async function storageGetMulti(keys){
 }
 
 // Reads and concatenates `${prefix}0` .. `${prefix}(numChunks-1)` — as ONE batched
-// request rather than one request per chunk (see storageGetMulti above).
+// request rather than one request per chunk (see storageGetMulti above), falling back
+// automatically to the original one-request-per-chunk method if the backend doesn't
+// support batching yet (so an out-of-date Apps Script deployment degrades to "slower"
+// rather than "no data at all").
 async function loadChunked(prefix, numChunks){
   if(!numChunks || numChunks<1) return [];
   const keys = Array.from({length:numChunks}, (_,i)=>prefix+i);
   let got = await storageGetMulti(keys);
+  if(got === null){
+    let parts = await Promise.all(keys.map(k=>storageGet(k)));
+    for(let attempt=0; attempt<2; attempt++){
+      const missing = [];
+      parts.forEach((c,i)=>{ if(c===null) missing.push(i); });
+      if(missing.length===0) break;
+      await new Promise(r=>setTimeout(r, 1000));
+      const retried = await Promise.all(missing.map(i=>storageGet(keys[i])));
+      missing.forEach((idx,k)=>{ parts[idx] = retried[k]; });
+    }
+    let rows2 = [];
+    parts.forEach(c=>{ if(c) rows2 = rows2.concat(c); });
+    return rows2;
+  }
   let parts = keys.map(k=> got[k] !== undefined ? got[k] : null);
   // Same targeted-retry idea as before: under a genuinely flaky connection a few
   // chunks can still come back missing even after the batched call — retry just
@@ -1411,6 +1443,7 @@ async function loadChunked(prefix, numChunks){
     if(missingKeys.length===0) break;
     await new Promise(r=>setTimeout(r, 1000));
     const retried = await storageGetMulti(missingKeys);
+    if(retried === null) break;   // backend flipped to unsupported mid-flight — the outer parts already has whatever it has
     keys.forEach((k,i)=>{ if(parts[i]===null && retried[k]!==undefined) parts[i]=retried[k]; });
   }
   let rows = [];
