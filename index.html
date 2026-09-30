@@ -2802,29 +2802,38 @@ function refreshCmpBanner(){
     + `▲▼ = perubahan dibanding data tersebut (hijau = membaik, merah = memburuk).`;
 }
 
+let cmpRenderGen = 0;   // bumped every render call, so a slow/stale load callback can tell it's outdated and skip re-rendering
+
 async function renderComparisonAll(){
   const ph = document.getElementById('cmpPlaceholder'), content = document.getElementById('cmpContent'), loading = document.getElementById('cmpLoading');
   if(!ph || !content) return;
-  ph.style.display = 'none'; content.style.display = 'none'; loading.style.display = '';
-  let anyWeek = false, anyLmtd = false;
-  try{
-    [anyWeek, anyLmtd] = await Promise.all([ensurePrevLoaded('week'), ensurePrevLoaded('lmtd')]);
-  }catch(e){
-    console.error('renderComparisonAll: failed to load WoW/MoM data', e);
-    loading.style.display = 'none';
-    ph.style.display = '';
-    ph.textContent = 'Gagal memuat data WoW/MoM (koneksi tidak stabil) — coba refresh halaman ini.';
-    return;
-  }
-  loading.style.display = 'none';
-  const any = anyWeek || anyLmtd;
-  ph.style.display = any ? 'none' : '';
-  content.style.display = any ? '' : 'none';
-  refreshCmpBanner();
-  if(!any) return;
+  const gen = ++cmpRenderGen;
+  ph.style.display = 'none'; loading.style.display = 'none'; content.style.display = '';
+
+  // Show immediately with whatever WoW/MoM data is already cached from earlier this session
+  // (MTD numbers don't need to wait for either comparison — previously the whole tab stayed
+  // blank behind a spinner until BOTH finished loading from the server, even though most of
+  // the content doesn't depend on that).
+  const weekLoading = !prevLoadPromises.week, lmtdLoading = !prevLoadPromises.lmtd;
   renderCmpMetricsTable();
   renderCmpCategory();
-  renderCmpDetail();
+  if(cmpDetailOpen) renderCmpDetail();
+  refreshCmpBanner();
+  if(weekLoading || lmtdLoading){
+    document.getElementById('cmpBanner').textContent += '  (memuat data WoW/MoM…)';
+  }
+
+  // Then patch the WoW/MoM columns in as each finishes — independently, so a slow one doesn't
+  // hold back the other. Only the bar that's actually still loading blocks anything now.
+  const rerenderIfCurrent = () => {
+    if(gen !== cmpRenderGen) return;   // a newer render already started (tab re-opened, filters changed) — this update is stale
+    renderCmpMetricsTable();
+    renderCmpCategory();
+    if(cmpDetailOpen) renderCmpDetail();
+    refreshCmpBanner();
+  };
+  ensurePrevLoaded('week').then(rerenderIfCurrent).catch(e=>console.error('renderComparisonAll: WoW load failed', e));
+  ensurePrevLoaded('lmtd').then(rerenderIfCurrent).catch(e=>console.error('renderComparisonAll: MoM load failed', e));
 }
 
 // ---------- filtering ----------
