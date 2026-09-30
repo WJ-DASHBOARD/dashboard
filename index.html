@@ -1828,11 +1828,29 @@ async function loadPrevBrand(kind, brand, mode){
   const bMap = map(n.brands, META.brands), aMap = map(n.areas, META.areas), brMap = map(n.branches, META.branches),
         mMap = map(n.micros, META.micros), cMap = map(n.cats, META.cats);
   const rows = [];
+  let droppedNoMap = 0, recoveredViaMaster = 0;
   for(const r of raw){
-    const b = bMap[r[0]], a = aMap[r[1]], br = brMap[r[2]], mi = mMap[r[3]], c = cMap[r[6]];
-    if(!(b>=0 && a>=0 && br>=0 && mi>=0 && c>=0)) continue;
+    let b = bMap[r[0]], a = aMap[r[1]], br = brMap[r[2]], mi = mMap[r[3]], c = cMap[r[6]];
+    if(!(b>=0 && a>=0 && br>=0 && mi>=0 && c>=0)){
+      // The snapshot's own dimension NAMES don't all exist anymore in the CURRENT
+      // Area/Branch/Micro Cluster/Kategori lists (e.g. Master was re-uploaded since this
+      // baseline was saved, and a branch got renamed/restructured) — rather than throw
+      // the whole outlet's row away, re-derive its CURRENT position from MASTER via its
+      // outlet ID, which is far more stable than dimension names across re-uploads.
+      const oid = r[4];
+      const mm = MASTER[brand + '|' + oid];
+      if(mm){
+        b = META.brands.indexOf(brand); a = META.areas.indexOf(mm.area); br = META.branches.indexOf(mm.branch);
+        mi = META.micros.indexOf(mm.micro); c = META.cats.indexOf(mm.cat);
+      }
+      if(!(b>=0 && a>=0 && br>=0 && mi>=0 && c>=0)){ droppedNoMap++; continue; }
+      recoveredViaMaster++;
+    }
     const r2 = r.slice(); r2[0]=b; r2[1]=a; r2[2]=br; r2[3]=mi; r2[6]=c;
     rows.push(r2);
+  }
+  if(droppedNoMap || recoveredViaMaster){
+    console.warn(`loadPrevBrand(${kind}, ${brand}, ${mode}): ${raw.length} baris dibaca, ${recoveredViaMaster} dipetakan ulang lewat MASTER (dimensi lama tidak cocok lagi), ${droppedNoMap} tetap tidak bisa dipetakan (outlet sudah tidak ada di pairing) dan dilewati.`);
   }
   return { rows, meta: m };
 }
