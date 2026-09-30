@@ -1837,12 +1837,18 @@ async function loadPrevBrand(kind, brand, mode){
       // baseline was saved, and a branch got renamed/restructured) — rather than throw
       // the whole outlet's row away, re-derive its CURRENT position from MASTER via its
       // outlet ID, which is far more stable than dimension names across re-uploads.
-      const oid = r[4];
-      const mm = MASTER[brand + '|' + oid];
-      if(mm){
-        b = META.brands.indexOf(brand); a = META.areas.indexOf(mm.area); br = META.branches.indexOf(mm.branch);
-        mi = META.micros.indexOf(mm.micro); c = META.cats.indexOf(mm.cat);
-      }
+      // Wrapped defensively: if MASTER isn't ready yet or anything here throws, fall back
+      // to the original "drop this one row" behaviour instead of letting an exception
+      // here silently wipe out the ENTIRE comparison (which is worse than losing a few
+      // unmappable rows).
+      try{
+        const oid = r[4];
+        const mm = MASTER && MASTER[brand + '|' + oid];
+        if(mm){
+          b = META.brands.indexOf(brand); a = META.areas.indexOf(mm.area); br = META.branches.indexOf(mm.branch);
+          mi = META.micros.indexOf(mm.micro); c = META.cats.indexOf(mm.cat);
+        }
+      }catch(e){ console.warn('loadPrevBrand: MASTER fallback lookup threw, skipping this row', e); }
       if(!(b>=0 && a>=0 && br>=0 && mi>=0 && c>=0)){ droppedNoMap++; continue; }
       recoveredViaMaster++;
     }
