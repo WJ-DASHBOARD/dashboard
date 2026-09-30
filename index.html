@@ -892,6 +892,7 @@
 <div id="tabComparison" class="tab-panel hidden">
   <div class="section-title">Performance WoW/MoM <div class="line"></div></div>
   <div class="cmp-banner" id="cmpBanner" style="margin-bottom:8px;"></div>
+  <div id="cmpDataWarning" style="display:none;margin-bottom:12px;padding:10px 14px;background:var(--amber-soft);border:1px solid var(--amber);border-radius:8px;font-size:12.5px;color:var(--ink);"></div>
   <div id="cmpLoading" style="padding:20px;text-align:center;color:var(--muted);display:none;">Memuat data WoW/MoM…</div>
   <div id="cmpPlaceholder" style="padding:40px 20px;text-align:center;color:var(--muted);background:#fff;border:1px solid var(--border);border-radius:10px;display:none;">
     Belum ada data WoW maupun MoM untuk dibandingkan.
@@ -2774,6 +2775,36 @@ function renderCmpMetricsTable(){
   document.getElementById('cmpMetricFoot').innerHTML = areaKeys.length ? `<tr style="font-weight:700;background:#FAF9F7;">
     <td>Total</td>${CMP_METRICS.map(m=>cmpRowCells(m.fmt, m.goodUp, grandCur[m.key]||0, T[m.key].week, T[m.key].week?{total:grandW[m.key]||0}:null, T[m.key].lmtd, T[m.key].lmtd?{total:grandL[m.key]||0}:null)).join('')}
   </tr>` : '';
+
+  // A growth number that's wildly out of proportion (e.g. +900%, or "baru" against a real
+  // current total) is far more often a sign the COMPARISON side of the data is incomplete —
+  // that metric wasn't uploaded for all outlets that week/month — than genuine business
+  // growth. Flag it here rather than let it sit quietly in the table looking like a real
+  // number.
+  const warnings = [];
+  CMP_METRICS.forEach(m=>{
+    const cur = grandCur[m.key]||0;
+    if(cur <= 0) return;   // nothing to compare against a positive current total
+    if(T[m.key].week){
+      const w = grandW[m.key]||0;
+      if(w===0 || cur/w > 4){
+        warnings.push(`${m.label} — WoW: ${w===0 ? 'dibandingkan dengan 0 (data minggu lalu tampak kosong)' : 'naik lebih dari 4x dibanding minggu lalu'} — cek apakah data ${m.label} untuk Last Week sudah lengkap untuk semua outlet.`);
+      }
+    }
+    if(T[m.key].lmtd){
+      const l = grandL[m.key]||0;
+      if(l===0 || cur/l > 4){
+        warnings.push(`${m.label} — MoM: ${l===0 ? 'dibandingkan dengan 0 (data bulan lalu tampak kosong)' : 'naik lebih dari 4x dibanding bulan lalu'} — cek apakah data ${m.label} untuk LMTD sudah lengkap untuk semua outlet.`);
+      }
+    }
+  });
+  const warnEl = document.getElementById('cmpDataWarning');
+  if(warnings.length){
+    warnEl.style.display = '';
+    warnEl.innerHTML = '⚠ <b>Growth terlihat tidak wajar — kemungkinan besar bukan pertumbuhan asli, tapi data pembandingnya belum lengkap:</b><br>' + warnings.map(w=>'• '+w).join('<br>');
+  } else {
+    warnEl.style.display = 'none';
+  }
 }
 
 // Same idea as the Summary table above, but grouped by Kategori (PJP/KAM/KRO) instead of
