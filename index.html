@@ -1962,6 +1962,23 @@ function onCompareToggle(which){
 // stand for is shown in the banner so a mismatch is visible.
 
 // "2026-09-28" -> "2026-08-28" (clamped to the shorter month, e.g. 2026-03-31 -> 2026-02-28)
+// "2026-09-26" minus N days -> "2026-09-19" (handles month/year boundaries correctly)
+function shiftDateBack(iso, days){
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  if(!m) return null;
+  const dt = new Date(Date.UTC(+m[1], +m[2]-1, +m[3]));
+  dt.setUTCDate(dt.getUTCDate() - days);
+  return dt.toISOString().slice(0,10);
+}
+// From a {date: value} map, the latest date that is <= target (closest available on/before it),
+// or null if nothing in the map goes back that far.
+function bestDateOnOrBefore(byDate, target){
+  if(!byDate || !target) return null;
+  let best = null;
+  for(const d in byDate){ if(d <= target && (!best || d > best)) best = d; }
+  return best;
+}
+
 function lmtdShiftBack(iso){
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
   if(!m) return null;
@@ -1988,8 +2005,8 @@ function lmtdCutoff(kind, brand){
 }
 
 // Two alternating slots, meta written last — same crash-safe pattern as the Last Week snapshots.
-async function lmtdWriteBaseline(kind, brand, rows, extraMeta){
-  const key = prevKey(kind, brand, 'lmtd'), metaKey = key + '_meta';
+async function writeBaselineByMode(kind, brand, rows, extraMeta, mode){
+  const key = prevKey(kind, brand, mode), metaKey = key + '_meta';
   const cur = await storageGet(metaKey);
   const slot = (cur && cur.slot === 0) ? 1 : 0;
   const res = await saveChunked(`${key}_s${slot}_c`, rows, 0);
@@ -1999,13 +2016,14 @@ async function lmtdWriteBaseline(kind, brand, rows, extraMeta){
   const ok = await storageSetWithRetry(metaKey, Object.assign(
     { slot, numChunks: res.numChunks, total: rows.length, savedAt: new Date().toISOString(), names }, extraMeta || {}));
   if(ok){
-    PREVS.lmtd = null; prevLoadPromises.lmtd = null;     // next Compare LMTD re-reads the fresh baseline
-    if(compareOn && compareMode === 'lmtd'){
-      ensurePrevLoaded('lmtd').then(()=>{ PREV = PREVS.lmtd || emptyPrev(); refreshCompareBanner(); applyFilters(); });
+    PREVS[mode] = null; prevLoadPromises[mode] = null;     // next Compare re-reads the fresh baseline
+    if(compareOn && compareMode === mode){
+      ensurePrevLoaded(mode).then(()=>{ PREV = PREVS[mode] || emptyPrev(); refreshCompareBanner(); applyFilters(); });
     }
   }
   return ok;
 }
+async function lmtdWriteBaseline(kind, brand, rows, extraMeta){ return writeBaselineByMode(kind, brand, rows, extraMeta, 'lmtd'); }
 
 // All-zero rows for every pairing outlet of a brand, in the same layout as the live datasets
 function lmtdBlankRows(kind, brand){
@@ -2022,15 +2040,23 @@ function lmtdBlankRows(kind, brand){
 
 // The LMTD Sell In baseline is filled in by up to three different uploads (DSE_PROD sell-in,
 // GA, Secondary); `parts` remembers which ones are in and as of when.
-async function lmtdSellinBaseline(brand){
-  const ex = await loadPrevBrand('sellin', brand, 'lmtd');
+async function sellinBaselineForMode(brand, mode){
+  const ex = await loadPrevBrand('sellin', brand, mode);
   if(ex) return { rows: ex.rows, parts: Object.assign({}, ex.meta.parts || {}) };
   return { rows: lmtdBlankRows('sellin', brand), parts: {} };
 }
-async function lmtdSaveSellin(brand, rows, parts){
+async function saveSellinForMode(brand, rows, parts, mode){
   const dates = Object.values(parts).map(p=>p && p.asOf).filter(Boolean).sort();
-  return lmtdWriteBaseline('sellin', brand, rows, { parts, asOf: dates[0] || null });
+  return writeBaselineByMode('sellin', brand, rows, { parts, asOf: dates[0] || null }, mode);
 }
+async function lmtdSellinBaseline(brand){ return sellinBaselineForMode(brand, 'lmtd'); }
+async function lmtdSaveSellin(brand, rows, parts){ return saveSellinForMode(brand, rows, parts, 'lmtd'); }
+// Same idea for the WoW ('week') Sell In baseline: GA / Sell In (OSA) / Sell In SP (Pcs) /
+// Secondary / Tertiary each derive their own "~7 days ago" values straight from the file being
+// uploaded (see each upload's finish function) and merge them into this ONE shared snapshot,
+// the same way the LMTD parts above do — so one metric's derived value doesn't erase another's.
+async function weekSellinBaseline(brand){ return sellinBaselineForMode(brand, 'week'); }
+async function weekSaveSellin(brand, rows, parts){ return saveSellinForMode(brand, rows, parts, 'week'); }
 
 // ---- GA: reuses the normal GA parsers; their result is diverted here instead of the live data ----
 let gaSink = null;
@@ -4105,7 +4131,8 @@ function handleStockFile(file){
 
       let entry = data[key];
       if(!entry){
-        entry = { stockMaxDate:null, stockAgg:{}, demandMaxDate:null, demandAgg:{} };
+        entry = { stockMaxDate:null, stockAgg:{}, demandMaxDate:null, demandAgg:{},
+                  stockByDate:{}, demandByDate:{} };
         data[key] = entry;
       }
       // stock_outlet and demand_30 are tracked with their OWN separate "latest
@@ -4124,6 +4151,14 @@ function handleStockFile(file){
           const agg = entry[aggKey];
           if(agg[flag]) { agg[flag][0]+=qty; agg[flag][1]+=amt; } else { agg[flag] = [qty, amt]; }
         }
+        // Stock files often carry a short rolling window (e.g. the last 5-7 days), not just
+        // one point-in-time date. Keep EVERY date's totals (bounded — at most ~31 distinct
+        // dates per outlet) so finishStockProcessing can look up the value ~7 days before the
+        // latest date for an automatic WoW baseline, without needing a second upload later.
+        const byDateKey = pos === 'stock_outlet' ? 'stockByDate' : 'demandByDate';
+        let dAgg = entry[byDateKey][d];
+        if(!dAgg) dAgg = entry[byDateKey][d] = {};
+        if(dAgg[flag]) { dAgg[flag][0]+=qty; dAgg[flag][1]+=amt; } else { dAgg[flag] = [qty, amt]; }
       }
 
       if(rowCount % 100000 === 0) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris…`;
@@ -4156,6 +4191,7 @@ async function finishStockProcessing(data, progressEl){
   const mI = Object.fromEntries(micros.map((v,i)=>[v,i]));
 
   const outlets = [];
+  const outletsFromFile = [];   // built from each outlet's value ~7 days before the latest date, using this same file's own date range — see the parse step
   let maxAsOf = null;
   masterKeys.forEach(key=>{
     const [brand, oid] = key.split('|');
@@ -4190,6 +4226,45 @@ async function finishStockProcessing(data, progressEl){
       Math.round(salQ), Math.round(salA), Math.round(dspA), Math.round(dvouA), Math.round(dsalA)
     ]);
   });
+
+  // Resolve the WoW ("~7 days ago") row per outlet, now that maxAsOf (the whole file's
+  // latest date) is known. Each outlet's OWN closest date on/before target is used — not
+  // every outlet necessarily has a row on the exact target date.
+  const weekTarget = maxAsOf ? shiftDateBack(maxAsOf, 7) : null;
+  let anyWeekAgo = false;
+  if(weekTarget){
+    masterKeys.forEach(key=>{
+      const [brand, oid] = key.split('|');
+      const mm = MASTER[key];
+      const e = data[key];
+      let spoQ=0,spoA=0,spiQ=0,spiA=0,voQ=0,voA=0,viQ=0,viA=0,salQ=0,salA=0,dspA=0,dvouA=0,dsalA=0;
+      if(e){
+        const sd = bestDateOnOrBefore(e.stockByDate, weekTarget);
+        const dd = bestDateOnOrBefore(e.demandByDate, weekTarget);
+        if(sd) anyWeekAgo = true;
+        if(sd) Object.keys(e.stockByDate[sd]).forEach(flag=>{
+          const [qty, amt] = e.stockByDate[sd][flag];
+          if(flag==='sp_ori'){ spoQ+=qty; spoA+=amt; }
+          else if(flag==='sp_inj'){ spiQ+=qty; spiA+=amt; }
+          else if(flag==='vou_ori'){ voQ+=qty; voA+=amt; }
+          else if(flag==='vou_inj'){ viQ+=qty; viA+=amt; }
+          else if(flag==='salmo'){ salQ+=qty; salA+=amt; }
+        });
+        if(dd) Object.keys(e.demandByDate[dd]).forEach(flag=>{
+          const [, amt] = e.demandByDate[dd][flag];
+          if(flag==='sp_ori' || flag==='sp_inj') dspA += amt;
+          else if(flag==='vou_ori' || flag==='vou_inj') dvouA += amt;
+          else if(flag==='salmo') dsalA += amt;
+        });
+      }
+      outletsFromFile.push([
+        bI[brand], aI[mm.area], brI[mm.branch], mI[mm.micro], oid, mm.name||'', cats.indexOf(mm.cat),
+        Math.round(spoQ), Math.round(spoA), Math.round(spiQ), Math.round(spiA),
+        Math.round(voQ), Math.round(voA), Math.round(viQ), Math.round(viA),
+        Math.round(salQ), Math.round(salA), Math.round(dspA), Math.round(dvouA), Math.round(dsalA)
+      ]);
+    });
+  }
 
   const branchByArea = {}; areas.forEach(a=>branchByArea[a]=new Set());
   const microByBranch = {}; branches.forEach(b=>microByBranch[b]=new Set());
@@ -4229,6 +4304,21 @@ async function finishStockProcessing(data, progressEl){
       let lmtdAuto = false;
       for(const b2 of snapOldMeta.brands){ if(await autoLmtdOnMonthChange('stock', snapOldRows, snapOldMeta, snapOldAsOf, maxAsOf, b2)) lmtdAuto = true; }
       if(lmtdAuto) progressEl.textContent = base + ' Data MoM bulan depan otomatis tersimpan.';
+    }
+    // If this file itself spans several days (a rolling window, not just one point-in-time
+    // date — very common for Stock exports), the value ~7 days before the latest date is
+    // already sitting in the file: use it as an automatic WoW baseline, no second upload a
+    // week apart needed. Takes priority over (runs after, overwrites) the "previous online
+    // state" snapshot above, since data read straight from the file is more reliable than an
+    // old saved copy.
+    if(anyWeekAgo && weekTarget){
+      const base2 = progressEl.textContent;
+      progressEl.textContent = base2 + ` Menyimpan WoW dari rentang tanggal di file ini (${weekTarget})…`;
+      const asOfMapFile = {}; META.brands.forEach(b=>asOfMapFile[b] = weekTarget);
+      const okSnapFile = await snapshotPrev('stock', outletsFromFile, META, asOfMapFile);
+      progressEl.textContent = base2 + (okSnapFile
+        ? ` WoW otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).`
+        : ' (Gagal menyimpan WoW dari rentang tanggal file ini.)');
     }
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data tidak berhasil disimpan online (koneksi tidak stabil). Data yang tampil di layar mungkin benar, tapi BELUM tentu tersimpan untuk orang lain. Coba upload ulang file ini.`;
@@ -4603,7 +4693,21 @@ async function finishSellinProcessing(brand, byKey, progressEl, maxAsOfDt){
     if(snapBrandRows.length && newAsOf && !sameAsOf(newAsOf, snapOldAsOf)){
       const base = progressEl.textContent;
       progressEl.textContent = base + ' Menyimpan snapshot WoW…';
-      const okSnap = await snapshotPrev('sellin', snapBrandRows, snapMeta, {[brand]: snapOldAsOf});
+      // Parts-aware: only overwrite the SP/Voucher/Saldo columns, keeping whatever GA/
+      // Secondary/Tertiary/Sell In SP (Pcs) values this WoW snapshot already had (a blind
+      // full-row overwrite here would erase those other metrics' own WoW baselines).
+      const oldByOutlet = new Map(); snapBrandRows.forEach(r=>oldByOutlet.set(r[IDX_S.outletId], r));
+      const blFallback = await weekSellinBaseline(brand);
+      let anyFallback = false;
+      blFallback.rows.forEach(r=>{
+        const old = oldByOutlet.get(r[IDX_S.outletId]);
+        if(old){ r[IDX_S.sellinSp] = old[IDX_S.sellinSp]; r[IDX_S.sellinVou] = old[IDX_S.sellinVou]; r[IDX_S.sellinSaldo] = old[IDX_S.sellinSaldo]; anyFallback = true; }
+      });
+      let okSnap = false;
+      if(anyFallback){
+        blFallback.parts.dse = { asOf: snapOldAsOf };
+        okSnap = await weekSaveSellin(brand, blFallback.rows, blFallback.parts);
+      }
       progressEl.textContent = base + (okSnap ? ' Snapshot WoW tersimpan.' : ' (Snapshot WoW gagal disimpan — perbandingan WoW belum tersedia untuk Sell In & GA.)');
       if(await autoLmtdSellinPart('dse', brand, snapBrandRows, snapMeta, snapOldAsOf, newAsOf, [IDX_S.sellinSp, IDX_S.sellinVou, IDX_S.sellinSaldo])){
         progressEl.textContent = base + ' Data MoM Sell In bulan depan otomatis tersimpan.';
@@ -4783,12 +4887,25 @@ function parseGaTxBody(file, delim, fmt, progressEl){
           if(brand !== 'IM3' && brand !== '3ID') continue;
           if(fmt.keep && !fmt.keep(row)){
             if(wantSpPcs && normKpiValue(row.kpi) === 'SELLIN'){
-              let sb = SP[brand]; if(!sb) sb = SP[brand] = { seen:new Set(), byKey:{} };
+              let sb = SP[brand]; if(!sb) sb = SP[brand] = { seen:new Set(), byKey:{}, maxDate:'', byMonth:{} };
               const ms = String(row[fmt.msisdn] || '').trim();
               if(!ms || !sb.seen.has(ms)){
                 if(ms) sb.seen.add(ms);
                 const key = brand + '|' + normId(row[fmt.outlet] == null ? '' : row[fmt.outlet]);
-                if(MASTER[key]) sb.byKey[key] = (sb.byKey[key] || 0) + 1;
+                if(MASTER[key]){
+                  sb.byKey[key] = (sb.byKey[key] || 0) + 1;
+                  // also keep a per-day breakdown, purely so a WoW ("~7 days ago") baseline
+                  // can be derived straight from this same file — see the complete() handler
+                  const spDt = String(row[fmt.date] || '').trim();
+                  const spM = /^(\d{4})-(\d{2})-(\d{2})/.exec(spDt);
+                  if(spM){
+                    const spYm = spM[1]+'-'+spM[2], spDay = +spM[3];
+                    if(spM[0] > sb.maxDate) sb.maxDate = spM[0];
+                    let mp = sb.byMonth[spYm]; if(!mp) mp = sb.byMonth[spYm] = new Map();
+                    let arr = mp.get(key); if(!arr){ arr = new Float64Array(31); mp.set(key, arr); }
+                    arr[spDay-1] += 1;
+                  }
+                }
               }
             } else { skippedRows++; }
             continue;   // not a GA row (kpi = SELLIN, or something else entirely)
@@ -4842,6 +4959,29 @@ function parseGaTxBody(file, delim, fmt, progressEl){
             Object.values(SP).forEach(sb=>Object.assign(combined, sb.byKey));
             await finishSellinPcsProcessing(combined, spBrands, progressEl, 0);
             msgs.push(progressEl.textContent);
+            // WoW baseline: same idea as GA — Sell In SP (Pcs) is a running MTD count, so
+            // "~7 days ago" is the same count truncated at an earlier day, straight from
+            // this file's own per-day breakdown.
+            for(const brand of spBrands){
+              const sb = SP[brand];
+              if(!sb.maxDate) continue;
+              const spYm = sb.maxDate.slice(0,7);
+              const weekTarget = shiftDateBack(sb.maxDate, 7);
+              if(!weekTarget || weekTarget.slice(0,7) !== spYm) continue;
+              const weekDay = +weekTarget.slice(8,10);
+              const mp = sb.byMonth[spYm];
+              if(!mp) continue;
+              const bl = await weekSellinBaseline(brand);
+              bl.rows.forEach(r=>{
+                const arr = mp.get(brand + '|' + r[IDX_S.outletId]);
+                let sum = 0;
+                if(arr){ for(let d=0; d<weekDay; d++) sum += arr[d]; }
+                r[IDX_S.sellinSpPcs] = Math.round(sum);
+              });
+              bl.parts.spPcs = { asOf: weekTarget };
+              const okW = await weekSaveSellin(brand, bl.rows, bl.parts);
+              msgs.push(okW ? `WoW Sell In SP (Pcs) ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : `Gagal menyimpan WoW Sell In SP (Pcs) ${brand} dari file ini.`);
+            }
           }
         } else if(skippedRows) msgs.push(`(${skippedRows.toLocaleString('id-ID')} baris bukan GA — kpi selain RET_TAG diabaikan.)`);
         if(dupRows) msgs.push(`(${dupRows.toLocaleString('id-ID')} baris MSISDN ganda dilewati.)`);
@@ -4899,6 +5039,22 @@ async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl,
         progressEl.textContent = base + ' Data MoM GA bulan depan otomatis tersimpan.';
       }
     }
+    // WoW baseline from WITHIN this same file: GA is a running MTD total (day 1 through
+    // lastDay), so "GA ~7 days ago" is just the same sum truncated at an earlier day — no
+    // second upload needed. Only computable when that earlier date is still in this month.
+    const weekTarget = shiftDateBack(asOf, 7);
+    if(weekTarget && weekTarget.slice(0,7) === ym){
+      const weekDay = +weekTarget.slice(8,10);
+      const gaWeekRows = brandRows.map(r=>{
+        const arr = byKey.get(brand + '|' + r[IDX_S.outletId]);
+        let sum = 0;
+        if(arr){ for(let d=0; d<weekDay; d++) sum += arr[d]; }
+        const r2 = r.slice(0,8); r2[7] = Math.round(sum*100)/100;
+        return r2;
+      });
+      const okWeek = await snapshotPrev('ga', gaWeekRows, META, {[brand]: weekTarget});
+      progressEl.textContent += okWeek ? ` WoW GA otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : ' (Gagal menyimpan WoW GA dari file ini.)';
+    }
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — data GA ${brand} tidak berhasil disimpan online. Coba upload ulang file ini.`;
   }
@@ -4948,7 +5104,7 @@ async function handleOsaFiles(fileList){
 
 function parseOsaBody(file, idCol, progressEl){
   return new Promise((resolve) => {
-    const B = {};   // brand -> { maxDate, byKey: Map(key -> {sp:{d,v}, vou:{d,v}, saldo:{d,v}}) }
+    const B = {};   // brand -> { maxDate, byKey: Map(key -> {sp:{date:amt}, vou:{date:amt}, saldo:{date:amt}}) }
     let rowCount = 0;
     Papa.parse(file, {
       header: true, skipEmptyLines: true, worker: true,
@@ -4967,9 +5123,8 @@ function parseOsaBody(file, idCol, progressEl){
           const key = brand + '|' + normId(row[idCol]);
           if(!MASTER[key]) continue;
           let e = b.byKey.get(key);
-          if(!e){ e = { sp:{d:'',v:0}, vou:{d:'',v:0}, saldo:{d:'',v:0} }; b.byKey.set(key, e); }
-          const amt = parseFloat(row.amt) || 0;
-          if(dt >= e[field].d) e[field] = { d: dt, v: amt };
+          if(!e){ e = { sp:{}, vou:{}, saldo:{} }; b.byKey.set(key, e); }
+          e[field][dt] = parseFloat(row.amt) || 0;   // keep EVERY date — see below (used for the current value and for the WoW lookup)
         }
         if(rowCount % 50000 < rows.length) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris…`;
       },
@@ -4982,12 +5137,33 @@ function parseOsaBody(file, idCol, progressEl){
         const msgs = [];
         for(const brand of brands){
           const b = B[brand], byKey = {};
-          b.byKey.forEach((e, key)=>{ byKey[key] = { sp: e.sp.v, vou: e.vou.v, saldo: e.saldo.v }; });
+          b.byKey.forEach((e, key)=>{ byKey[key] = { sp: e.sp[b.maxDate]||0, vou: e.vou[b.maxDate]||0, saldo: e.saldo[b.maxDate]||0 }; });
           progressEl.textContent = `Menggabungkan data Sell In (OSA) ${brand} (${b.byKey.size.toLocaleString('id-ID')} outlet, per ${b.maxDate})…`;
           await finishSellinProcessing(brand, byKey, progressEl, b.maxDate);
           msgs.push(progressEl.textContent);
+
+          // WoW baseline: the value ~7 days before this file's latest date, per outlet — if
+          // this file's date range actually reaches back that far (same idea as Stock above).
+          const weekTarget = shiftDateBack(b.maxDate, 7);
+          const byKeyWeekAgo = {}; let anyWeekAgo = false;
+          b.byKey.forEach((e, key)=>{
+            const sd = bestDateOnOrBefore(e.sp, weekTarget), vd = bestDateOnOrBefore(e.vou, weekTarget), ld = bestDateOnOrBefore(e.saldo, weekTarget);
+            if(sd || vd || ld) anyWeekAgo = true;
+            byKeyWeekAgo[key] = { sp: sd?e.sp[sd]:0, vou: vd?e.vou[vd]:0, saldo: ld?e.saldo[ld]:0 };
+          });
+          if(anyWeekAgo){
+            const bl = await weekSellinBaseline(brand);
+            bl.rows.forEach(r=>{
+              const s = byKeyWeekAgo[brand + '|' + r[IDX_S.outletId]];
+              if(s){ r[IDX_S.sellinSp] = Math.round(s.sp); r[IDX_S.sellinVou] = Math.round(s.vou); r[IDX_S.sellinSaldo] = Math.round(s.saldo); }
+            });
+            bl.parts.dse = { asOf: weekTarget };
+            const okW = await weekSaveSellin(brand, bl.rows, bl.parts);
+            msgs[msgs.length-1] += okW ? ` WoW Sell In otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : ' (Gagal menyimpan WoW Sell In dari file ini.)';
+          }
         }
         if(msgs.length > 1) progressEl.innerHTML = msgs.map(r=>'• ' + r).join('<br>');
+        else progressEl.textContent = msgs[0] || progressEl.textContent;
         resolve();
       },
       error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
@@ -5009,8 +5185,9 @@ function handleTertiaryFile(file){
     }
     progressEl.textContent = `Membaca file (${file.name})…`;
     const byKey = {};
+    const byDayKey = {};   // key -> {date: revSum} — for the automatic WoW baseline (see below)
     const brandsSeen = new Set();
-    let rowCount = 0, matched = 0;
+    let rowCount = 0, matched = 0, maxDate = '';
     Papa.parse(file, {
       header: true, skipEmptyLines: true, worker: true,
       step: function(res){
@@ -5021,8 +5198,15 @@ function handleTertiaryFile(file){
         if(brand !== 'IM3' && brand !== '3ID') return;
         brandsSeen.add(brand);
         const key = brand + '|' + normId(row.outlet_id);
-        byKey[key] = (byKey[key] || 0) + (parseFloat(row.net_rev) || 0);
+        const rev = parseFloat(row.net_rev) || 0;
+        byKey[key] = (byKey[key] || 0) + rev;
         matched++;
+        const d = String(row.dt_id || '').slice(0,10);
+        if(/^\d{4}-\d{2}-\d{2}$/.test(d)){
+          if(d > maxDate) maxDate = d;
+          let dm = byDayKey[key]; if(!dm) dm = byDayKey[key] = {};
+          dm[d] = (dm[d] || 0) + rev;
+        }
         if(rowCount % 50000 === 0) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris…`;
       },
       complete: function(){
@@ -5031,14 +5215,14 @@ function handleTertiaryFile(file){
           resolve(); return;
         }
         progressEl.textContent = `Menggabungkan data Tertiary (${matched.toLocaleString('id-ID')} baris, ${Object.keys(byKey).length.toLocaleString('id-ID')} outlet)…`;
-        setTimeout(()=>finishTertiaryProcessing(byKey, brandsSeen, progressEl).then(resolve), 30);
+        setTimeout(()=>finishTertiaryProcessing(byKey, brandsSeen, progressEl, byDayKey, maxDate).then(resolve), 30);
       },
       error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
     });
   });
 }
 
-async function finishTertiaryProcessing(byKey, brandsSeen, progressEl){
+async function finishTertiaryProcessing(byKey, brandsSeen, progressEl, byDayKey, maxDate){
   let totalUpdated = 0;
   const brandSummaries = [];
   brandsSeen.forEach(brand=>{
@@ -5068,6 +5252,31 @@ async function finishTertiaryProcessing(byKey, brandsSeen, progressEl){
   if(saveOk){
     progressEl.textContent = `Selesai. Data Tertiary diganti — ` + brandSummaries.join(' · ') + '.';
     await logUpdate('Tertiary (replace)', brandSummaries.join(' · '), totalUpdated);
+    // WoW baseline: Tertiary is a running MTD sum, so "~7 days ago" is the same sum
+    // truncated to rows dated on/before that day — derived straight from this file.
+    if(maxDate){
+      const weekTarget = shiftDateBack(maxDate, 7);
+      if(weekTarget){
+        for(const brand of brandsSeen){
+          const brandI = META.brands.indexOf(brand);
+          if(brandI < 0 || !SELLIN_OUTLETS.some(r=>r[IDX_S.brandIdx]===brandI)) continue;
+          const bl = await weekSellinBaseline(brand);
+          let any = false;
+          bl.rows.forEach(r=>{
+            const dm = byDayKey[brand + '|' + r[IDX_S.outletId]];
+            if(!dm) return;
+            let sum = 0;
+            Object.keys(dm).forEach(d=>{ if(d <= weekTarget) sum += dm[d]; });
+            if(sum){ r[IDX_S.tertiary] = Math.round(sum); any = true; }
+          });
+          if(any){
+            bl.parts.tertiary = { asOf: weekTarget };
+            const okW = await weekSaveSellin(brand, bl.rows, bl.parts);
+            progressEl.textContent += okW ? ` WoW Tertiary ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : ` (Gagal menyimpan WoW Tertiary ${brand} dari file ini.)`;
+          }
+        }
+      }
+    }
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data Tertiary tidak berhasil disimpan online. Coba upload ulang file ini.`;
   }
@@ -5204,8 +5413,9 @@ function handleSecondaryFile(file){
     progressEl.textContent = `Membaca file (${file.name})…`;
 
     const byKey = {};
+    const byDayKey = {};   // key -> {date: revSum} — for the automatic WoW baseline (see below)
     const brandsSeen = new Set();
-    let rowCount = 0, matched = 0;
+    let rowCount = 0, matched = 0, maxDate = '';
 
     Papa.parse(file, {
       header: true,
@@ -5224,6 +5434,12 @@ function handleSecondaryFile(file){
         const rev = parseFloat(row.rev) || 0;
         byKey[key] = (byKey[key] || 0) + rev;
         matched++;
+        const d = String(row.dt_id || '').slice(0,10);
+        if(/^\d{4}-\d{2}-\d{2}$/.test(d)){
+          if(d > maxDate) maxDate = d;
+          let dm = byDayKey[key]; if(!dm) dm = byDayKey[key] = {};
+          dm[d] = (dm[d] || 0) + rev;
+        }
         if(rowCount % 50000 === 0) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris…`;
       },
       complete: function(){
@@ -5233,14 +5449,14 @@ function handleSecondaryFile(file){
           return;
         }
         progressEl.textContent = `Menggabungkan data Secondary (${matched.toLocaleString('id-ID')} baris transaksi, ${Object.keys(byKey).length.toLocaleString('id-ID')} outlet)…`;
-        setTimeout(()=>finishSecondaryProcessing(byKey, brandsSeen, progressEl).then(resolve), 30);
+        setTimeout(()=>finishSecondaryProcessing(byKey, brandsSeen, progressEl, byDayKey, maxDate).then(resolve), 30);
       },
       error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
     });
   });
 }
 
-async function finishSecondaryProcessing(byKey, brandsSeen, progressEl){
+async function finishSecondaryProcessing(byKey, brandsSeen, progressEl, byDayKey, maxDate){
   let totalUpdated = 0;
   const brandSummaries = [];
   brandsSeen.forEach(brand=>{
@@ -5270,6 +5486,31 @@ async function finishSecondaryProcessing(byKey, brandsSeen, progressEl){
   if(saveOk){
     progressEl.textContent = `Selesai. Data Secondary diganti — ` + brandSummaries.join(' · ') + '.';
     await logUpdate('Secondary (replace)', brandSummaries.join(' · '), totalUpdated);
+    // WoW baseline: Secondary is a running MTD sum, so "~7 days ago" is the same sum
+    // truncated to rows dated on/before that day — derived straight from this file.
+    if(maxDate){
+      const weekTarget = shiftDateBack(maxDate, 7);
+      if(weekTarget){
+        for(const brand of brandsSeen){
+          const brandI = META.brands.indexOf(brand);
+          if(brandI < 0 || !SELLIN_OUTLETS.some(r=>r[IDX_S.brandIdx]===brandI)) continue;
+          const bl = await weekSellinBaseline(brand);
+          let any = false;
+          bl.rows.forEach(r=>{
+            const dm = byDayKey[brand + '|' + r[IDX_S.outletId]];
+            if(!dm) return;
+            let sum = 0;
+            Object.keys(dm).forEach(d=>{ if(d <= weekTarget) sum += dm[d]; });
+            if(sum){ r[IDX_S.secondary] = Math.round(sum); any = true; }
+          });
+          if(any){
+            bl.parts.secondary = { asOf: weekTarget };
+            const okW = await weekSaveSellin(brand, bl.rows, bl.parts);
+            progressEl.textContent += okW ? ` WoW Secondary ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : ` (Gagal menyimpan WoW Secondary ${brand} dari file ini.)`;
+          }
+        }
+      }
+    }
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data Secondary tidak berhasil disimpan online. Coba upload ulang file ini.`;
   }
@@ -5328,6 +5569,7 @@ function parseSupplyBody(file, progressEl){
       return;
     }
     const outletAgg = {}; // "brand|outletId" -> field -> [hit, rev]
+    const outletAggByDate = {}; // "brand|outletId" -> date -> field -> [hit, rev] — for the automatic WoW baseline
     const productAgg = {}; // "SP|Product Name" -> [hit, rev]
     let rowCount = 0, matched = 0, brand = null, maxDate = null;
 
@@ -5352,6 +5594,14 @@ function parseSupplyBody(file, progressEl){
           if(!outletAgg[key][field]) outletAgg[key][field] = [0,0];
           outletAgg[key][field][0] += hit;
           outletAgg[key][field][1] += rev;
+          const d = String(row.dt_id || '').slice(0,10);
+          if(/^\d{4}-\d{2}-\d{2}$/.test(d)){
+            if(!outletAggByDate[key]) outletAggByDate[key] = {};
+            if(!outletAggByDate[key][d]) outletAggByDate[key][d] = {};
+            if(!outletAggByDate[key][d][field]) outletAggByDate[key][d][field] = [0,0];
+            outletAggByDate[key][d][field][0] += hit;
+            outletAggByDate[key][d][field][1] += rev;
+          }
 
           let group = null;
           if(field.startsWith('sp_')) group = 'SP';
@@ -5381,14 +5631,14 @@ function parseSupplyBody(file, progressEl){
           return;
         }
         progressEl.textContent = `Menggabungkan data Supply ${brand} (${matched.toLocaleString('id-ID')} baris cocok)…`;
-        setTimeout(()=>finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, progressEl).then(resolve), 30);
+        setTimeout(()=>finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, progressEl, outletAggByDate).then(resolve), 30);
       },
       error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
     });
   });
 }
 
-async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, progressEl){
+async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, progressEl, outletAggByDate){
   const brandI = META.brands.indexOf(brand);
   // this brand's rows as they were before the upload, for the Last Week snapshot
   const snapBrandRows = SUPPLY_OUTLETS.filter(r=>r[IDX_SUP.brandIdx]===brandI);
@@ -5446,6 +5696,41 @@ async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, pro
       progressEl.textContent = base + (okSnap ? ' Snapshot WoW tersimpan.' : ' (Snapshot WoW gagal disimpan — perbandingan WoW belum tersedia untuk Supply.)');
       if(await autoLmtdOnMonthChange('supply', snapBrandRows, snapMeta, snapOldAsOf, maxDate, brand)){
         progressEl.textContent = base + ' Data MoM Supply bulan depan otomatis tersimpan.';
+      }
+    }
+    // WoW baseline from WITHIN this same file: Supply revenue is a running MTD sum, so
+    // "~7 days ago" is the same sum truncated to rows dated on/before that day.
+    if(maxDate){
+      const weekTarget = shiftDateBack(maxDate, 7);
+      if(weekTarget){
+        const weekRows = [];
+        Object.keys(MASTER).forEach(key=>{
+          if(!key.startsWith(brand+'|')) return;
+          const mm = MASTER[key];
+          const oid = key.split('|')[1];
+          const byDate = outletAggByDate[key];
+          const row = [
+            brandI, META.areas.indexOf(mm.area), META.branches.indexOf(mm.branch), META.micros.indexOf(mm.micro),
+            oid, mm.name||'', META.cats.indexOf(mm.cat)
+          ];
+          const totals = {};
+          if(byDate) Object.keys(byDate).forEach(d=>{
+            if(d > weekTarget) return;
+            const dayAgg = byDate[d];
+            Object.keys(dayAgg).forEach(f=>{
+              if(!totals[f]) totals[f] = [0,0];
+              totals[f][0] += dayAgg[f][0]; totals[f][1] += dayAgg[f][1];
+            });
+          });
+          SUP_CAT_FIELDS.forEach(f=>{
+            const v = totals[f] || [0,0];
+            row.push(Math.round(v[0]));
+            row.push(Math.round(v[1]));
+          });
+          weekRows.push(row);
+        });
+        const okWeek = await snapshotPrev('supply', weekRows, META, {[brand]: weekTarget});
+        progressEl.textContent += okWeek ? ` WoW Supply ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : ` (Gagal menyimpan WoW Supply ${brand} dari file ini.)`;
       }
     }
   } else {
