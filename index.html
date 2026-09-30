@@ -914,36 +914,42 @@
     </div>
 
     <div class="panel">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-        <h3 style="margin:0;">Detail Outlet — WoW (vs Last Week)</h3>
-        <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+      <div id="cmpDetailToggleWeek" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;">
+        <h3 style="margin:0;"><span id="cmpDetailArrowWeek">▸</span> Detail Outlet — WoW (vs Last Week)</h3>
+        <span style="color:var(--muted);font-size:12px;">klik untuk buka</span>
+      </div>
+      <div id="cmpDetailWrapWeek" style="display:none;margin-top:8px;">
+        <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;font-size:12px;margin-bottom:6px;">
           <span id="cmpPageInfoWeek">–</span>
           <button id="cmpPrevPageWeek" class="btn btn-ghost btn-sm">&lsaquo; Sebelumnya</button>
           <button id="cmpNextPageWeek" class="btn btn-ghost btn-sm">Berikutnya &rsaquo;</button>
         </div>
-      </div>
-      <div style="overflow:auto;max-height:520px;">
-      <table class="summary" id="cmpDetailTableWeek">
-        <thead id="cmpDetailHeadWeek"></thead>
-        <tbody id="cmpDetailBodyWeek"></tbody>
-      </table>
+        <div style="overflow:auto;max-height:520px;">
+        <table class="summary" id="cmpDetailTableWeek">
+          <thead id="cmpDetailHeadWeek"></thead>
+          <tbody id="cmpDetailBodyWeek"></tbody>
+        </table>
+        </div>
       </div>
     </div>
 
     <div class="panel">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-        <h3 style="margin:0;">Detail Outlet — MoM (vs LMTD)</h3>
-        <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+      <div id="cmpDetailToggleLmtd" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;">
+        <h3 style="margin:0;"><span id="cmpDetailArrowLmtd">▸</span> Detail Outlet — MoM (vs LMTD)</h3>
+        <span style="color:var(--muted);font-size:12px;">klik untuk buka</span>
+      </div>
+      <div id="cmpDetailWrapLmtd" style="display:none;margin-top:8px;">
+        <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;font-size:12px;margin-bottom:6px;">
           <span id="cmpPageInfoLmtd">–</span>
           <button id="cmpPrevPageLmtd" class="btn btn-ghost btn-sm">&lsaquo; Sebelumnya</button>
           <button id="cmpNextPageLmtd" class="btn btn-ghost btn-sm">Berikutnya &rsaquo;</button>
         </div>
-      </div>
-      <div style="overflow:auto;max-height:520px;">
-      <table class="summary" id="cmpDetailTableLmtd">
-        <thead id="cmpDetailHeadLmtd"></thead>
-        <tbody id="cmpDetailBodyLmtd"></tbody>
-      </table>
+        <div style="overflow:auto;max-height:520px;">
+        <table class="summary" id="cmpDetailTableLmtd">
+          <thead id="cmpDetailHeadLmtd"></thead>
+          <tbody id="cmpDetailBodyLmtd"></tbody>
+        </table>
+        </div>
       </div>
     </div>
   </div>
@@ -2510,6 +2516,7 @@ const CMP_METRICS = [
 
 let expandedCmp = { areas:new Set(), branches:new Set() };   // shared by every metric now that they're one table
 let cmpDetailPage = { week:1, lmtd:1 };
+let cmpDetailOpen = { week:false, lmtd:false };   // Detail Outlet starts collapsed so the Summary table is visible without scrolling past it
 const CMP_PAGE_SIZE = 60;
 
 const cmpSupplyVal = r => SUP_CAT_FIELDS.reduce((a,c)=>a+r[IDX_SUP[c+'Rev']], 0);
@@ -2698,7 +2705,15 @@ function renderCmpCategory(){
 
 // Detail Outlet — ONE mode at a time (this table stays the simpler 3-column-per-metric shape;
 // WoW and MoM are two separate stacked tables rather than one very wide merged one).
+function toggleCmpDetail(mode, tag){
+  cmpDetailOpen[mode] = !cmpDetailOpen[mode];
+  document.getElementById('cmpDetailWrap'+tag).style.display = cmpDetailOpen[mode] ? '' : 'none';
+  document.getElementById('cmpDetailArrow'+tag).textContent = cmpDetailOpen[mode] ? '▾' : '▸';
+  if(cmpDetailOpen[mode]) renderCmpDetailOne(mode, tag);   // lazy: only build the table the first time it's opened
+}
+
 function renderCmpDetailOne(mode, tag){
+  if(!cmpDetailOpen[mode]) return;   // collapsed — skip the (fairly heavy) render until the person opens it
   const sellinIdxCur = new Map(); filteredSellin.forEach(r=>sellinIdxCur.set(META.brands[r[IDX_S.brandIdx]]+'|'+r[IDX_S.outletId], r));
   const supplyIdxCur = new Map(); filteredSupply.forEach(r=>supplyIdxCur.set(META.brands[r[IDX_SUP.brandIdx]]+'|'+r[IDX_SUP.outletId], r));
   const sellinArr = cmpPrevArrFor('ga', mode);  // ga/secondary/tertiary/sellin all key off the same sellin snapshot rows
@@ -6693,6 +6708,8 @@ function bindEvents(){
   });
 
   document.getElementById('prevPage').addEventListener('click', ()=>{ if(page>1){page--; renderTable();} });
+  document.getElementById('cmpDetailToggleWeek').addEventListener('click', ()=>toggleCmpDetail('week','Week'));
+  document.getElementById('cmpDetailToggleLmtd').addEventListener('click', ()=>toggleCmpDetail('lmtd','Lmtd'));
   document.getElementById('cmpPrevPageWeek').addEventListener('click', ()=>{ if(cmpDetailPage.week>1){cmpDetailPage.week--; renderCmpDetailOne('week','Week');} });
   document.getElementById('cmpNextPageWeek').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filtered.length/CMP_PAGE_SIZE)); if(cmpDetailPage.week<tp){cmpDetailPage.week++; renderCmpDetailOne('week','Week');} });
   document.getElementById('cmpPrevPageLmtd').addEventListener('click', ()=>{ if(cmpDetailPage.lmtd>1){cmpDetailPage.lmtd--; renderCmpDetailOne('lmtd','Lmtd');} });
