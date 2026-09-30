@@ -1812,8 +1812,17 @@ async function loadPrevBrand(kind, brand, mode){
   const key = prevKey(kind, brand, mode);
   const m = await storageGet(key + '_meta');
   if(!m || !m.numChunks) return null;
-  const raw = await loadChunked(`${key}_s${m.slot}_c`, m.numChunks);
-  if(m.total && raw.length < m.total * 0.98) return null;   // incomplete — better no comparison than a wrong one
+  let raw = await loadChunked(`${key}_s${m.slot}_c`, m.numChunks);
+  // A transient hiccup (one slow/flaky request) can leave this short even though
+  // loadChunked already retries missing chunks internally — rather than immediately
+  // treating that as "no baseline exists" (which would silently hide a real WoW/MoM
+  // comparison until the next upload happens to refresh it), give the WHOLE load one
+  // more full attempt before giving up.
+  if(m.total && raw.length < m.total * 0.98){
+    await new Promise(r=>setTimeout(r, 1200));
+    raw = await loadChunked(`${key}_s${m.slot}_c`, m.numChunks);
+  }
+  if(m.total && raw.length < m.total * 0.98) return null;   // still incomplete after retrying — better no comparison than a wrong one
   const n = m.names || {};
   const map = (arr, cur) => (arr || []).map(nm=>cur.indexOf(nm));
   const bMap = map(n.brands, META.brands), aMap = map(n.areas, META.areas), brMap = map(n.branches, META.branches),
@@ -4361,18 +4370,20 @@ async function finishStockProcessing(data, progressEl){
   // Resolve the WoW ("~7 days ago") row per outlet, now that maxAsOf (the whole file's
   // latest date) is known. Each outlet's OWN closest date on/before target is used — not
   // every outlet necessarily has a row on the exact target date.
-  const weekTarget = maxAsOf ? shiftDateBack(maxAsOf, 7) : null;
-  let anyWeekAgo = false;
-  if(weekTarget){
+  // Builds a full-universe Stock row set using each outlet's closest date ON OR BEFORE
+  // `target` (from this same file's own date spread) — shared by the WoW (7-days-back)
+  // and MoM (1-month-back) auto-derivation below, just with a different target date.
+  function buildStockRowsAtDate(target){
+    const rows = []; let any = false;
     masterKeys.forEach(key=>{
       const [brand, oid] = key.split('|');
       const mm = MASTER[key];
       const e = data[key];
       let spoQ=0,spoA=0,spiQ=0,spiA=0,voQ=0,voA=0,viQ=0,viA=0,salQ=0,salA=0,dspA=0,dvouA=0,dsalA=0;
       if(e){
-        const sd = bestDateOnOrBefore(e.stockByDate, weekTarget);
-        const dd = bestDateOnOrBefore(e.demandByDate, weekTarget);
-        if(sd) anyWeekAgo = true;
+        const sd = bestDateOnOrBefore(e.stockByDate, target);
+        const dd = bestDateOnOrBefore(e.demandByDate, target);
+        if(sd) any = true;
         if(sd) Object.keys(e.stockByDate[sd]).forEach(flag=>{
           const [qty, amt] = e.stockByDate[sd][flag];
           if(flag==='sp_ori'){ spoQ+=qty; spoA+=amt; }
@@ -4388,13 +4399,67 @@ async function finishStockProcessing(data, progressEl){
           else if(flag==='salmo') dsalA += amt;
         });
       }
-      outletsFromFile.push([
+      rows.push([
         bI[brand], aI[mm.area], brI[mm.branch], mI[mm.micro], oid, mm.name||'', cats.indexOf(mm.cat),
         Math.round(spoQ), Math.round(spoA), Math.round(spiQ), Math.round(spiA),
         Math.round(voQ), Math.round(voA), Math.round(viQ), Math.round(viA),
         Math.round(salQ), Math.round(salA), Math.round(dspA), Math.round(dvouA), Math.round(dsalA)
       ]);
     });
+    return { rows, any };
+  }
+  // Like buildStockRowsAtDate, but for MoM: instead of matching the SAME day-of-month as
+  // this upload (which may not even exist in the file), just use the LATEST date that
+  // falls within the given month — Stock is a point-in-time balance, so "last month's
+  // final state" is a more natural MoM baseline than "last month's exact same day".
+  function lastDateInMonth(byDate, ym){
+    if(!byDate) return null;
+    let best = null;
+    for(const d in byDate){ if(d.slice(0,7)===ym && (!best || d>best)) best = d; }
+    return best;
+  }
+  function buildStockRowsAtMonth(ym){
+    const rows = []; let any = false, latestUsed = null;
+    masterKeys.forEach(key=>{
+      const [brand, oid] = key.split('|');
+      const mm = MASTER[key];
+      const e = data[key];
+      let spoQ=0,spoA=0,spiQ=0,spiA=0,voQ=0,voA=0,viQ=0,viA=0,salQ=0,salA=0,dspA=0,dvouA=0,dsalA=0;
+      if(e){
+        const sd = lastDateInMonth(e.stockByDate, ym);
+        const dd = lastDateInMonth(e.demandByDate, ym);
+        if(sd){ any = true; if(!latestUsed || sd > latestUsed) latestUsed = sd; }
+        if(dd && (!latestUsed || dd > latestUsed)) latestUsed = dd;
+        if(sd) Object.keys(e.stockByDate[sd]).forEach(flag=>{
+          const [qty, amt] = e.stockByDate[sd][flag];
+          if(flag==='sp_ori'){ spoQ+=qty; spoA+=amt; }
+          else if(flag==='sp_inj'){ spiQ+=qty; spiA+=amt; }
+          else if(flag==='vou_ori'){ voQ+=qty; voA+=amt; }
+          else if(flag==='vou_inj'){ viQ+=qty; viA+=amt; }
+          else if(flag==='salmo'){ salQ+=qty; salA+=amt; }
+        });
+        if(dd) Object.keys(e.demandByDate[dd]).forEach(flag=>{
+          const [, amt] = e.demandByDate[dd][flag];
+          if(flag==='sp_ori' || flag==='sp_inj') dspA += amt;
+          else if(flag==='vou_ori' || flag==='vou_inj') dvouA += amt;
+          else if(flag==='salmo') dsalA += amt;
+        });
+      }
+      rows.push([
+        bI[brand], aI[mm.area], brI[mm.branch], mI[mm.micro], oid, mm.name||'', cats.indexOf(mm.cat),
+        Math.round(spoQ), Math.round(spoA), Math.round(spiQ), Math.round(spiA),
+        Math.round(voQ), Math.round(voA), Math.round(viQ), Math.round(viA),
+        Math.round(salQ), Math.round(salA), Math.round(dspA), Math.round(dvouA), Math.round(dsalA)
+      ]);
+    });
+    return { rows, any, latestUsed };
+  }
+  const weekTarget = maxAsOf ? shiftDateBack(maxAsOf, 7) : null;
+  let anyWeekAgo = false;
+  if(weekTarget){
+    const b = buildStockRowsAtDate(weekTarget);
+    outletsFromFile.push(...b.rows);
+    anyWeekAgo = b.any;
   }
 
   const branchByArea = {}; areas.forEach(a=>branchByArea[a]=new Set());
@@ -4450,6 +4515,25 @@ async function finishStockProcessing(data, progressEl){
       progressEl.textContent = base2 + (okSnapFile
         ? ` WoW otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).`
         : ' (Gagal menyimpan WoW dari rentang tanggal file ini.)');
+    }
+    // Same idea, but a month back — if this file also carries last month's dates (e.g. it
+    // spans both August and September at once), that's usable directly as the LMTD/MoM
+    // baseline, cut at the same day-of-month.
+    // MoM baseline from WITHIN this same file — for Stock specifically, use the LAST date
+    // available in last month, whatever day that happens to be (not forced to match this
+    // month's cutoff day), since Stock is a point-in-time balance rather than a running sum.
+    const momAnchor = maxAsOf ? lmtdShiftBack(maxAsOf) : null;   // just used to derive which month is "last month"
+    if(momAnchor){
+      const bm = buildStockRowsAtMonth(momAnchor.slice(0,7));
+      if(bm.any){
+        const base3 = progressEl.textContent;
+        const momAsOf = bm.latestUsed;
+        const okMom1 = await lmtdWriteBaseline('stock', 'IM3', bm.rows.filter(r=>r[0]===bI['IM3']), { asOf: momAsOf });
+        const okMom2 = await lmtdWriteBaseline('stock', '3ID', bm.rows.filter(r=>r[0]===bI['3ID']), { asOf: momAsOf });
+        progressEl.textContent = base3 + ((okMom1 && okMom2)
+          ? ` MoM Stock otomatis dari file ini tersimpan (dibandingkan dengan ${momAsOf}, tanggal terakhir bulan lalu di file ini).`
+          : ' (Gagal menyimpan MoM Stock dari rentang tanggal file ini.)');
+      }
     }
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data tidak berhasil disimpan online (koneksi tidak stabil). Data yang tampil di layar mungkin benar, tapi BELUM tentu tersimpan untuk orang lain. Coba upload ulang file ini.`;
@@ -5080,7 +5164,7 @@ function parseGaTxBody(file, delim, fmt, progressEl){
             + ((total-tagged) ? `, ${(total-tagged).toLocaleString('id-ID')} tanpa outlet (tidak bisa dihubungkan ke outlet)` : '') + '.'
             + (older ? ` ${older.toLocaleString('id-ID')} baris bulan sebelumnya diabaikan.` : '');
           progressEl.textContent = `Menggabungkan data GA ${brand} (${(b.byMonth[ym]||new Map()).size.toLocaleString('id-ID')} outlet punya GA, sampai tgl ${lastDay})…`;
-          await (gaSink || finishGaProcessing)(brand, b.byMonth[ym] || new Map(), lastDay, ym, total, progressEl, note);
+          await (gaSink || finishGaProcessing)(brand, b.byMonth[ym] || new Map(), lastDay, ym, total, progressEl, note, b.byMonth);
           msgs.push(progressEl.textContent);
         }
         if(wantSpPcs){
@@ -5112,6 +5196,25 @@ function parseGaTxBody(file, delim, fmt, progressEl){
               bl.parts.spPcs = { asOf: weekTarget };
               const okW = await weekSaveSellin(brand, bl.rows, bl.parts);
               msgs.push(okW ? `WoW Sell In SP (Pcs) ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : `Gagal menyimpan WoW Sell In SP (Pcs) ${brand} dari file ini.`);
+
+              // MoM baseline: same idea, a month back — usable when this file also carries
+              // last month's dates (e.g. it spans both August and September at once).
+              const momTarget = lmtdShiftBack(sb.maxDate);
+              const momYm = momTarget ? momTarget.slice(0,7) : null;
+              const momDay = momTarget ? +momTarget.slice(8,10) : null;
+              const mpMom = momYm ? sb.byMonth[momYm] : null;
+              if(mpMom){
+                const blM = await lmtdSellinBaseline(brand);
+                blM.rows.forEach(r=>{
+                  const arr = mpMom.get(brand + '|' + r[IDX_S.outletId]);
+                  let sum = 0;
+                  if(arr){ for(let d=0; d<momDay; d++) sum += arr[d]; }
+                  r[IDX_S.sellinSpPcs] = Math.round(sum);
+                });
+                blM.parts.spPcs = { asOf: momTarget };
+                const okM = await lmtdSaveSellin(brand, blM.rows, blM.parts);
+                msgs.push(okM ? `MoM Sell In SP (Pcs) ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${momTarget}).` : `Gagal menyimpan MoM Sell In SP (Pcs) ${brand} dari file ini.`);
+              }
             }
           }
         } else if(skippedRows) msgs.push(`(${skippedRows.toLocaleString('id-ID')} baris bukan GA — kpi selain RET_TAG diabaikan.)`);
@@ -5124,7 +5227,7 @@ function parseGaTxBody(file, delim, fmt, progressEl){
   });
 }
 
-async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl, extraNote){
+async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl, extraNote, allByMonth){
   const brandI = META.brands.indexOf(brand);
   const asOf = `${ym}-${String(lastDay).padStart(2,'0')}`;
   const brandRows = SELLIN_OUTLETS.filter(r=>r[IDX_S.brandIdx]===brandI);
@@ -5185,6 +5288,29 @@ async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl,
       });
       const okWeek = await snapshotPrev('ga', gaWeekRows, META, {[brand]: weekTarget});
       progressEl.textContent += okWeek ? ` WoW GA otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : ' (Gagal menyimpan WoW GA dari file ini.)';
+    }
+    // MoM baseline from WITHIN this same file: usable when this file ALSO carries last
+    // month's dates (e.g. it spans both August and September at once) — this GA upload
+    // format (BigQuery/per-MSISDN) tracks each month's daily data separately, so the
+    // previous month's own day array is just looked up directly, no re-parsing needed.
+    if(allByMonth){
+      const momTarget = lmtdShiftBack(asOf);
+      const momYm = momTarget ? momTarget.slice(0,7) : null;
+      const momDay = momTarget ? +momTarget.slice(8,10) : null;
+      const momMap = momYm ? allByMonth[momYm] : null;
+      if(momMap){
+        const blM = await lmtdSellinBaseline(brand);
+        blM.rows.forEach(r=>{
+          const arr = momMap.get(brand + '|' + r[IDX_S.outletId]);
+          let sum = 0;
+          if(arr){ for(let d=0; d<momDay; d++) sum += arr[d]; }
+          r[IDX_S.rguGa] = Math.round(sum*100)/100;
+          r[IDX_S.qsso] = qssoOf(r[IDX_S.rguGa]);
+        });
+        blM.parts.ga = { asOf: momTarget };
+        const okMom = await lmtdSaveSellin(brand, blM.rows, blM.parts);
+        progressEl.textContent += okMom ? ` MoM GA otomatis dari file ini tersimpan (dibandingkan dengan ${momTarget}).` : ' (Gagal menyimpan MoM GA dari file ini.)';
+      }
     }
   } else {
     progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — data GA ${brand} tidak berhasil disimpan online. Coba upload ulang file ini.`;
@@ -5292,6 +5418,26 @@ function parseOsaBody(file, idCol, progressEl){
             const okW = await weekSaveSellin(brand, bl.rows, bl.parts);
             msgs[msgs.length-1] += okW ? ` WoW Sell In otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : ' (Gagal menyimpan WoW Sell In dari file ini.)';
           }
+
+          // MoM baseline: same idea, a month back — usable when this file also carries last
+          // month's dates (e.g. it spans both August and September at once).
+          const momTarget = lmtdShiftBack(b.maxDate);
+          const byKeyMom = {}; let anyMom = false;
+          b.byKey.forEach((e, key)=>{
+            const sm = bestDateOnOrBefore(e.sp, momTarget), vm = bestDateOnOrBefore(e.vou, momTarget), lm = bestDateOnOrBefore(e.saldo, momTarget);
+            if(sm || vm || lm) anyMom = true;
+            byKeyMom[key] = { sp: sm?e.sp[sm]:0, vou: vm?e.vou[vm]:0, saldo: lm?e.saldo[lm]:0 };
+          });
+          if(anyMom){
+            const blM = await lmtdSellinBaseline(brand);
+            blM.rows.forEach(r=>{
+              const s = byKeyMom[brand + '|' + r[IDX_S.outletId]];
+              if(s){ r[IDX_S.sellinSp] = Math.round(s.sp); r[IDX_S.sellinVou] = Math.round(s.vou); r[IDX_S.sellinSaldo] = Math.round(s.saldo); }
+            });
+            blM.parts.dse = { asOf: momTarget };
+            const okM = await lmtdSaveSellin(brand, blM.rows, blM.parts);
+            msgs[msgs.length-1] += okM ? ` MoM Sell In otomatis dari file ini tersimpan (dibandingkan dengan ${momTarget}).` : ' (Gagal menyimpan MoM Sell In dari file ini.)';
+          }
         }
         if(msgs.length > 1) progressEl.innerHTML = msgs.map(r=>'• ' + r).join('<br>');
         else progressEl.textContent = msgs[0] || progressEl.textContent;
@@ -5385,8 +5531,13 @@ async function finishTertiaryProcessing(byKey, brandsSeen, progressEl, byDayKey,
     await logUpdate('Tertiary (replace)', brandSummaries.join(' · '), totalUpdated);
     // WoW baseline: Tertiary is a running MTD sum, so "~7 days ago" is the same sum
     // truncated to rows dated on/before that day — derived straight from this file.
+    // Constrained to the SAME MONTH as maxDate: byDayKey can hold more than one month's
+    // dates (e.g. a file spanning both August and September at once for the MoM case
+    // below), and a plain "d <= weekTarget" string compare would otherwise also sweep in
+    // an entire earlier month's total by mistake.
     if(maxDate){
       const weekTarget = shiftDateBack(maxDate, 7);
+      const curYm = maxDate.slice(0,7);
       if(weekTarget){
         for(const brand of brandsSeen){
           const brandI = META.brands.indexOf(brand);
@@ -5397,13 +5548,37 @@ async function finishTertiaryProcessing(byKey, brandsSeen, progressEl, byDayKey,
             const dm = byDayKey[brand + '|' + r[IDX_S.outletId]];
             if(!dm) return;
             let sum = 0;
-            Object.keys(dm).forEach(d=>{ if(d <= weekTarget) sum += dm[d]; });
+            Object.keys(dm).forEach(d=>{ if(d.slice(0,7)===curYm && d <= weekTarget) sum += dm[d]; });
             if(sum){ r[IDX_S.tertiary] = Math.round(sum); any = true; }
           });
           if(any){
             bl.parts.tertiary = { asOf: weekTarget };
             const okW = await weekSaveSellin(brand, bl.rows, bl.parts);
             progressEl.textContent += okW ? ` WoW Tertiary ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : ` (Gagal menyimpan WoW Tertiary ${brand} dari file ini.)`;
+          }
+        }
+      }
+      // MoM baseline: same idea, a month back — usable when this file also carries last
+      // month's dates (e.g. it spans both August and September at once).
+      const momTarget = lmtdShiftBack(maxDate);
+      if(momTarget){
+        const momYm = momTarget.slice(0,7);
+        for(const brand of brandsSeen){
+          const brandI = META.brands.indexOf(brand);
+          if(brandI < 0 || !SELLIN_OUTLETS.some(r=>r[IDX_S.brandIdx]===brandI)) continue;
+          const blM = await lmtdSellinBaseline(brand);
+          let anyM = false;
+          blM.rows.forEach(r=>{
+            const dm = byDayKey[brand + '|' + r[IDX_S.outletId]];
+            if(!dm) return;
+            let sum = 0;
+            Object.keys(dm).forEach(d=>{ if(d.slice(0,7)===momYm && d <= momTarget) sum += dm[d]; });
+            if(sum){ r[IDX_S.tertiary] = Math.round(sum); anyM = true; }
+          });
+          if(anyM){
+            blM.parts.tertiary = { asOf: momTarget };
+            const okM = await lmtdSaveSellin(brand, blM.rows, blM.parts);
+            progressEl.textContent += okM ? ` MoM Tertiary ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${momTarget}).` : ` (Gagal menyimpan MoM Tertiary ${brand} dari file ini.)`;
           }
         }
       }
@@ -5619,8 +5794,10 @@ async function finishSecondaryProcessing(byKey, brandsSeen, progressEl, byDayKey
     await logUpdate('Secondary (replace)', brandSummaries.join(' · '), totalUpdated);
     // WoW baseline: Secondary is a running MTD sum, so "~7 days ago" is the same sum
     // truncated to rows dated on/before that day — derived straight from this file.
+    // Constrained to the SAME MONTH as maxDate (see the Tertiary version above for why).
     if(maxDate){
       const weekTarget = shiftDateBack(maxDate, 7);
+      const curYm = maxDate.slice(0,7);
       if(weekTarget){
         for(const brand of brandsSeen){
           const brandI = META.brands.indexOf(brand);
@@ -5631,13 +5808,37 @@ async function finishSecondaryProcessing(byKey, brandsSeen, progressEl, byDayKey
             const dm = byDayKey[brand + '|' + r[IDX_S.outletId]];
             if(!dm) return;
             let sum = 0;
-            Object.keys(dm).forEach(d=>{ if(d <= weekTarget) sum += dm[d]; });
+            Object.keys(dm).forEach(d=>{ if(d.slice(0,7)===curYm && d <= weekTarget) sum += dm[d]; });
             if(sum){ r[IDX_S.secondary] = Math.round(sum); any = true; }
           });
           if(any){
             bl.parts.secondary = { asOf: weekTarget };
             const okW = await weekSaveSellin(brand, bl.rows, bl.parts);
             progressEl.textContent += okW ? ` WoW Secondary ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : ` (Gagal menyimpan WoW Secondary ${brand} dari file ini.)`;
+          }
+        }
+      }
+      // MoM baseline: same idea, a month back — usable when this file also carries last
+      // month's dates (e.g. it spans both August and September at once).
+      const momTarget = lmtdShiftBack(maxDate);
+      if(momTarget){
+        const momYm = momTarget.slice(0,7);
+        for(const brand of brandsSeen){
+          const brandI = META.brands.indexOf(brand);
+          if(brandI < 0 || !SELLIN_OUTLETS.some(r=>r[IDX_S.brandIdx]===brandI)) continue;
+          const blM = await lmtdSellinBaseline(brand);
+          let anyM = false;
+          blM.rows.forEach(r=>{
+            const dm = byDayKey[brand + '|' + r[IDX_S.outletId]];
+            if(!dm) return;
+            let sum = 0;
+            Object.keys(dm).forEach(d=>{ if(d.slice(0,7)===momYm && d <= momTarget) sum += dm[d]; });
+            if(sum){ r[IDX_S.secondary] = Math.round(sum); anyM = true; }
+          });
+          if(anyM){
+            blM.parts.secondary = { asOf: momTarget };
+            const okM = await lmtdSaveSellin(brand, blM.rows, blM.parts);
+            progressEl.textContent += okM ? ` MoM Secondary ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${momTarget}).` : ` (Gagal menyimpan MoM Secondary ${brand} dari file ini.)`;
           }
         }
       }
@@ -5862,6 +6063,46 @@ async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, pro
         });
         const okWeek = await snapshotPrev('supply', weekRows, META, {[brand]: weekTarget});
         progressEl.textContent += okWeek ? ` WoW Supply ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : ` (Gagal menyimpan WoW Supply ${brand} dari file ini.)`;
+      }
+      // MoM baseline from WITHIN this same file: if the file also carries last month's
+      // dates (e.g. it spans both August and September at once), that's usable directly
+      // as the LMTD baseline — cut at the same day-of-month as this upload's MTD figure —
+      // instead of needing a separate upload during an actual real month change.
+      const momTarget = lmtdShiftBack(maxDate);   // same day, one calendar month back (clamped to shorter months)
+      if(momTarget){
+        const momYm = momTarget.slice(0,7), momDay = momTarget.slice(8,10);
+        let anyMom = false;
+        const momRows = [];
+        Object.keys(MASTER).forEach(key=>{
+          if(!key.startsWith(brand+'|')) return;
+          const mm = MASTER[key];
+          const oid = key.split('|')[1];
+          const byDate = outletAggByDate[key];
+          const row = [
+            brandI, META.areas.indexOf(mm.area), META.branches.indexOf(mm.branch), META.micros.indexOf(mm.micro),
+            oid, mm.name||'', META.cats.indexOf(mm.cat)
+          ];
+          const totals = {};
+          if(byDate) Object.keys(byDate).forEach(d=>{
+            if(d.slice(0,7) !== momYm || d.slice(8,10) > momDay) return;   // last month only, up to the matching day
+            anyMom = true;
+            const dayAgg = byDate[d];
+            Object.keys(dayAgg).forEach(f=>{
+              if(!totals[f]) totals[f] = [0,0];
+              totals[f][0] += dayAgg[f][0]; totals[f][1] += dayAgg[f][1];
+            });
+          });
+          SUP_CAT_FIELDS.forEach(f=>{
+            const v = totals[f] || [0,0];
+            row.push(Math.round(v[0]));
+            row.push(Math.round(v[1]));
+          });
+          momRows.push(row);
+        });
+        if(anyMom){
+          const okMom = await lmtdWriteBaseline('supply', brand, momRows, { asOf: momTarget });
+          progressEl.textContent += okMom ? ` MoM Supply ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${momTarget}).` : ` (Gagal menyimpan MoM Supply ${brand} dari file ini.)`;
+        }
       }
     }
   } else {
