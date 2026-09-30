@@ -926,6 +926,7 @@
       </div>
       <div id="cmpDetailWrap" style="display:none;margin-top:8px;">
         <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;font-size:12px;margin-bottom:6px;">
+          <button id="btnDownloadCmpDetail" class="btn btn-ghost btn-sm">Unduh CSV (semua metrik, semua outlet terfilter)</button>
           <span id="cmpPageInfo">–</span>
           <button id="cmpPrevPage" class="btn btn-ghost btn-sm">&lsaquo; Sebelumnya</button>
           <button id="cmpNextPage" class="btn btn-ghost btn-sm">Berikutnya &rsaquo;</button>
@@ -2921,6 +2922,70 @@ function renderCmpDetail(){
   document.getElementById('cmpPageInfo').textContent = `Halaman ${cmpDetailPage} / ${totalPages} (${fmtN(filtered.length)} outlet)`;
   document.getElementById('cmpPrevPage').disabled = cmpDetailPage<=1;
   document.getElementById('cmpNextPage').disabled = cmpDetailPage>=totalPages;
+}
+
+// Same per-outlet values as the Detail Outlet table above, but as a CSV covering EVERY
+// filtered outlet (not just the current page) with raw numbers — useful for spot-checking
+// a WoW/MoM figure by hand against the original source file.
+function exportCmpDetailCsv(){
+  const sellinIdxCur = new Map(); filteredSellin.forEach(r=>sellinIdxCur.set(META.brands[r[IDX_S.brandIdx]]+'|'+r[IDX_S.outletId], r));
+  const supplyIdxCur = new Map(); filteredSupply.forEach(r=>supplyIdxCur.set(META.brands[r[IDX_SUP.brandIdx]]+'|'+r[IDX_SUP.outletId], r));
+  const idxFor = (kind, mode) => {
+    const arr = cmpPrevArrFor(kind==='ga'?'ga':kind, mode);
+    const idx = kind==='stock' ? IDX : (kind==='supply' ? IDX_SUP : IDX_S);
+    const m = new Map(); if(arr) arr.forEach(r=>m.set(META.brands[r[idx.brandIdx]]+'|'+r[idx.outletId], r));
+    return { arr, map: m };
+  };
+  const sellinW = idxFor('ga','week'), sellinL = idxFor('ga','lmtd');
+  const supplyW = idxFor('supply','week'), supplyL = idxFor('supply','lmtd');
+  const stockW = idxFor('stock','week'), stockL = idxFor('stock','lmtd');
+
+  const valuesFor = (r) => {
+    const key = META.brands[r[IDX.brandIdx]]+'|'+r[IDX.outletId];
+    const sc = sellinIdxCur.get(key), su = supplyIdxCur.get(key);
+    return CMP_METRICS.map(m=>{
+      let cv=0, wv=null, lv=null, wOk=false, lOk=false;
+      if(m.key==='stock'){
+        cv = stockAmt(r);
+        wOk = !!stockW.arr; const wr = stockW.map.get(key); wv = wOk ? (wr?stockAmt(wr):0) : null;
+        lOk = !!stockL.arr; const lr = stockL.map.get(key); lv = lOk ? (lr?stockAmt(lr):0) : null;
+      } else if(m.key==='supply'){
+        cv = su?cmpSupplyVal(su):0;
+        wOk = !!supplyW.arr; const wr = supplyW.map.get(key); wv = wOk ? (wr?cmpSupplyVal(wr):0) : null;
+        lOk = !!supplyL.arr; const lr = supplyL.map.get(key); lv = lOk ? (lr?cmpSupplyVal(lr):0) : null;
+      } else {
+        const fIdx = m.key==='ga' ? IDX_S.rguGa : m.key==='sellin' ? null : m.key==='secondary' ? IDX_S.secondary : IDX_S.tertiary;
+        const curVal = m.key==='sellin' ? (sc?(sc[IDX_S.sellinSp]+sc[IDX_S.sellinVou]+sc[IDX_S.sellinSaldo]):0) : (sc?sc[fIdx]:0);
+        cv = curVal;
+        const partKey = m.key==='sellin' ? 'sellin' : m.key;
+        wOk = !!sellinW.arr && cmpPartOk(partKey,'week'); const wr = sellinW.map.get(key);
+        wv = wOk ? (wr ? (m.key==='sellin' ? (wr[IDX_S.sellinSp]+wr[IDX_S.sellinVou]+wr[IDX_S.sellinSaldo]) : wr[fIdx]) : 0) : null;
+        lOk = !!sellinL.arr && cmpPartOk(partKey,'lmtd'); const lr = sellinL.map.get(key);
+        lv = lOk ? (lr ? (m.key==='sellin' ? (lr[IDX_S.sellinSp]+lr[IDX_S.sellinVou]+lr[IDX_S.sellinSaldo]) : lr[fIdx]) : 0) : null;
+      }
+      const growW = (wOk && wv) ? Math.round((cv-wv)/wv*1000)/10 : (wOk && cv>0 ? 'baru' : '');
+      const growL = (lOk && lv) ? Math.round((cv-lv)/lv*1000)/10 : (lOk && cv>0 ? 'baru' : '');
+      return [cv, wOk?wv:'', growW, lOk?lv:'', growL];
+    });
+  };
+
+  const headers = ['brand','area','branch','micro_cluster','outlet_id','outlet_name','kategori'];
+  CMP_METRICS.forEach(m=>{ headers.push(m.label+'_mtd', m.label+'_last_week', m.label+'_growth_wow_pct', m.label+'_lmtd', m.label+'_growth_mom_pct'); });
+  const lines = [headers.join(',')];
+  filtered.forEach(r=>{
+    const base = [
+      META.brands[r[IDX.brandIdx]], META.areas[r[IDX.areaIdx]], META.branches[r[IDX.branchIdx]], META.micros[r[IDX.microIdx]],
+      r[IDX.outletId], JSON.stringify(r[IDX.outletName]||''), META.cats[r[IDX.catIdx]]
+    ];
+    const vals = valuesFor(r).flat();
+    lines.push(base.concat(vals).join(','));
+  });
+  const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `performance_wow_mom_detail_${(document.getElementById('fBranch').value||'semua_branch').replace(/\s+/g,'_')}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function cmpDateLabel(kind, mode){
@@ -5241,8 +5306,21 @@ function parseGaTxBody(file, delim, fmt, progressEl){
         if(wantSpPcs){
           const spBrands = new Set(Object.keys(SP));
           if(spBrands.size){
+            // "Current" (MTD) must only include THIS MONTH's rows — raw sb.byKey sums every
+            // row in the file regardless of date, so a file spanning an earlier month too
+            // would fold that month's count into this month's MTD. Recompute from the
+            // per-day breakdown (sb.byMonth), restricted to each brand's own latest month.
             const combined = {};
-            Object.values(SP).forEach(sb=>Object.assign(combined, sb.byKey));
+            Object.values(SP).forEach(sb=>{
+              if(!sb.maxDate) return;
+              const spYm = sb.maxDate.slice(0,7);
+              const mp = sb.byMonth[spYm];
+              if(!mp) return;
+              mp.forEach((arr, key)=>{
+                let sum = 0; for(let d=0; d<31; d++) sum += arr[d];
+                if(sum) combined[key] = sum;
+              });
+            });
             await finishSellinPcsProcessing(combined, spBrands, progressEl, 0);
             msgs.push(progressEl.textContent);
             // WoW baseline: same idea as GA — Sell In SP (Pcs) is a running MTD count, so
@@ -5571,6 +5649,18 @@ function handleTertiaryFile(file){
 }
 
 async function finishTertiaryProcessing(byKey, brandsSeen, progressEl, byDayKey, maxDate){
+  // "Current" (MTD) must only include THIS MONTH's rows — see the identical fix/comment
+  // in finishSecondaryProcessing above.
+  const curYm = maxDate ? maxDate.slice(0,7) : null;
+  const curByKey = {};
+  if(curYm){
+    Object.keys(byDayKey).forEach(key=>{
+      let sum = 0;
+      Object.keys(byDayKey[key]).forEach(d=>{ if(d.slice(0,7)===curYm) sum += byDayKey[key][d]; });
+      if(sum) curByKey[key] = sum;
+    });
+  }
+  const liveByKey = curYm ? curByKey : byKey;
   let totalUpdated = 0;
   const brandSummaries = [];
   brandsSeen.forEach(brand=>{
@@ -5584,7 +5674,7 @@ async function finishTertiaryProcessing(byKey, brandsSeen, progressEl, byDayKey,
     let updated = 0, total = 0;
     SELLIN_OUTLETS.forEach(r=>{
       if(r[IDX_S.brandIdx] !== brandI) return;
-      const v = byKey[brand + '|' + r[IDX_S.outletId]];
+      const v = liveByKey[brand + '|' + r[IDX_S.outletId]];
       r[IDX_S.tertiary] = v ? Math.round(v) : 0;
       total += r[IDX_S.tertiary];
       updated++;
@@ -5834,6 +5924,21 @@ function handleSecondaryFile(file){
 }
 
 async function finishSecondaryProcessing(byKey, brandsSeen, progressEl, byDayKey, maxDate){
+  // "Current" (MTD) must only include THIS MONTH's rows — if the file also spans an
+  // earlier month (used below for the automatic MoM baseline), the raw byKey sum (every
+  // row in the file, no date filter) would silently fold last month's revenue into this
+  // month's MTD figure too. Recompute per-outlet from the day-level breakdown instead,
+  // restricted to maxDate's month.
+  const curYm = maxDate ? maxDate.slice(0,7) : null;
+  const curByKey = {};
+  if(curYm){
+    Object.keys(byDayKey).forEach(key=>{
+      let sum = 0;
+      Object.keys(byDayKey[key]).forEach(d=>{ if(d.slice(0,7)===curYm) sum += byDayKey[key][d]; });
+      if(sum) curByKey[key] = sum;
+    });
+  }
+  const liveByKey = curYm ? curByKey : byKey;
   let totalUpdated = 0;
   const brandSummaries = [];
   brandsSeen.forEach(brand=>{
@@ -5848,7 +5953,7 @@ async function finishSecondaryProcessing(byKey, brandsSeen, progressEl, byDayKey
     SELLIN_OUTLETS.forEach(r=>{
       if(r[IDX_S.brandIdx] !== brandI) return;
       const key = brand + '|' + r[IDX_S.outletId];
-      const v = byKey[key];
+      const v = liveByKey[key];
       r[IDX_S.secondary] = v ? Math.round(v) : 0;
       updated++;
     });
@@ -6047,6 +6152,21 @@ async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, pro
   const snapBrandRows = SUPPLY_OUTLETS.filter(r=>r[IDX_SUP.brandIdx]===brandI);
   const snapOldAsOf = SUPMETA ? (brand==='IM3' ? SUPMETA.imDate : SUPMETA.tidDate) : null;
   const snapMeta = META;
+  // "Current" (MTD) must only include THIS MONTH's rows — if the file also spans an
+  // earlier month (used below for the automatic MoM baseline), summing outletAgg as-is
+  // would silently fold last month's revenue into this month's MTD total too. Rebuild the
+  // current aggregate from the per-date breakdown, restricted to maxDate's month, instead
+  // of using the raw (unfiltered, all-dates) outletAgg the parser handed in.
+  const curYm = maxDate ? maxDate.slice(0,7) : null;
+  const aggForMonth = (byDate, ym) => {
+    const totals = {};
+    if(byDate && ym) Object.keys(byDate).forEach(d=>{
+      if(d.slice(0,7) !== ym) return;
+      const dayAgg = byDate[d];
+      Object.keys(dayAgg).forEach(f=>{ if(!totals[f]) totals[f]=[0,0]; totals[f][0]+=dayAgg[f][0]; totals[f][1]+=dayAgg[f][1]; });
+    });
+    return totals;
+  };
   // keep the OTHER brand's rows untouched; rebuild this brand's rows from MASTER + new supply data
   const keptOther = SUPPLY_OUTLETS.filter(r=>r[IDX_SUP.brandIdx]!==brandI);
   const rebuilt = [];
@@ -6054,7 +6174,7 @@ async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, pro
     if(!key.startsWith(brand+'|')) return;
     const mm = MASTER[key];
     const oid = key.split('|')[1];
-    const agg = outletAgg[key] || {};
+    const agg = curYm ? aggForMonth(outletAggByDate[key], curYm) : (outletAgg[key] || {});
     const row = [
       brandI, META.areas.indexOf(mm.area), META.branches.indexOf(mm.branch), META.micros.indexOf(mm.micro),
       oid, mm.name||'', META.cats.indexOf(mm.cat)
@@ -7109,6 +7229,7 @@ function bindEvents(){
 
   document.getElementById('prevPage').addEventListener('click', ()=>{ if(page>1){page--; renderTable();} });
   document.getElementById('cmpDetailToggle').addEventListener('click', toggleCmpDetail);
+  document.getElementById('btnDownloadCmpDetail').addEventListener('click', exportCmpDetailCsv);
   document.getElementById('cmpPrevPage').addEventListener('click', ()=>{ if(cmpDetailPage>1){cmpDetailPage--; renderCmpDetail();} });
   document.getElementById('cmpNextPage').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filtered.length/CMP_PAGE_SIZE)); if(cmpDetailPage<tp){cmpDetailPage++; renderCmpDetail();} });
   document.getElementById('nextPage').addEventListener('click', ()=>{ const tp=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)); if(page<tp){page++; renderTable();} });
