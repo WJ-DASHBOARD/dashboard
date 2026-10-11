@@ -1317,7 +1317,10 @@ const FIELDS_SUP = (() => {
 const IDX_SUP = Object.fromEntries(FIELDS_SUP.map((k,i)=>[k,i]));
 let SUPMETA = null;
 let SUPPLY_OUTLETS = [];
-const PROD_FIELDS_SUP = ['group','product','brandIdx','areaIdx','branchIdx','microIdx','catIdx','hit','rev','nOutlet'];
+// ptypeIdx/territoryIdx/dseIdx appended at the end (same backward-compat rule as
+// FIELDS_O/FIELDS_S): older stored rows simply lack these positions, and anything
+// reading them treats `undefined` as "no filter info" rather than crashing.
+const PROD_FIELDS_SUP = ['group','product','brandIdx','areaIdx','branchIdx','microIdx','catIdx','hit','rev','nOutlet','ptypeIdx','territoryIdx','dseIdx'];
 const IDX_PROD = Object.fromEntries(PROD_FIELDS_SUP.map((k,i)=>[k,i]));
 let SUPPLY_PRODUCT_ROWS = []; // dimension-tagged rows, filtered the same way as SUPPLY_OUTLETS
 let filteredSupply = [];
@@ -3573,11 +3576,22 @@ function renderTopProducts(){
   const area = document.getElementById('fArea').value;
   const branch = document.getElementById('fBranch').value;
   const micro = document.getElementById('fMicro').value;
+  const ptype = document.getElementById('fPtype').value;
+  const territory = document.getElementById('fTerritory').value;
+  const dse = document.getElementById('fDse').value;
   const brandI = brand ? META.brands.indexOf(brand) : -1;
   const areaI = area ? META.areas.indexOf(area) : -1;
   const branchI = branch ? META.branches.indexOf(branch) : -1;
   const microI = micro ? META.micros.indexOf(micro) : -1;
   const catI = activeCat ? META.cats.indexOf(activeCat) : -1;
+  // ptypeIdx/territoryIdx/dseIdx are baked directly into each SUPPLY_PRODUCT_ROWS
+  // row (unlike SUPPLY_OUTLETS, which needs the MASTER-derived keySet since it has
+  // no room to carry these dimensions per-row without duplicating every outlet row
+  // per product) — older rows saved before this field existed decode as undefined,
+  // which is treated the same as "no selection" below (>=0 check short-circuits).
+  const ptypeI = ptype ? META.ptypes.indexOf(ptype) : -1;
+  const territoryI = territory ? META.territories.indexOf(territory) : -1;
+  const dseI = dse ? META.dses.indexOf(dse) : -1;
   let regionAreaSet = null;
   if(region && !area && META.areasByRegion && META.areasByRegion[region]){
     regionAreaSet = new Set(META.areasByRegion[region].map(a=>META.areas.indexOf(a)));
@@ -3589,6 +3603,9 @@ function renderTopProducts(){
     if(regionAreaSet && !regionAreaSet.has(r[IDX_PROD.areaIdx])) return false;
     if(branchI>=0 && r[IDX_PROD.branchIdx]!==branchI) return false;
     if(microI>=0 && r[IDX_PROD.microIdx]!==microI) return false;
+    if(ptypeI>=0 && r[IDX_PROD.ptypeIdx]!==ptypeI) return false;
+    if(territoryI>=0 && r[IDX_PROD.territoryIdx]!==territoryI) return false;
+    if(dseI>=0 && r[IDX_PROD.dseIdx]!==dseI) return false;
     if(catI>=0 && r[IDX_PROD.catIdx]!==catI) return false;
     return true;
   });
@@ -6571,7 +6588,13 @@ function parseSupplyBody(file, progressEl){
             // dimension-tagged key so Top Products can be filtered by Area/Branch/
             // Micro/Kategori later, the same way the outlet-level tables are
             const pname = (row.product_name && row.product_name.trim()) ? row.product_name : row.category;
-            const pkey = [group, pname, mm.area, mm.branch, mm.micro, mm.cat].join('\u0001');
+            // ptype/territory/dse are folded into the grouping key (not just area/branch/
+            // micro/cat) so Top Products can be filtered by Partner Type/Territory/DSE
+            // Code the same way the outlet-level tables are — those three filters aren't
+            // reliably positioned across schemas, but since each outlet has exactly one
+            // ptype/territory/dse, grouping by them here is just a finer partition of the
+            // same per-outlet Set already being built, not an approximation.
+            const pkey = [group, pname, mm.area, mm.branch, mm.micro, mm.cat, mm.ptype||'N/A', mm.territory||'N/A', mm.dse||'N/A'].join('\u0001');
             if(!productAgg[pkey]) productAgg[pkey] = [0,0,new Set()];
             productAgg[pkey][0] += hit;
             productAgg[pkey][1] += rev;
@@ -6643,12 +6666,18 @@ async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, pro
   // brand's rows are kept untouched (matching how outlet rows are handled above)
   const keptOtherProd = SUPPLY_PRODUCT_ROWS.filter(r=>r[IDX_PROD.brandIdx]!==brandI);
   const rebuiltProd = [];
+  const ptypeIdxOf = Object.fromEntries((META.ptypes||['N/A']).map((v,i)=>[v,i]));
+  const territoryIdxOf = Object.fromEntries((META.territories||['N/A']).map((v,i)=>[v,i]));
+  const dseIdxOf = Object.fromEntries((META.dses||['N/A']).map((v,i)=>[v,i]));
   Object.keys(productAgg).forEach(pkey=>{
-    const [group, product, area, branch, micro, cat] = pkey.split('\u0001');
+    const [group, product, area, branch, micro, cat, ptype, territory, dse] = pkey.split('\u0001');
     const v = productAgg[pkey];
     rebuiltProd.push([
       group, product, brandI, META.areas.indexOf(area), META.branches.indexOf(branch), META.micros.indexOf(micro), META.cats.indexOf(cat),
-      v[0], Math.round(v[1]*100)/100, v[2] instanceof Set ? v[2].size : v[2]
+      v[0], Math.round(v[1]*100)/100, v[2] instanceof Set ? v[2].size : v[2],
+      ptypeIdxOf[ptype] != null ? ptypeIdxOf[ptype] : ptypeIdxOf['N/A'],
+      territoryIdxOf[territory] != null ? territoryIdxOf[territory] : territoryIdxOf['N/A'],
+      dseIdxOf[dse] != null ? dseIdxOf[dse] : dseIdxOf['N/A']
     ]);
   });
   SUPPLY_PRODUCT_ROWS = keptOtherProd.concat(rebuiltProd);
@@ -7113,6 +7142,9 @@ function renderMapPoints(){
   const areaSel = document.getElementById('fArea').value;
   const branch = document.getElementById('fBranch').value;
   const microSel = document.getElementById('fMicro').value;
+  const ptype = document.getElementById('fPtype').value;
+  const territory = document.getElementById('fTerritory').value;
+  const dse = document.getElementById('fDse').value;
   const search = document.getElementById('fSearch').value.trim().toLowerCase();
   const brandI = brand ? META.brands.indexOf(brand) : -1;
   const branchI = branch ? META.branches.indexOf(branch) : -1;
@@ -7126,6 +7158,20 @@ function renderMapPoints(){
     META.areasByRegion[region].forEach(a=>(META.branchByArea[a]||[]).forEach(b=>regionBranches.add(b)));
   }
   const catI = activeCat ? META.cats.indexOf(activeCat) : -1;
+  // GEO_POINTS does carry outletId, so Partner Type/Territory/DSE Code (not
+  // reliably positioned across schemas) go through the same MASTER-derived
+  // keySet pattern as applyFilters(), keyed by brand+outletId.
+  let keySet = null;
+  if(ptype || territory || dse){
+    keySet = new Set();
+    Object.keys(MASTER).forEach(key=>{
+      const mm = MASTER[key];
+      if(ptype && (mm.ptype||'N/A') !== ptype) return;
+      if(territory && (mm.territory||'N/A') !== territory) return;
+      if(dse && (mm.dse||'N/A') !== dse) return;
+      keySet.add(key);
+    });
+  }
 
   const searchTokens = search ? search.split(/\s+/).filter(Boolean) : [];
 
@@ -7143,6 +7189,7 @@ function renderMapPoints(){
     if(areaBranches && !areaBranches.has(META.branches[p[GIDX.branchIdx]])) return;
     if(regionBranches && !regionBranches.has(META.branches[p[GIDX.branchIdx]])) return;
     if(catI>=0 && p[GIDX.catIdx]!==catI) return;
+    if(keySet && !keySet.has(META.brands[p[GIDX.brandIdx]]+'|'+p[GIDX.outletId])) return;
     if(searchTokens.length){
       const hay = (String(p[GIDX.outletId]) + ' ' + String(p[GIDX.outletName]) + ' ' + META.branches[p[GIDX.branchIdx]]).toLowerCase();
       if(!searchTokens.every(t=>hay.includes(t))) return;
