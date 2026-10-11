@@ -197,6 +197,22 @@
   .badge.zero{background:var(--grey-soft);color:var(--ink-soft);}
   .badge.low{background:var(--amber-soft);color:var(--amber);}
   .badge.ok{background:var(--green-soft);color:var(--green);}
+  .badge.Hybrid{background:var(--amber-soft);color:var(--amber);}
+  .badge.im3only{background:#E1EBF6;color:#2A6FB0;}
+  .badge.tidonly{background:var(--green-soft);color:var(--green);}
+  .badge.MPX{background:#E3DBF7;color:#5B3FA6;}
+  .badge.SDP{background:#FDE3EE;color:#B0266F;}
+  /* Brand and Branch columns hidden: Brand already has its own summary section just
+     below each table, and Branch Name is now identical to Area Name in the pairing
+     data (see handleMasterFile), so both are redundant as table columns. All four
+     ".data" outlet-level tables (Stock, Sell In, Supply, and the merged Detail
+     Outlet table) share this exact column order (Brand, Branch, Micro Cluster, ...). */
+  table.data thead tr:first-child th:nth-child(1), table.data tbody tr td:nth-child(1),
+  table.data thead tr:first-child th:nth-child(2), table.data tbody tr td:nth-child(2),
+  #cmpDetailTable thead tr:first-child th:nth-child(1), #cmpDetailTable tbody tr td:nth-child(1),
+  #cmpDetailTable thead tr:first-child th:nth-child(2), #cmpDetailTable tbody tr td:nth-child(2){
+    display:none;
+  }
   .pagination{display:flex;gap:6px;justify-content:flex-end;margin-top:12px;align-items:center;font-size:12.5px;color:var(--muted);}
   .pagination button{border:1px solid var(--border);background:#fff;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12.5px;}
   .pagination button:disabled{opacity:.4;cursor:default;}
@@ -255,9 +271,9 @@
 <div class="filterbar">
   <div class="filterbar-inner">
     <div class="filter-controls">
-      <select id="fBrand"><option value="">Semua Brand</option></select>
+      <select id="fBrand" style="display:none;"><option value="">Semua Brand</option></select>
       <select id="fArea"><option value="">Semua Area</option></select>
-      <select id="fBranch"><option value="">Semua Branch</option></select>
+      <select id="fBranch" style="display:none;"><option value="">Semua Branch</option></select>
       <select id="fMicro"><option value="">Semua Micro Cluster</option></select>
       <div class="chip-row" id="catChips">
         <div class="chip active" data-cat="">Semua Outlet</div>
@@ -985,6 +1001,16 @@
       <input type="password" id="loginPass" style="width:100%;" autocomplete="current-password">
       <div class="progress-line" id="loginError" style="color:var(--red);"></div>
       <button class="btn btn-primary" id="btnDoLogin" style="margin-top:12px;background:var(--red);color:#fff;width:100%;">Masuk</button>
+      <div style="text-align:center;margin-top:10px;">
+        <a href="#" id="linkForgotPass" style="font-size:12px;color:var(--ink-soft);text-decoration:underline;">Lupa password?</a>
+      </div>
+      <div id="forgotPassBox" class="hidden" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
+        <label style="font-size:12.5px;display:block;margin-bottom:4px;">Username yang mau direset</label>
+        <input type="text" id="forgotPassUser" style="width:100%;margin-bottom:8px;" autocomplete="username">
+        <div class="progress-line" id="forgotPassMsg"></div>
+        <button class="btn btn-sm" id="btnDoForgotPass" style="margin-top:6px;width:100%;">Reset Password ke Default</button>
+        <p class="hint" style="margin-top:6px;">Password akan direset ke default (<code>wj2026</code>) dan kamu akan diminta membuat password baru saat login berikutnya.</p>
+      </div>
     </div>
   </div>
 </div>
@@ -1036,7 +1062,7 @@
 
     <div class="upload-block">
       <h4>2. Data Outlet / Pairing (Excel .xlsx)</h4>
-      <p class="hint">Update bulanan. Sheet "IM3" dan "3ID"; outlet dengan PJP = "YES" atau Flag KAM = "KAM" yang dipakai. Kategori: KAM (Flag KAM) diprioritaskan, lalu KRO (Flag), sisanya PJP.</p>
+      <p class="hint">Update bulanan. Dua format didukung: (1) format lama — sheet "IM3" dan "3ID", outlet dengan PJP = "YES" atau Flag KAM = "KAM" yang dipakai, Kategori: KAM (Flag KAM) diprioritaskan, lalu KRO (Flag), sisanya PJP; (2) format baru — 1 sheet dengan kolom "Outlet Code IM3"/"Outlet Code 3ID" berdampingan, khusus PJP, kolom "Outlet status" dipakai untuk remark Hybrid/IM3 only/3ID only (outlet KAM/KRO dari upload sebelumnya tetap dipertahankan).</p>
       <input type="file" id="masterFile" accept=".xlsx">
       <div class="progress-line" id="masterProgress"></div>
     </div>
@@ -1052,6 +1078,10 @@
       <h4>4. Update Secondary (replace) — BigQuery export (CSV)</h4>
       <p class="hint">Ganti kolom Secondary di data Sell In &amp; GA yang sudah ada, dari file transaksi mentah (kolom brand, region, outlet_id, parameter, rev, dst — 1 file berisi IM3+3ID sekaligus). Baris difilter otomatis ke region=WEST JAVA dan parameter=SECONDARY, lalu nilai <b>rev</b> dijumlahkan per outlet. Hanya kolom Secondary yang diganti — GA/Sell In SP/Voucher/Saldo/Tertiary tidak disentuh. Outlet yang tidak muncul di file ini akan di-set Secondary = 0 (dianggap tidak ada transaksi Secondary bulan tsb). Perlu data Sell In &amp; GA (menu #3) sudah pernah diupload dulu.</p>
       <input type="file" id="secondaryFile" accept=".csv">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-soft);margin-top:6px;">
+        <input type="checkbox" id="secondaryIsLmtd">
+        Ini data <b>bulan lalu saja</b> (file terpisah, bukan gabungan 2 bulan) — jadikan baseline LMTD/MoM, jangan timpa data bulan berjalan
+      </label>
       <div class="progress-line" id="secondaryProgress"></div>
     </div>
 
@@ -1127,7 +1157,15 @@
 
 const FIELDS_O = ['brandIdx','areaIdx','branchIdx','microIdx','outletId','outletName','catIdx',
   'spoQty','spoAmt','spiQty','spiAmt','voQty','voAmt','viQty','viAmt','salQty','salAmt',
-  'dspAmt','dvouAmt','dsalAmt'];
+  'dspAmt','dvouAmt','dsalAmt','remarkIdx','ptypeIdx'];
+// ptypeIdx (Tipe Partner: MPX / SDP — from the pairing file's "Partner Type" column,
+// "MPC/MP3" style values group as MPX, "MITRAIM3/3KIOSK" style values group as SDP)
+// was added right after remarkIdx, same backward-compat rule: missing on older rows,
+// falls back to 'N/A' via ptypeOf().
+// remarkIdx (Hybrid / IM3 only / 3ID only — which brand(s) an outlet actually carries,
+// from the pairing file's own "Outlet status" column) was added after everything above
+// it; rows saved before this feature existed are 1 element shorter, so any read of this
+// field falls back to 'N/A' via remarkOf().
 const IDX = Object.fromEntries(FIELDS_O.map((k,i)=>[k,i]));
 function totalDemandAmt(r){ return r[IDX.dspAmt]+r[IDX.dvouAmt]+r[IDX.dsalAmt]; }
 function dosOf(stockA, demandA){ return demandA>0 ? (stockA/demandA) : null; }
@@ -1169,7 +1207,9 @@ function rebuildMasterFromOutlets(){
       branch: META.branches[row[IDX.branchIdx]],
       micro: META.micros[row[IDX.microIdx]],
       name: row[IDX.outletName],
-      cat: META.cats[row[IDX.catIdx]] || 'PJP'
+      cat: META.cats[row[IDX.catIdx]] || 'PJP',
+      remark: remarkOf(row, IDX),
+      ptype: ptypeOf(row, IDX)
     };
   });
   return m;
@@ -1177,7 +1217,7 @@ function rebuildMasterFromOutlets(){
 
 
 const FIELDS_S = ['brandIdx','areaIdx','branchIdx','microIdx','outletId','outletName','catIdx',
-  'rguGa','qsso','sellinSp','sellinVou','sellinSaldo','tertiary','secondary','sellinSpPcs'];
+  'rguGa','qsso','sellinSp','sellinVou','sellinSaldo','tertiary','secondary','sellinSpPcs','remarkIdx','ptypeIdx'];
 // sellinSpPcs (SP Sell In, satuan Pcs — jumlah baris kpi=SELLIN unik per outlet dari export
 // BigQuery, field sellinSpPcs) was added after everything above it; rows saved before this feature
 // existed are 1 element shorter, so any read of this field falls back to 0 (see spPcsOf()).
@@ -1244,6 +1284,37 @@ function catName(i){ return META.cats[i]; }
 // visible in the label. The underlying key stays 'KRO' everywhere else (CSS
 // classes, filters, chips) so nothing else needs to change.
 function catDisplayLabel(cat){ return cat==='KRO' ? 'KRO + PJP' : cat; }
+// remark = which brand(s) an outlet actually carries (Hybrid / IM3 only / 3ID only),
+// sourced from the pairing file's "Outlet status" column. 'N/A' covers rows saved
+// before this field existed, and KAM/KRO outlets carried forward from an older
+// pairing file that never had this column at all.
+function remarkOf(row, idxObj){
+  const i = idxObj.remarkIdx;
+  const v = (i==null) ? undefined : row[i];
+  if(v==null) return 'N/A';
+  return (META.remarks && META.remarks[v]) || 'N/A';
+}
+function remarkClass(remark){
+  return remark==='Hybrid' ? 'Hybrid' : remark==='IM3 only' ? 'im3only' : remark==='3ID only' ? 'tidonly' : 'zero';
+}
+function remarkBadge(row, idxObj){
+  const r = remarkOf(row, idxObj);
+  return `<span class="badge ${remarkClass(r)}">${r}</span>`;
+}
+// ptype = Tipe Partner (MPX / SDP), sourced from the pairing file's "Partner Type"
+// column — "MPC/MP3"-style values group as MPX, "MITRAIM3/3KIOSK"-style values
+// group as SDP. Same backward-compat fallback as remark ('N/A' when missing).
+function ptypeOf(row, idxObj){
+  const i = idxObj.ptypeIdx;
+  const v = (i==null) ? undefined : row[i];
+  if(v==null) return 'N/A';
+  return (META.ptypes && META.ptypes[v]) || 'N/A';
+}
+function ptypeClass(ptype){ return ptype==='MPX' ? 'MPX' : ptype==='SDP' ? 'SDP' : 'zero'; }
+function ptypeBadge(row, idxObj){
+  const p = ptypeOf(row, idxObj);
+  return `<span class="badge ${ptypeClass(p)}">${p}</span>`;
+}
 function gaSlabLabel(gaVal){
   if(gaVal<=0) return 'No GA';
   if(gaVal<25) return '<25';
@@ -1557,7 +1628,7 @@ async function loadFromStorageOrSeed(){
     } else if(!meta){
       // no embedded fallback (slim/hosted build) and nothing in the sheet yet either
       setTimeout(()=>showToast('Belum ada data tersimpan — upload data stok lewat "Perbarui data" untuk mulai.'), 800);
-      META = { brands:[], areas:[], branches:[], micros:[], cats:['KAM','KRO','PJP'], branchByArea:{}, microByBranch:{}, brandCounts:{}, totalOutlets:0, fields_outlet: [] };
+      META = { brands:[], areas:[], branches:[], micros:[], cats:['KAM','KRO','PJP'], remarks:['N/A','Hybrid','IM3 only','3ID only'], branchByArea:{}, microByBranch:{}, brandCounts:{}, totalOutlets:0, fields_outlet: [] };
       OUTLETS = [];
       MASTER = {};
     } else {
@@ -2745,26 +2816,35 @@ function renderCmpMetricsTable(){
     const branchTotal = bk => CMP_METRICS.reduce((s,m)=>s + (((T[m.key].cur[ak]||{}).branches||{})[bk]?.total||0), 0);
     const brKeys = Array.from(brKeysSet).sort((x,y)=>branchTotal(y)-branchTotal(x));
     brKeys.forEach(bk=>{
+      // Newer pairing data has Branch Name == Area Name (no real separate Branch level
+      // — see handleMasterFile's wide-format parser). When an Area has exactly one
+      // "branch" and it's just the Area's own name again, showing it as its own row
+      // is a redundant hierarchy level, so it's skipped entirely: its Micro Clusters
+      // render directly nested under the Area row instead, and it's always "open".
+      const isRedundantBranch = brKeys.length===1 && META.branches[bk]===META.areas[ak];
       const bKey = ak+'|'+bk;
-      const bOpen = expandedCmp.branches.has(bKey);
-      let bRowCells = '';
-      CMP_METRICS.forEach(m=>{
-        const cb = (T[m.key].cur[ak]||{}).branches?.[bk] || { total:0, micros:{} };
-        const wA = T[m.key].week ? T[m.key].week[ak] : null;
-        const lA = T[m.key].lmtd ? T[m.key].lmtd[ak] : null;
-        const wb = wA ? (wA.branches[bk] || { total:0, micros:{} }) : null;
-        const lb = lA ? (lA.branches[bk] || { total:0, micros:{} }) : null;
-        bRowCells += cmpRowCells(m.fmt, m.goodUp, cb.total, T[m.key].week, wb, T[m.key].lmtd, lb);
-      });
-      html += `<tr style="background:#FAFAF8;">
-        <td style="padding-left:24px;"><span class="expand-toggle" data-scope="cmp-branch" data-key="${bKey}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${bOpen?'⊟':'⊞'}</span>${META.branches[bk]}</td>
-        ${bRowCells}
-      </tr>`;
+      const bOpen = isRedundantBranch || expandedCmp.branches.has(bKey);
+      if(!isRedundantBranch){
+        let bRowCells = '';
+        CMP_METRICS.forEach(m=>{
+          const cb = (T[m.key].cur[ak]||{}).branches?.[bk] || { total:0, micros:{} };
+          const wA = T[m.key].week ? T[m.key].week[ak] : null;
+          const lA = T[m.key].lmtd ? T[m.key].lmtd[ak] : null;
+          const wb = wA ? (wA.branches[bk] || { total:0, micros:{} }) : null;
+          const lb = lA ? (lA.branches[bk] || { total:0, micros:{} }) : null;
+          bRowCells += cmpRowCells(m.fmt, m.goodUp, cb.total, T[m.key].week, wb, T[m.key].lmtd, lb);
+        });
+        html += `<tr style="background:#FAFAF8;">
+          <td style="padding-left:24px;"><span class="expand-toggle" data-scope="cmp-branch" data-key="${bKey}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${bOpen?'⊟':'⊞'}</span>${META.branches[bk]}</td>
+          ${bRowCells}
+        </tr>`;
+      }
       if(!bOpen) return;
       const miKeysSet = new Set();
       CMP_METRICS.forEach(m=>Object.keys(((T[m.key].cur[ak]||{}).branches?.[bk]||{}).micros||{}).forEach(mik=>miKeysSet.add(mik)));
       const microTotal = mik => CMP_METRICS.reduce((s,m)=>s + ((((T[m.key].cur[ak]||{}).branches?.[bk]||{}).micros||{})[mik]||0), 0);
       const miKeys = Array.from(miKeysSet).sort((x,y)=>microTotal(y)-microTotal(x));
+      const miIndent = isRedundantBranch ? 24 : 44;
       miKeys.forEach(mik=>{
         let miRowCells = '';
         CMP_METRICS.forEach(m=>{
@@ -2781,7 +2861,7 @@ function renderCmpMetricsTable(){
             + `<td>${T[m.key].lmtd ? m.fmt(lv) : '–'}</td><td>${T[m.key].lmtd ? dl(cv, lv, m.goodUp, m.fmt) : ''}</td>`;
         });
         html += `<tr style="background:#F5F4F1;">
-          <td style="padding-left:44px;color:var(--ink-soft);font-size:11.5px;">${META.micros[mik]}</td>
+          <td style="padding-left:${miIndent}px;color:var(--ink-soft);font-size:11.5px;">${META.micros[mik]}</td>
           ${miRowCells}
         </tr>`;
       });
@@ -3367,7 +3447,7 @@ let expandedBranchesSup = new Set();
 function renderSupplySummaryTable(){
   const ctx = groupContext();
   document.getElementById('supSummaryTitle').textContent = 'Summary Supply ' + ctx.title;
-  document.getElementById('supSummaryHeadCol').textContent = ctx.label==='branch' ? 'Branch' : 'Micro Cluster';
+  document.getElementById('supSummaryHeadCol').textContent = ctx.label==='branch' ? 'Area' : 'Micro Cluster';
   const gKey = ctx.key===IDX.branchIdx ? IDX_SUP.branchIdx : IDX_SUP.microIdx;
 
   const initSup = () => ({ outlet:0, spOutlet:0, spHit:0, spRev:0, rebuyOutlet:0, rebuyHit:0, rebuyRev:0, vouOutlet:0, vouHit:0, vouRev:0, vouOriOutlet:0, vouOriHit:0, vouOriRev:0 });
@@ -3706,7 +3786,7 @@ function renderSellinCatSummary(){
 function renderSellinSummaryTable(){
   const ctx = groupContext();
   document.getElementById('siSummaryTitle').textContent = 'Summary Sell In & GA ' + ctx.title;
-  document.querySelector('#siSummaryTable thead th').textContent = ctx.label==='branch' ? 'Branch' : 'Micro Cluster';
+  document.querySelector('#siSummaryTable thead th').textContent = ctx.label==='branch' ? 'Area' : 'Micro Cluster';
   const gKey = ctx.key===IDX.branchIdx ? IDX_S.branchIdx : IDX_S.microIdx;
 
   const initSI = () => ({outlet:0, ga:0, sp:0, vou:0, saldo:0, tertiary:0, secondary:0, wSp:0, wVou:0, wSaldo:0, wGa:0, s0:0,s1:0,s2:0,s3:0,s4:0});
@@ -3828,7 +3908,7 @@ function renderSellinTable(){
       <td>${META.micros[r[IDX_S.microIdx]]}</td>
       <td>${r[IDX_S.outletId]}</td>
       <td class="name-cell">${r[IDX_S.outletName]||'-'}</td>
-      <td><span class="badge ${catName(r[IDX_S.catIdx])}">${catDisplayLabel(catName(r[IDX_S.catIdx]))}</span></td>
+      <td><span class="badge ${catName(r[IDX_S.catIdx])}">${catDisplayLabel(catName(r[IDX_S.catIdx]))}</span> ${remarkBadge(r, IDX_S)}</td>
       <td>${fmtN(r[IDX_S.rguGa])}</td>
       <td><span class="badge ${statusGa}">${statusGaLabel}</span></td>
       <td>${fmtN(r[IDX_S.sellinSp])}</td>
@@ -3846,13 +3926,13 @@ function renderSellinTable(){
 }
 
 function exportSellinCsv(){
-  const headers = ['brand','area','branch','micro_cluster','outlet_id','outlet_name','kategori','ga_mtd','status_ga','sellin_sp','sellin_voucher','sellin_saldo','tertiary','secondary','status_sellin'];
+  const headers = ['brand','area','branch','micro_cluster','outlet_id','outlet_name','kategori','remark_pairing','ga_mtd','status_ga','sellin_sp','sellin_voucher','sellin_saldo','tertiary','secondary','status_sellin'];
   const lines = [headers.join(',')];
   filteredSellin.forEach(r=>{
     const statusGa = gaSlabLabel(r[IDX_S.rguGa]);
     lines.push([
       META.brands[r[IDX_S.brandIdx]], META.areas[r[IDX_S.areaIdx]], META.branches[r[IDX_S.branchIdx]], META.micros[r[IDX_S.microIdx]],
-      r[IDX_S.outletId], JSON.stringify(r[IDX_S.outletName]||''), catDisplayLabel(catName(r[IDX_S.catIdx])),
+      r[IDX_S.outletId], JSON.stringify(r[IDX_S.outletName]||''), catDisplayLabel(catName(r[IDX_S.catIdx])), remarkOf(r, IDX_S),
       r[IDX_S.rguGa], statusGa, r[IDX_S.sellinSp], r[IDX_S.sellinVou], r[IDX_S.sellinSaldo], r[IDX_S.tertiary], r[IDX_S.secondary],
       JSON.stringify(sellinStatusFlags(r).join('; '))
     ].join(','));
@@ -3935,9 +4015,15 @@ function renderKpis(){
 }
 
 function groupContext(){
-  const branch = document.getElementById('fBranch').value;
-  if(!branch) return {key: IDX.branchIdx, names: META.branches, label: 'branch', title: 'per Branch'};
-  return {key: IDX.microIdx, names: META.micros, label: 'micro', title: 'per Micro Cluster — ' + branch};
+  // Drilling into Micro Cluster used to be keyed off the (now-hidden) Branch filter.
+  // Newer pairing data has Branch Name == Area Name (no real separate Branch level),
+  // so the drill-down trigger moved to the Area filter instead — picking an Area
+  // drills straight to its Micro Clusters, matching the Area → Micro Cluster
+  // structure everywhere else. The grouping key itself stays branchIdx (same values
+  // as areaIdx on this data), just relabeled "Area" instead of "Branch".
+  const area = document.getElementById('fArea').value;
+  if(!area) return {key: IDX.branchIdx, names: META.branches, label: 'branch', title: 'per Area'};
+  return {key: IDX.microIdx, names: META.micros, label: 'micro', title: 'per Micro Cluster — ' + area};
 }
 
 // Rendered as inline SVG rather than CSS (flex-child widths and gradient-background
@@ -4021,7 +4107,7 @@ let expandedBranchesSI = new Set();
 function renderSummaryTable(){
   const ctx = groupContext();
   document.getElementById('summaryTableTitle').textContent = 'Summary ' + ctx.title;
-  document.querySelector('#summaryTable thead th').textContent = ctx.label==='branch' ? 'Branch' : 'Micro Cluster';
+  document.querySelector('#summaryTable thead th').textContent = ctx.label==='branch' ? 'Area' : 'Micro Cluster';
 
   const initLB = () => ({outlet:0, stock:0, spoQ:0, spiQ:0, spoA:0, spiA:0, voQ:0, viQ:0, voA:0, viA:0, salA:0,
     dspA:0, dvouA:0, dsalA:0, zero:0, low:0, ok:0});
@@ -4163,7 +4249,7 @@ function exportSummaryTableCsv(){
     return [dSp!==null?dSp.toFixed(2):'', dVou!==null?dVou.toFixed(2):'', dSal!==null?dSal.toFixed(2):'', dAll!==null?dAll.toFixed(2):''];
   };
 
-  const headers = [ctx.label==='branch'?'Branch':'Micro Cluster','Outlet','Total Stock Amount',
+  const headers = [ctx.label==='branch'?'Area':'Micro Cluster','Outlet','Total Stock Amount',
     'SP Qty Ori','SP Qty Inj','SP Amount Ori','SP Amount Inj','Voucher Qty Ori','Voucher Qty Inj',
     'Voucher Amount Ori','Voucher Amount Inj','Salmo Amount','DOS SP','DOS Voucher','DOS Salmo','DOS All Product','Saldo 0','<100K','>=100K'];
   const lines = [headers.join(',')];
@@ -4218,7 +4304,7 @@ function renderTable(){
       <td>${META.micros[r[IDX.microIdx]]}</td>
       <td>${r[IDX.outletId]}</td>
       <td class="name-cell">${r[IDX.outletName]||'-'}</td>
-      <td><span class="badge ${catName(r[IDX.catIdx])}">${catDisplayLabel(catName(r[IDX.catIdx]))}</span></td>
+      <td><span class="badge ${catName(r[IDX.catIdx])}">${catDisplayLabel(catName(r[IDX.catIdx]))}</span> ${remarkBadge(r, IDX)}</td>
       <td>${fmtN(r[IDX.spoQty])}</td>
       <td>${fmtN(r[IDX.spoAmt])}</td>
       <td>${fmtN(r[IDX.spiQty])}</td>
@@ -4251,7 +4337,7 @@ function exportCsv(){
   const sellinIdx = new Map();
   filteredSellin.forEach(r=>sellinIdx.set(META.brands[r[IDX_S.brandIdx]]+'|'+r[IDX_S.outletId], r));
 
-  const headers = ['brand','area','branch','micro_cluster','outlet_id','outlet_name','kategori',
+  const headers = ['brand','area','branch','micro_cluster','outlet_id','outlet_name','kategori','remark_pairing',
     'sp_ori_qty','sp_ori_amt','sp_inj_qty','sp_inj_amt','vou_ori_qty','vou_ori_amt','vou_inj_qty','vou_inj_amt',
     'salmo_amt','dos_sp','dos_voucher','dos_salmo','dos_all_product','status_saldo',
     'sellin_sp','sellin_voucher','sellin_saldo','total_sellin'];
@@ -4269,7 +4355,7 @@ function exportCsv(){
     const totalSellin = s ? (s[IDX_S.sellinSp]+s[IDX_S.sellinVou]+s[IDX_S.sellinSaldo]) : '';
     const row = [
       META.brands[r[IDX.brandIdx]], META.areas[r[IDX.areaIdx]], META.branches[r[IDX.branchIdx]], META.micros[r[IDX.microIdx]],
-      r[IDX.outletId], JSON.stringify(r[IDX.outletName]||''), catDisplayLabel(catName(r[IDX.catIdx])),
+      r[IDX.outletId], JSON.stringify(r[IDX.outletName]||''), catDisplayLabel(catName(r[IDX.catIdx])), remarkOf(r, IDX),
       r[IDX.spoQty], r[IDX.spoAmt], r[IDX.spiQty], r[IDX.spiAmt], r[IDX.voQty], r[IDX.voAmt], r[IDX.viQty], r[IDX.viAmt],
       r[IDX.salAmt],
       dosSp!==null?dosSp.toFixed(2):'', dosVou!==null?dosVou.toFixed(2):'', dosSal!==null?dosSal.toFixed(2):'', dosAll!==null?dosAll.toFixed(2):'', status,
@@ -4292,7 +4378,7 @@ function exportCombinedCsv(){
   filteredSellin.forEach(r=>sellinIdx.set(META.brands[r[IDX_S.brandIdx]]+'|'+r[IDX_S.outletId], r));
 
   const headers = [
-    'brand','area','branch','micro_cluster','outlet_id','outlet_name','kategori',
+    'brand','area','branch','micro_cluster','outlet_id','outlet_name','kategori','remark_pairing',
     'stock_amount_saldo','stock_amount_all','status_stock_saldo','status_stock_all','dos_saldo','dos_all_product',
     'ga_mtd','status_ga','sellin_all','status_sellin'
   ];
@@ -4312,7 +4398,7 @@ function exportCombinedCsv(){
 
     const row = [
       META.brands[r[IDX.brandIdx]], META.areas[r[IDX.areaIdx]], META.branches[r[IDX.branchIdx]], META.micros[r[IDX.microIdx]],
-      r[IDX.outletId], JSON.stringify(r[IDX.outletName]||''), catDisplayLabel(catName(r[IDX.catIdx])),
+      r[IDX.outletId], JSON.stringify(r[IDX.outletName]||''), catDisplayLabel(catName(r[IDX.catIdx])), remarkOf(r, IDX),
       r[IDX.salAmt], Math.round(stock), statusSaldo, statusStockAll,
       dosSal!==null?dosSal.toFixed(2):'', dosAll!==null?dosAll.toFixed(2):'',
       s ? s[IDX_S.rguGa] : '', gaSlabLabel(gaVal), totalSellin, JSON.stringify(statusSellin)
@@ -4359,7 +4445,7 @@ function renderCombinedTable(){
       <td>${META.micros[r[IDX.microIdx]]}</td>
       <td>${r[IDX.outletId]}</td>
       <td class="name-cell">${r[IDX.outletName]||'-'}</td>
-      <td><span class="badge ${catName(r[IDX.catIdx])}">${catDisplayLabel(catName(r[IDX.catIdx]))}</span></td>
+      <td><span class="badge ${catName(r[IDX.catIdx])}">${catDisplayLabel(catName(r[IDX.catIdx]))}</span> ${remarkBadge(r, IDX)}</td>
       <td>${fmtN(r[IDX.salAmt])}</td>
       <td>${fmtN(stock)}</td>
       <td><span class="badge ${statusSaldo}">${statusSaldoLabel}</span></td>
@@ -4761,8 +4847,80 @@ function handleMasterFile(file){
         }
         return n;
       }
-      const n1 = extract('IM3', 'IM3');
-      const n2 = extract('3ID', '3ID');
+
+      // NEWER file layout: one sheet, one row per outlet-pairing-slot, with BOTH
+      // brands' outlet code/name side by side (columns "Outlet Code IM3" / "Outlet
+      // Code 3ID") instead of two separate IM3/3ID sheets. This layout is PJP-only
+      // (no PJP/Flag/Flag KAM columns at all) and already carries an "Outlet status"
+      // column telling us whether the outlet has IM3 only, 3ID only, or both
+      // ("hybrid_outlet" / "only_im3_outlet" / "only_3id_outlet", case can vary) —
+      // that becomes the Hybrid/IM3 only/3ID only remark.
+      function extractWideFormat(ws){
+        const allRows = XLSX.utils.sheet_to_json(ws, {header:1});
+        let headerRowIdx = -1, header = null;
+        const searchLimit = Math.min(allRows.length, 30);
+        for(let i=0;i<searchLimit;i++){
+          if(allRows[i] && allRows[i].some(c=>normHeader(c)==='outlet code im3')){ headerRowIdx = i; header = allRows[i]; break; }
+        }
+        if(headerRowIdx===-1) return null; // not this layout
+        const normedHeader = header.map(normHeader);
+        const col = (name)=>normedHeader.indexOf(normHeader(name));
+        const iArea = col('Area Name'), iMicro = col('Micro Cluster Name (MC)'),
+          iCodeIm3 = col('Outlet Code IM3'), iNameIm3 = col('Outlet IM3 Name'),
+          iCodeTid = col('Outlet Code 3ID'), iNameTid = col('Outlet 3ID Name'),
+          iStatus = col('Outlet status'), iPtype = col('Partner Type');
+        // This file's hierarchy is Area -> Micro Cluster directly (its "Branch Name"
+        // column is always identical to Area Name here), so Branch is just set equal
+        // to Area rather than read from its own column.
+        function classifyPtype(raw){
+          const s = normHeader(raw);
+          if(s.indexOf('mitraim3')>=0 || s.indexOf('3kiosk')>=0) return 'SDP';
+          if(s.indexOf('mp3')>=0 || s.indexOf('mpx')>=0 || s.indexOf('mpc')>=0) return 'MPX';
+          return 'N/A';
+        }
+        const entries = {};
+        let nIm3 = 0, nTid = 0, skippedNoCode = 0;
+        for(let ri=headerRowIdx+1; ri<allRows.length; ri++){
+          const r = allRows[ri];
+          if(!r){ continue; }
+          const codeIm3 = iCodeIm3>=0 ? r[iCodeIm3] : null;
+          const codeTid = iCodeTid>=0 ? r[iCodeTid] : null;
+          const hasIm3 = codeIm3!=null && String(codeIm3).trim()!=='';
+          const hasTid = codeTid!=null && String(codeTid).trim()!=='';
+          if(!hasIm3 && !hasTid){ skippedNoCode++; continue; }
+          const statusRaw = iStatus>=0 ? normHeader(r[iStatus]) : '';
+          let remark;
+          if(statusRaw.indexOf('hybrid')>=0) remark = 'Hybrid';
+          else if(statusRaw.indexOf('only_im3')>=0) remark = 'IM3 only';
+          else if(statusRaw.indexOf('only_3id')>=0) remark = '3ID only';
+          else remark = (hasIm3 && hasTid) ? 'Hybrid' : (hasIm3 ? 'IM3 only' : '3ID only'); // fallback if status missing/unrecognized
+          const ptype = iPtype>=0 ? classifyPtype(r[iPtype]) : 'N/A';
+          const area = (iArea>=0 && r[iArea]) || 'TANPA AREA';
+          const branch = area;
+          const micro = (iMicro>=0 && r[iMicro]) || 'TANPA MICRO CLUSTER';
+          if(hasIm3){ entries['IM3|'+normId(codeIm3)] = {area, branch, micro, name:(iNameIm3>=0?r[iNameIm3]:'')||'', cat:'PJP', remark, ptype}; nIm3++; }
+          if(hasTid){ entries['3ID|'+normId(codeTid)] = {area, branch, micro, name:(iNameTid>=0?r[iNameTid]:'')||'', cat:'PJP', remark, ptype}; nTid++; }
+        }
+        return {entries, nIm3, nTid, skippedNoCode, totalRows: allRows.length - headerRowIdx - 1};
+      }
+
+      let wideResult = null;
+      for(const sn of wb.SheetNames){ const r = extractWideFormat(wb.Sheets[sn]); if(r){ wideResult = r; break; } }
+
+      let n1, n2;
+      if(wideResult){
+        // This file is PJP-only — keep whatever KAM/KRO outlets already exist from
+        // an older pairing upload (this file doesn't cover them and nothing asked
+        // for them to be dropped), and replace the entire PJP universe with this
+        // file's content.
+        Object.keys(MASTER).forEach(k=>{ if(MASTER[k].cat !== 'PJP') newMaster[k] = MASTER[k]; });
+        Object.assign(newMaster, wideResult.entries);
+        n1 = wideResult.nIm3; n2 = wideResult.nTid;
+        diagnostics.push(`Format baru terdeteksi (1 sheet, kolom "Outlet Code IM3"/"Outlet Code 3ID"). ${wideResult.totalRows} baris dibaca, ${wideResult.skippedNoCode} tanpa kode outlet. Kategori KAM/KRO dari pairing sebelumnya (jika ada) tetap dipakai.`);
+      } else {
+        n1 = extract('IM3', 'IM3');
+        n2 = extract('3ID', '3ID');
+      }
 
       if(n1+n2 === 0){
         // never proceed to save with an empty result — that would wipe out the
@@ -4796,10 +4954,14 @@ function handleMasterFile(file){
       const branches = Array.from(branchesSet).sort();
       const micros = Array.from(microsSet).sort();
       const cats = ['KAM','KRO','PJP'];
+      const remarks = ['N/A','Hybrid','IM3 only','3ID only'];
+      const ptypes = ['N/A','MPX','SDP'];
       const bI = Object.fromEntries(brands.map((v,i)=>[v,i]));
       const aI = Object.fromEntries(areas.map((v,i)=>[v,i]));
       const brI = Object.fromEntries(branches.map((v,i)=>[v,i]));
       const mI = Object.fromEntries(micros.map((v,i)=>[v,i]));
+      const rI = Object.fromEntries(remarks.map((v,i)=>[v,i]));
+      const pI = Object.fromEntries(ptypes.map((v,i)=>[v,i]));
 
       const newOutlets = masterKeys.map(key=>{
         const [brand, oid] = key.split('|');
@@ -4813,7 +4975,8 @@ function handleMasterFile(file){
           old ? old[IDX.voQty] : 0, old ? old[IDX.voAmt] : 0,
           old ? old[IDX.viQty] : 0, old ? old[IDX.viAmt] : 0,
           old ? old[IDX.salQty] : 0, old ? old[IDX.salAmt] : 0,
-          old ? old[IDX.dspAmt] : 0, old ? old[IDX.dvouAmt] : 0, old ? old[IDX.dsalAmt] : 0
+          old ? old[IDX.dspAmt] : 0, old ? old[IDX.dvouAmt] : 0, old ? old[IDX.dsalAmt] : 0,
+          rI[mm.remark || 'N/A'], pI[mm.ptype || 'N/A']
         ];
       });
 
@@ -4830,7 +4993,7 @@ function handleMasterFile(file){
       newOutlets.forEach(row=>{ brandCounts[brands[row[0]]]++; });
 
       META = {
-        brands, areas, branches, micros, cats, branchByArea, microByBranch, brandCounts,
+        brands, areas, branches, micros, cats, remarks, ptypes, branchByArea, microByBranch, brandCounts,
         asOf: META.asOf, totalOutlets: newOutlets.length,
         masterUpdated: META.masterUpdated, lastUpdated: new Date().toISOString(),
         fields_outlet: FIELDS_O,
@@ -4852,7 +5015,8 @@ function handleMasterFile(file){
           bI[b], aI[mm.area], brI[mm.branch], mI[mm.micro], oid, mm.name||'', cats.indexOf(mm.cat),
           old ? old[IDX_S.rguGa] : 0, old ? old[IDX_S.qsso] : 0, old ? old[IDX_S.sellinSp] : 0,
           old ? old[IDX_S.sellinVou] : 0, old ? old[IDX_S.sellinSaldo] : 0,
-          old ? old[IDX_S.tertiary] : 0, old ? old[IDX_S.secondary] : 0, old ? spPcsOf(old) : 0
+          old ? old[IDX_S.tertiary] : 0, old ? old[IDX_S.secondary] : 0, old ? spPcsOf(old) : 0,
+          rI[mm.remark || 'N/A'], pI[mm.ptype || 'N/A']
         ];
       });
       if(SMETA) SMETA = {...SMETA, totalOutlets: SELLIN_OUTLETS.length};
@@ -4861,7 +5025,14 @@ function handleMasterFile(file){
       const saveOk1 = await persistAll((done,total)=>{ progressEl.textContent = `Menyimpan pairing online — data outlet ${done}/${total}…`; });
       const saveOk2 = SMETA ? await persistSellin((done,total)=>{ progressEl.textContent = `Menyimpan pairing online — data sell-in ${done}/${total}…`; }) : true;
       if(saveOk1 && saveOk2){
-        progressEl.textContent = `Selesai. Total ${newOutlets.length.toLocaleString('id-ID')} outlet (IM3: ${n1}, 3ID: ${n2}). Angka stok/sell-in memakai data terakhir; upload ulang file stok/sell-in bila perlu menyegarkan.`;
+        const remarkCounts = {Hybrid:0,'IM3 only':0,'3ID only':0,'N/A':0};
+        const ptypeCounts = {MPX:0,SDP:0,'N/A':0};
+        newOutlets.forEach(row=>{
+          const r = remarkOf(row, IDX); remarkCounts[r] = (remarkCounts[r]||0)+1;
+          const p = ptypeOf(row, IDX); ptypeCounts[p] = (ptypeCounts[p]||0)+1;
+        });
+        const remarkNote = wideResult ? ` Status pairing: Hybrid ${remarkCounts['Hybrid'].toLocaleString('id-ID')}, IM3 only ${remarkCounts['IM3 only'].toLocaleString('id-ID')}, 3ID only ${remarkCounts['3ID only'].toLocaleString('id-ID')}. Tipe Partner: MPX ${ptypeCounts['MPX'].toLocaleString('id-ID')}, SDP ${ptypeCounts['SDP'].toLocaleString('id-ID')}.` : '';
+        progressEl.textContent = `Selesai. Total ${newOutlets.length.toLocaleString('id-ID')} outlet (IM3: ${n1}, 3ID: ${n2}). Angka stok/sell-in memakai data terakhir; upload ulang file stok/sell-in bila perlu menyegarkan.${remarkNote}`;
         await logUpdate('Pairing Outlet', `IM3: ${n1}, 3ID: ${n2}`, newOutlets.length);
       } else {
         progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data tidak berhasil disimpan online. Coba upload ulang file ini.`;
@@ -5931,12 +6102,45 @@ function handleSecondaryFile(file){
           resolve();
           return;
         }
+        const isLmtd = document.getElementById('secondaryIsLmtd').checked;
+        if(isLmtd){
+          progressEl.textContent = `Menyimpan sebagai baseline LMTD (${matched.toLocaleString('id-ID')} baris, ${Object.keys(byKey).length.toLocaleString('id-ID')} outlet)…`;
+          setTimeout(()=>finishSecondaryAsLmtd(byKey, brandsSeen, progressEl, maxDate).then(resolve), 30);
+          return;
+        }
         progressEl.textContent = `Menggabungkan data Secondary (${matched.toLocaleString('id-ID')} baris transaksi, ${Object.keys(byKey).length.toLocaleString('id-ID')} outlet)…`;
         setTimeout(()=>finishSecondaryProcessing(byKey, brandsSeen, progressEl, byDayKey, maxDate).then(resolve), 30);
       },
       error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
     });
   });
+}
+
+// Upload path for a file that is ONLY last month's Secondary data (a separate file, not a
+// combined 2-month export) — writes straight into the LMTD/MoM baseline (merged with
+// whatever GA/Sell In/Tertiary parts are already there) and never touches the live/current
+// Secondary figures used for MTD.
+async function finishSecondaryAsLmtd(byKey, brandsSeen, progressEl, maxDate){
+  const asOf = maxDate || null;
+  const msgs = [];
+  for(const brand of brandsSeen){
+    const brandI = META.brands.indexOf(brand);
+    if(brandI < 0 || !SELLIN_OUTLETS.some(r=>r[IDX_S.brandIdx]===brandI)){
+      msgs.push(`${brand}: dilewati (belum ada data Sell In &amp; GA untuk brand ini)`);
+      continue;
+    }
+    const bl = await lmtdSellinBaseline(brand);
+    let any = false;
+    bl.rows.forEach(r=>{
+      const v = byKey[brand + '|' + r[IDX_S.outletId]];
+      r[IDX_S.secondary] = v ? Math.round(v) : 0;
+      if(v) any = true;
+    });
+    bl.parts.secondary = { asOf };
+    const ok = await lmtdSaveSellin(brand, bl.rows, bl.parts);
+    msgs.push(`${brand}: ${ok ? `baseline LMTD Secondary tersimpan (per ${asOf}, ${Object.keys(byKey).filter(k=>k.startsWith(brand+'|')).length.toLocaleString('id-ID')} outlet ada transaksi)` : '<b style="color:var(--red);">GAGAL menyimpan baseline LMTD</b>'}`);
+  }
+  progressEl.innerHTML = `<b>Selesai (LMTD).</b> Data Secondary bulan lalu disimpan sebagai baseline MoM — data bulan berjalan (MTD) tidak diubah.<br>` + msgs.map(m=>'• '+m).join('<br>');
 }
 
 async function finishSecondaryProcessing(byKey, brandsSeen, progressEl, byDayKey, maxDate){
@@ -7184,9 +7388,57 @@ async function removeUserByName(name){
 }
 window.removeUserByName = removeUserByName;
 
+// Self-service "forgot password" on the login page itself — no admin needed. Anyone
+// who knows a valid username can reset it to the default password (same default
+// resetUserPassword/resetAllPasswords already use for admin-initiated resets); the
+// account is then forced through "Buat Password Baru" on next login, same as an
+// admin-triggered reset. This mirrors the existing low-friction, small-team login
+// model (there's no email/SSO to verify identity against here).
+async function doForgotPassword(){
+  const name = document.getElementById('forgotPassUser').value.trim();
+  const msg = document.getElementById('forgotPassMsg');
+  const btn = document.getElementById('btnDoForgotPass');
+  if(!name){ msg.style.color = 'var(--red)'; msg.textContent = 'Isi username dulu.'; return; }
+  btn.disabled = true;
+  msg.style.color = '';
+  msg.textContent = 'Memproses…';
+  if(usersReadyPromise && !usersLoaded){
+    await Promise.race([usersReadyPromise, new Promise(r=>setTimeout(r, 15000))]);
+  }
+  const u = USERS.find(x=>x.username.toLowerCase()===name.toLowerCase());
+  if(!u){
+    msg.style.color = 'var(--red)';
+    msg.textContent = `Username "${name}" tidak ditemukan.`;
+    btn.disabled = false;
+    return;
+  }
+  const oldSalt = u.salt, oldHash = u.passwordHash, oldMustChange = u.mustChangePassword;
+  u.salt = DEFAULT_CREDENTIAL.salt; u.passwordHash = DEFAULT_CREDENTIAL.passwordHash;
+  delete u.password;
+  u.mustChangePassword = true;
+  const saveOk = await saveUsers();
+  btn.disabled = false;
+  if(!saveOk){
+    u.salt = oldSalt; u.passwordHash = oldHash; u.mustChangePassword = oldMustChange;
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Gagal reset — koneksi ke server tidak stabil, coba lagi.';
+    return;
+  }
+  msg.style.color = 'var(--green)';
+  msg.textContent = `Password "${u.username}" direset ke default (${DEFAULT_PASSWORD}). Login dengan password itu, lalu buat password baru.`;
+  document.getElementById('loginUser').value = u.username;
+  document.getElementById('loginPass').value = '';
+}
+
 function bindLoginEvents(){
   document.getElementById('btnDoLogin').addEventListener('click', doLogin);
   document.getElementById('loginPass').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
+  document.getElementById('linkForgotPass').addEventListener('click', (e)=>{
+    e.preventDefault();
+    document.getElementById('forgotPassBox').classList.toggle('hidden');
+  });
+  document.getElementById('btnDoForgotPass').addEventListener('click', doForgotPassword);
+  document.getElementById('forgotPassUser').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doForgotPassword(); });
 }
 
 function bindEvents(){
