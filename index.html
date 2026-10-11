@@ -247,6 +247,21 @@
 </head>
 <body>
 
+<!-- Shown only during the one-time embedded-seed auto-sync (loadFromStorageOrSeed() /
+     init() adopting window.__SEED__ and pushing it to the backend) — this is the
+     "login terasa stuck lama" case: hundreds of sequential chunk saves used to run
+     with zero visible feedback. Hidden the rest of the time. -->
+<div id="syncOverlay" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(20,17,26,.55);align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 12px 32px rgba(0,0,0,.3);">
+    <div style="font-weight:700;font-size:15px;margin-bottom:6px;">Menyinkronkan pembaruan data…</div>
+    <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;" id="syncOverlaySub">Menyiapkan…</div>
+    <div style="height:8px;border-radius:5px;background:var(--grey-soft,#EDEBE6);overflow:hidden;">
+      <div id="syncOverlayBar" style="height:100%;width:0%;background:var(--red);transition:width .2s ease;"></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px;">Ini hanya terjadi sekali di browser ini setelah ada pembaruan data baru — mohon jangan tutup atau refresh halaman sampai selesai.</div>
+  </div>
+</div>
+
 <div class="topbar">
   <div class="topbar-inner">
     <div>
@@ -1448,6 +1463,23 @@ function showToast(msg){
   setTimeout(()=>t.classList.remove('show'), 3200);
 }
 
+// ---------- seed auto-sync progress overlay ----------
+// Used only for the one-time embedded-seed sync (see loadFromStorageOrSeed()/init()) —
+// a potentially long, fully-silent operation otherwise (hundreds of sequential chunk
+// saves). stage/stageOf let the overlay show combined progress across the two phases
+// (outlets, then sell-in reconciliation) instead of resetting to 0% partway through.
+function syncOverlayShow(){
+  document.getElementById('syncOverlay').style.display = 'flex';
+}
+function syncOverlayUpdate(label, done, total){
+  const pct = total>0 ? Math.round((done/total)*100) : 0;
+  document.getElementById('syncOverlaySub').textContent = `${label} — ${done.toLocaleString('id-ID')}/${total.toLocaleString('id-ID')} (${pct}%)`;
+  document.getElementById('syncOverlayBar').style.width = pct + '%';
+}
+function syncOverlayHide(){
+  document.getElementById('syncOverlay').style.display = 'none';
+}
+
 // ---------- storage helpers ----------
 // Google Apps Script Web App backend — replaces Claude's window.storage so the
 // dashboard works fully standalone (any browser, any device, no Claude needed).
@@ -1534,18 +1566,45 @@ function chunkRows(rows){
   return chunks.length ? chunks : [[]]; // always at least one (possibly empty) chunk
 }
 
-// Writes rows as fixed-size chunks under `${prefix}${i}` for i in [0, numChunks).
-// Also deletes any straggler chunks beyond the new count, left over from a
-// previous save that had more rows (otherwise a shrink would leave stale extra
-// chunks that a reader might still pick up). onProgress(done, total) is optional.
+// How many chunk saves run at once against the Apps Script backend. Saving strictly
+// one-at-a-time (the original approach) meant a large dataset (OUTLETS alone is ~250
+// chunks) paid Apps Script's per-request overhead (network round-trip + cold-start-ish
+// invocation time, typically a few hundred ms) sequentially — a few minutes of totally
+// silent, blocking work, which is what made the first sync after an embedded-data
+// update look "stuck". Apps Script has no real server-side concurrency of its own
+// (each invocation is independent), so running several requests in flight at once is
+// safe and cuts wall-clock time roughly proportionally; 6 is enough to help a lot
+// without firing so many simultaneous invocations that the backend starts throttling.
+const CHUNK_CONCURRENCY = 6;
+
+// Runs `items` (by index) through `worker(i)` with at most `concurrency` in flight at
+// once, calling onEach(doneCount) as each one finishes (not necessarily in order).
+async function runPool(count, concurrency, worker, onEach){
+  let next = 0, done = 0;
+  async function run(){
+    while(next < count){
+      const i = next++;
+      await worker(i);
+      done++;
+      if(onEach) onEach(done);
+    }
+  }
+  const n = Math.min(concurrency, count) || 0;
+  await Promise.all(Array.from({length:n}, run));
+}
+
+// Writes rows as fixed-size chunks under `${prefix}${i}` for i in [0, numChunks),
+// several at a time (see CHUNK_CONCURRENCY). Also deletes any straggler chunks beyond
+// the new count, left over from a previous save that had more rows (otherwise a shrink
+// would leave stale extra chunks that a reader might still pick up). onProgress(done,
+// total) is optional — done counts chunks completed so far, not necessarily in order.
 async function saveChunked(prefix, rows, previousNumChunks, onProgress){
   const chunks = chunkRows(rows);
   const failed = [];
-  for(let i=0;i<chunks.length;i++){
-    if(onProgress) onProgress(i+1, chunks.length);
+  await runPool(chunks.length, CHUNK_CONCURRENCY, async (i)=>{
     const ok = await storageSetWithRetry(prefix+i, chunks[i]);
     if(!ok) failed.push(i);
-  }
+  }, (done)=>{ if(onProgress) onProgress(done, chunks.length); });
   // storageSetWithRetry already retries each chunk up to 5 times with backoff — if a chunk
   // is STILL failing after that, the connection had a genuinely rough patch right then, not
   // just a one-off blip. Rather than immediately reporting the whole save as failed (forcing
@@ -1554,17 +1613,20 @@ async function saveChunked(prefix, rows, previousNumChunks, onProgress){
   // has passed by then.
   if(failed.length){
     await new Promise(r=>setTimeout(r, 4000));
-    for(let k=failed.length-1; k>=0; k--){
-      const i = failed[k];
-      if(onProgress) onProgress(chunks.length, chunks.length);
+    const retryList = failed.slice();
+    failed.length = 0;
+    await runPool(retryList.length, CHUNK_CONCURRENCY, async (k)=>{
+      const i = retryList[k];
       const ok = await storageSetWithRetry(prefix+i, chunks[i]);
-      if(ok) failed.splice(k,1);
-    }
+      if(!ok) failed.push(i);
+    }, ()=>{ if(onProgress) onProgress(chunks.length, chunks.length); });
   }
   const allOk = failed.length === 0;
   if(allOk && previousNumChunks){
+    // best-effort cleanup of now-unused straggler keys — not worth parallelizing
+    // (usually few or none) and not fatal if any single delete fails
     for(let i=chunks.length;i<previousNumChunks;i++){
-      await storageSet(prefix+i, null).catch(()=>{}); // best-effort cleanup, not fatal if it fails
+      await storageSet(prefix+i, null).catch(()=>{});
     }
   }
   return { allOk, numChunks: chunks.length };
@@ -1736,7 +1798,14 @@ async function loadFromStorageOrSeed(){
       OUTLETS = window.__SEED__.outlets;
       MASTER = rebuildMasterFromOutlets();
       outletsReseeded = true;
-      persistAll();
+      // This used to run with ZERO visible feedback — hundreds of sequential chunk
+      // saves behind the scenes, looking exactly like a stuck/frozen page. Now shows
+      // a blocking overlay with real progress; init() keeps it up through the
+      // sell-in reconciliation phase that follows, and hides it when both are done
+      // (see the outletsReseeded block in init()).
+      syncOverlayShow();
+      syncOverlayUpdate('Menyimpan data outlet', 0, 1);
+      await persistAll((done,total)=>syncOverlayUpdate('Menyimpan data outlet', done, total));
     } else if(!meta){
       // no embedded fallback (slim/hosted build) and nothing in the sheet yet either
       setTimeout(()=>showToast('Belum ada data tersimpan — upload data stok lewat "Perbarui data" untuk mulai.'), 800);
@@ -7214,8 +7283,14 @@ function renderMapPoints(){
     const hitMarker = L.circleMarker([p[GIDX.lat], p[GIDX.lon]], {
       radius: 9, fillOpacity: 0, opacity: 0, interactive: true
     });
+    // GEO_POINTS' own outletName comes from a one-time geo/coordinate import (separate
+    // from the master-outlet pairing upload), and some outlets there were saved with no
+    // name — e.g. observed for Tasikmalaya points. Rather than show blank, fall back to
+    // the name the master-outlet data has for this same brand+outletId (same lookup
+    // already used above for stock figures), which is kept current by every upload.
+    const displayName = p[GIDX.outletName] || (stockRow ? stockRow[IDX.outletName] : null) || '-';
     hitMarker.bindPopup(
-      `<b>${p[GIDX.outletName]||'-'}</b><br>Outlet ID: ${p[GIDX.outletId]}<br>Brand: ${brandName} · Branch: ${META.branches[p[GIDX.branchIdx]]} · MC: ${META.micros[p[GIDX.microIdx]]}<br>Kategori: ${META.cats[p[GIDX.catIdx]]}<br>Lat/Long: ${p[GIDX.lat]}, ${p[GIDX.lon]}<br>Sell In SP: ${sellinSp!==null ? fmtN(sellinSp) : '-'}<br>Sell In Saldo: ${sellinSaldo!==null ? fmtN(sellinSaldo) : '-'}<br>Stock Saldo (Salmo): ${stockSaldo!==null ? fmtN(stockSaldo) : '-'}<br>Status: ${isRed ? '<span style="color:#C81E3A;font-weight:600;">Ada masalah (cek GA/Sell In SP/Sell In Saldo/Stock)</span>' : '<span style="color:#1B8A5A;font-weight:600;">Lengkap</span>'}${isNoStock ? '<br><span style="color:#C81E3A;font-weight:600;">⚠ Tidak ada stock sama sekali</span>' : ''}`
+      `<b>${displayName}</b><br>Outlet ID: ${p[GIDX.outletId]}<br>Brand: ${brandName} · Branch: ${META.branches[p[GIDX.branchIdx]]} · MC: ${META.micros[p[GIDX.microIdx]]}<br>Kategori: ${META.cats[p[GIDX.catIdx]]}<br>Lat/Long: ${p[GIDX.lat]}, ${p[GIDX.lon]}<br>Sell In SP: ${sellinSp!==null ? fmtN(sellinSp) : '-'}<br>Sell In Saldo: ${sellinSaldo!==null ? fmtN(sellinSaldo) : '-'}<br>Stock Saldo (Salmo): ${stockSaldo!==null ? fmtN(stockSaldo) : '-'}<br>Status: ${isRed ? '<span style="color:#C81E3A;font-weight:600;">Ada masalah (cek GA/Sell In SP/Sell In Saldo/Stock)</span>' : '<span style="color:#1B8A5A;font-weight:600;">Lengkap</span>'}${isNoStock ? '<br><span style="color:#C81E3A;font-weight:600;">⚠ Tidak ada stock sama sekali</span>' : ''}`
     );
     mapMarkerLayer.addLayer(hitMarker);
     const marker = L.circleMarker([p[GIDX.lat], p[GIDX.lon]], {
@@ -7928,9 +8003,15 @@ async function init(){
     // The outlet universe just changed shape (embedded seed above) — SELLIN_OUTLETS
     // just loaded from storage is now stale (see reconcileSellinToMaster). Fix it up
     // and save it back once, so every visitor after this one loads already-correct data.
+    // The sync overlay (shown by loadFromStorageOrSeed for the outlets phase) stays up
+    // through this second phase too, so the person sees continuous progress rather than
+    // the bar disappearing and the page looking stuck again right before it finishes.
     reconcileSellinToMaster();
-    await persistSellin();
+    syncOverlayShow();
+    syncOverlayUpdate('Menyimpan data Sell In', 0, 1);
+    await persistSellin((done,total)=>syncOverlayUpdate('Menyimpan data Sell In', done, total));
     await logUpdate('Master/Pairing Outlet', 'Auto-sync dari data terbaru yang di-bundle di index.html', META.totalOutlets, 'index.html (embedded seed)');
+    syncOverlayHide();
   }
   await usersReadyPromise;
   // "Perbarui data" is hidden by default so people who only have the shared link can
