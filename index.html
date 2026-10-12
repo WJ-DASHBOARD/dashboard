@@ -1,9 +1,11 @@
 <!DOCTYPE html>
+<!-- Dashboard dibuat oleh IS -->
 <html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Outlet Performance West Java</title>
+<title>Outlet Performance</title>
+<meta name="author" content="IS">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -274,7 +276,7 @@
 <div class="topbar">
   <div class="topbar-inner">
     <div>
-      <p class="eyebrow">WEST JAVA · IM3 &amp; 3ID</p>
+      <p class="eyebrow">OneIOH Jakarta Raya</p>
       <h1 class="h1">Outlet Performance
         <small>Monitoring GA, Sell In &amp; Stock per Outlet</small>
       </h1>
@@ -652,7 +654,7 @@
   <div class="two-col">
     <div class="panel">
       <h3 id="gaSlabBreakdownTitle">Slab GA per Branch</h3>
-      <div id="gaSlabBreakdownChart"></div>
+      <div id="gaSlabBreakdownChart" style="max-height:330px;overflow-y:auto;padding-right:6px;"></div>
       <div class="legend">
         <span><i class="dot" style="background:#9B98A8"></i>No GA</span>
         <span><i class="dot" style="background:var(--amber)"></i>&lt;25</span>
@@ -4116,16 +4118,16 @@ function renderGaSlab(){
 
 function renderGaSlabBreakdown(){
   const ctx = groupContext();
-  document.getElementById('gaSlabBreakdownTitle').textContent = 'Slab GA ' + ctx.title + ' — Top ' + topNForCharts();
+  document.getElementById('gaSlabBreakdownTitle').textContent = 'Slab GA ' + ctx.title;
   const agg = {};
-  filteredSellin.forEach(r=>{
+  mergeSellinPairs(filteredSellin).forEach(r=>{   // 1 outlet fisik = 1 hitungan
     const g = r[ctx.key===IDX.branchIdx ? IDX_S.branchIdx : IDX_S.microIdx];
     if(!agg[g]) agg[g] = {s0:0,s1:0,s2:0,s3:0,s4:0,total:0};
     const ga = r[IDX_S.rguGa];
     const slab = ga<=0?'s0' : ga<25?'s1' : ga<50?'s2' : ga<100?'s3' : 's4';
     agg[g][slab]++; agg[g].total++;
   });
-  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.total-a.total).slice(0,topNForCharts());
+  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.total-a.total);   // semua area/MC ditampilkan; jendela grafik bisa di-scroll
   const segs = [
     {key:'s0',color:'#9B98A8'}, {key:'s1',color:'var(--amber)'}, {key:'s2',color:'#6E8FD9'},
     {key:'s3',color:'#4E9E72'}, {key:'s4',color:'var(--green)'}
@@ -4385,7 +4387,7 @@ function renderSupplySummaryTable(){
   const prevGrand = prevAgg ? Object.values(prevAgg).reduce((acc,x)=>{ Object.keys(acc).forEach(k=>acc[k]+=x[k]); return acc; }, initSup()) : null;
   document.getElementById('supSummaryFoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
-      <td>Total West Java</td><td>${fmtN(grand.outlet)}</td>
+      <td>Total</td><td>${fmtN(grand.outlet)}</td>
       <td>${fmtN(grand.spOutlet)}</td><td>${fmtN(grand.spHit)}${dk(grand,prevGrand,'spHit',true)}</td><td>${fmtBn(grand.spRev)}${dk(grand,prevGrand,'spRev',true,fmtBn)}</td>
       <td>${fmtN(grand.rebuyOutlet)}</td><td>${fmtN(grand.rebuyHit)}${dk(grand,prevGrand,'rebuyHit',true)}</td><td>${fmtBn(grand.rebuyRev)}${dk(grand,prevGrand,'rebuyRev',true,fmtBn)}</td>
       <td>${fmtN(grand.vouOutlet)}</td><td>${fmtN(grand.vouHit)}${dk(grand,prevGrand,'vouHit',true)}</td><td>${fmtBn(grand.vouRev)}${dk(grand,prevGrand,'vouRev',true,fmtBn)}</td>
@@ -4621,7 +4623,7 @@ function renderSellinBreakdown(){
       <svg viewBox="0 0 300 16" preserveAspectRatio="none" style="flex:1;min-width:0;height:16px;border-radius:4px;overflow:hidden;background:var(--grey-soft);display:block;">
         <rect x="0" y="0" width="${w.toFixed(2)}" height="16" fill="var(--green)"/>
       </svg>
-      <div class="bar-total">${fmtN(r.ga)} <span style="color:var(--muted);font-weight:400;">(${pct}%)</span></div>
+      <div class="bar-total">${fmtN(r.ga)}</div>
     </div>`;
   }).join('') || '<p style="color:var(--muted);font-size:13px;">Tidak ada data.</p>';
 }
@@ -4686,7 +4688,7 @@ function renderSellinCatSummary(){
     {outlet:0,ga:0,sp:0,vou:0,saldo:0,tertiary:0,secondary:0,wSp:0,wVou:0,wSaldo:0,wGa:0}) : null;
   document.getElementById('siCatTfoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
-      <td>Total West Java</td><td>${fmtN(grand.outlet)}</td><td>${fmtN(grand.ga)}${dk(grand,prevGrand,'ga',true)}</td>
+      <td>Total</td><td>${fmtN(grand.outlet)}</td><td>${fmtN(grand.ga)}${dk(grand,prevGrand,'ga',true)}</td>
       <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td><td>${fmtBn(grand.sp)}${dk(grand,prevGrand,'sp',true,fmtBn)}</td>
       <td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td><td>${fmtBn(grand.vou)}${dk(grand,prevGrand,'vou',true,fmtBn)}</td>
       <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td><td>${fmtBn(grand.saldo)}${dk(grand,prevGrand,'saldo',true,fmtBn)}</td>
@@ -4793,7 +4795,7 @@ function renderSellinSummaryTable(){
   const prevGrand = prevAgg ? Object.values(prevAgg).reduce((acc,x)=>{ Object.keys(acc).forEach(k=>acc[k]+=x[k]); return acc; }, initSI()) : null;
   document.getElementById('siSummaryTfoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
-      <td>Total West Java</td><td>${fmtN(grand.outlet)}</td><td>${fmtN(grand.ga)}${dk(grand,prevGrand,'ga',true)}</td>
+      <td>Total</td><td>${fmtN(grand.outlet)}</td><td>${fmtN(grand.ga)}${dk(grand,prevGrand,'ga',true)}</td>
       <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td><td>${PCS ? fmtN(grand.spPcs) : fmtBn(grand.sp)+dk(grand,prevGrand,'sp',true,fmtBn)}</td>
       ${PCS ? `<td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td>` : `<td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td><td>${fmtBn(grand.vou)}${dk(grand,prevGrand,'vou',true,fmtBn)}</td>
       <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td><td>${fmtBn(grand.saldo)}${dk(grand,prevGrand,'saldo',true,fmtBn)}</td>
@@ -5339,7 +5341,7 @@ function renderSummaryTable(){
   const prevGrand = prevAgg ? Object.values(prevAgg).reduce((acc,x)=>{ Object.keys(acc).forEach(k=>acc[k]+=x[k]); return acc; }, initLB()) : null;
   document.getElementById('summaryTfoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
-      <td>Total West Java</td>
+      <td>Total</td>
       <td>${fmtN(grand.outlet)}</td>
       <td>${fmtBn(grand.stock)}${dk(grand,prevGrand,'stock',true,fmtBn)}</td>
       <td>${fmtN(grand.spoQ)}</td>
@@ -5404,7 +5406,7 @@ function exportSummaryTableCsv(){
     acc.zero+=r.zero; acc.low+=r.low; acc.ok+=r.ok;
     return acc;
   }, {outlet:0,stock:0,spoQ:0,spiQ:0,spoA:0,spiA:0,voQ:0,viQ:0,voA:0,viA:0,salA:0,dspA:0,dvouA:0,dsalA:0,zero:0,low:0,ok:0});
-  lines.push(['Total West Java', grand.outlet, Math.round(grand.stock), grand.spoQ, grand.spiQ, Math.round(grand.spoA),
+  lines.push(['Total', grand.outlet, Math.round(grand.stock), grand.spoQ, grand.spiQ, Math.round(grand.spoA),
     Math.round(grand.spiA), grand.voQ, grand.viQ, Math.round(grand.voA), Math.round(grand.viA), Math.round(grand.salA),
     ...dosVals(grand), grand.zero, grand.low, grand.ok].join(','));
 
@@ -9456,5 +9458,6 @@ init();
 
 })();
 </script>
+<div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
 </body>
 </html>
