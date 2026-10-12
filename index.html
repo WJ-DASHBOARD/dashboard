@@ -276,7 +276,7 @@
 <div class="topbar">
   <div class="topbar-inner">
     <div>
-      <p class="eyebrow">OneIOH Jakarta Raya</p>
+      <p class="eyebrow">West Java OneIOH</p>
       <h1 class="h1">Outlet Performance
         <small>Monitoring GA, Sell In &amp; Stock per Outlet</small>
       </h1>
@@ -665,7 +665,7 @@
     </div>
     <div class="panel">
       <h3 id="siBreakdownTitle">Total GA per Branch</h3>
-      <div id="siBreakdownChart"></div>
+      <div id="siBreakdownChart" style="max-height:330px;overflow-y:auto;padding-right:6px;"></div>
     </div>
   </div>
 
@@ -4605,14 +4605,14 @@ function renderCoverageCards(){
 
 function renderSellinBreakdown(){
   const ctx = groupContext();
-  document.getElementById('siBreakdownTitle').textContent = 'Total GA ' + ctx.title + ' — Top ' + topNForCharts();
+  document.getElementById('siBreakdownTitle').textContent = 'Total GA ' + ctx.title;
 
   const agg = {};
   filteredSellin.forEach(r=>{
     const g = r[ctx.key===IDX.branchIdx ? IDX_S.branchIdx : IDX_S.microIdx];
     agg[g] = (agg[g]||0) + r[IDX_S.rguGa];
   });
-  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ga: agg[g]})).sort((a,b)=>b.ga-a.ga).slice(0,topNForCharts());
+  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ga: agg[g]})).sort((a,b)=>b.ga-a.ga);
   const maxGa = Math.max(1, ...rows.map(r=>r.ga));
   const grandTotalGa = Object.values(agg).reduce((a,b)=>a+b, 0) || 1;
   document.getElementById('siBreakdownChart').innerHTML = rows.map(r=>{
@@ -5154,7 +5154,6 @@ function renderKpis(){
 }
 
 // Jumlah baris "Top" untuk grafik per Area / Micro Cluster: Region dipilih (mis. West Java) -> Top 5, semua region -> Top 10.
-function topNForCharts(){ return document.getElementById('fRegion').value ? 5 : 10; }
 function groupContext(){
   // Drilling into Micro Cluster used to be keyed off the (now-hidden) Branch filter.
   // Newer pairing data has Branch Name == Area Name (no real separate Branch level),
