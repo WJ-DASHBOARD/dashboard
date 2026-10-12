@@ -4899,7 +4899,7 @@ function pairMatchesFilters(p, f){
     if(im3Dse !== f.dse && tidDse !== f.dse) return false;
   }
   if(f.searchTokens && f.searchTokens.length){
-    const name = (p.im3&&p.im3.name) || (p.tid&&p.tid.name) || '';
+    const name = cleanName(p.im3&&p.im3.name) || cleanName(p.tid&&p.tid.name) || '';
     const hay = (String(p.im3?p.im3.outletId:'')+' '+String(p.tid?p.tid.outletId:'')+' '+dispOutletId('3ID',p.tid?p.tid.outletId:'')+' '+String(name)+' '+rep.branch).toLowerCase();
     if(!f.searchTokens.every(t=>hay.includes(t))) return false;
   }
@@ -4984,7 +4984,7 @@ function buildFilteredPairedRows(){
       pairKey: p.pairKey,
       micro: rep.micro,
       // IM3 name first, else the 3ID name; '', '0', '-' etc. count as missing (see cleanName)
-      name: nameOr(cleanName(p.im3 && p.im3.name) || cleanName(p.tid && p.tid.name)),
+      name: nameOr(cleanName(p.im3 && p.im3.name) || cleanName(p.tid && p.tid.name)),   // nama IM3 dulu; kalau kosong, pakai nama 3ID
       idIm3: p.im3 ? (dispOutletId('IM3', p.im3.outletId)||null) : null,
       idTid: p.tid ? (dispOutletId('3ID', p.tid.outletId)||null) : null,
       hasTid: !!p.tid,
