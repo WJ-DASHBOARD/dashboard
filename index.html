@@ -1040,7 +1040,7 @@
 </div>
 
 <div class="overlay" id="usersOverlay">
-  <div class="modal" style="max-width:460px;">
+  <div class="modal" style="max-width:760px;">
     <button class="modal-close" id="closeUsers">&times;</button>
     <h2>Kelola User</h2>
     <p class="desc">Semua user baru otomatis dapat password default <b id="defaultPassLabel"></b> — sampaikan ke masing-masing user, dan mereka bisa login pakai username + password default itu.</p>
@@ -1061,6 +1061,17 @@
       <label style="font-size:12.5px;display:block;margin-bottom:4px;">Reset password semua user sekaligus (kembali ke default, semua wajib bikin password baru saat login berikutnya)</label>
       <button class="btn btn-ghost btn-sm" id="btnResetAllPass" style="color:var(--red);border-color:var(--red);">Reset Password Semua User</button>
       <div class="progress-line" id="resetAllMsg"></div>
+    </div>
+    <div class="upload-block">
+      <label style="font-size:12.5px;display:block;margin-bottom:4px;">Aktivitas user (login &amp; ganti password)</label>
+      <button class="btn btn-ghost btn-sm" onclick="downloadAllUsersCsv()">Unduh Semua User (CSV)</button>
+      <div class="progress-line" id="userActMsg"></div>
+      <div style="max-height:220px;overflow:auto;margin-top:8px;">
+        <table class="summary" style="width:100%;font-size:11.5px;">
+          <thead><tr><th style="text-align:left;">Username</th><th style="text-align:left;">Role</th><th style="text-align:left;">Login terakhir</th><th>Jml login</th><th style="text-align:left;">Ganti password</th><th style="text-align:left;">Status</th></tr></thead>
+          <tbody id="userActBody"></tbody>
+        </table>
+      </div>
     </div>
     <div style="max-height:300px;overflow:auto;margin-top:10px;">
       <table class="summary" style="width:100%;">
@@ -8879,6 +8890,161 @@ function finishLogin(username, role){
   applyLoginState();
   showToast('Berhasil login sebagai ' + username + '.');
   logLogin(username, role || 'viewer');
+  noteUserActivity(username, 'login');
+  startSessionWatch();
+}
+
+// ---- Aktivitas per user (login terakhir, jumlah login, ganti password) ----
+// Disimpan per user di key 'ua_<username>' supaya login banyak orang bersamaan tidak saling menimpa.
+let USER_ACT = {};
+async function noteUserActivity(username, kind){
+  try{
+    const key = 'ua_' + username;
+    const cur = (await storageGet(key)) || {};
+    const now = new Date().toISOString();
+    if(kind === 'login'){
+      cur.firstLogin = cur.firstLogin || now;
+      cur.lastLogin = now;
+      cur.loginCount = (cur.loginCount || 0) + 1;
+      cur.history = [now].concat(cur.history || []).slice(0, 20);
+    } else if(kind === 'pass'){
+      cur.lastPassChange = now;
+      cur.passChangeCount = (cur.passChangeCount || 0) + 1;
+    } else if(kind === 'reset'){
+      cur.lastReset = now;
+    }
+    await storageSet(key, cur);
+    USER_ACT[username] = cur;
+  }catch(e){ console.warn('noteUserActivity failed', e); }
+}
+async function loadUserActivity(){
+  const keys = USERS.map(u=>'ua_' + u.username);
+  let got = null;
+  try{ got = await storageGetMulti(keys); }catch(e){}
+  const out = {};
+  if(got){
+    USERS.forEach(u=>{
+      let v = got['ua_' + u.username];
+      if(typeof v === 'string'){ try{ v = JSON.parse(v); }catch(e){ v = null; } }
+      if(v && typeof v === 'object') out[u.username] = v;
+    });
+  } else {
+    for(const u of USERS){
+      const v = await storageGet('ua_' + u.username);
+      if(v) out[u.username] = v;
+    }
+  }
+  USER_ACT = out;
+}
+function fmtActTime(iso){ return iso ? new Date(iso).toLocaleString('id-ID') : '-'; }
+async function renderUserActivity(){
+  const body = document.getElementById('userActBody');
+  if(!body) return;
+  body.innerHTML = '<tr><td colspan="6" style="color:var(--muted);">Memuat…</td></tr>';
+  await loadUserActivity();
+  body.innerHTML = USERS.map(u=>{
+    const a = USER_ACT[u.username] || {};
+    const st = u.mustChangePassword !== false ? '<span style="color:var(--red);">Belum ganti password</span>' : 'Sudah ganti';
+    return `<tr><td>${u.username}</td><td>${u.role==='admin'?'admin':'viewer'}</td><td>${fmtActTime(a.lastLogin)}</td><td style="text-align:right;">${a.loginCount||0}</td><td>${fmtActTime(a.lastPassChange)}</td><td>${st}</td></tr>`;
+  }).join('') || '<tr><td colspan="6" style="color:var(--muted);">Belum ada user.</td></tr>';
+}
+async function downloadAllUsersCsv(){
+  const msg = document.getElementById('userActMsg');
+  if(msg) msg.textContent = 'Menyiapkan data…';
+  await loadUserActivity();
+  const q = v => '"' + String(v==null?'':v).replace(/"/g,'""') + '"';
+  const lines = [['Username','Role','Status Password','Login Pertama','Login Terakhir','Jumlah Login','Terakhir Ganti Password','Jumlah Ganti Password','Terakhir Direset Admin'].map(q).join(',')];
+  USERS.forEach(u=>{
+    const a = USER_ACT[u.username] || {};
+    lines.push([u.username, u.role==='admin'?'admin':'viewer', u.mustChangePassword!==false?'Belum ganti (default)':'Sudah ganti',
+      fmtActTime(a.firstLogin), fmtActTime(a.lastLogin), a.loginCount||0, fmtActTime(a.lastPassChange), a.passChangeCount||0, fmtActTime(a.lastReset)].map(q).join(','));
+  });
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const el = document.createElement('a');
+  el.href = url; el.download = 'daftar_user_dashboard.csv';
+  document.body.appendChild(el); el.click(); document.body.removeChild(el);
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  if(msg) msg.textContent = USERS.length + ' user diunduh.';
+}
+window.downloadAllUsersCsv = downloadAllUsersCsv;
+
+// ---- Sesi login: 1 user = 1 sesi aktif, auto-logout setelah 1 jam tanpa aktivitas ----
+const IDLE_LIMIT_MS = 60*60*1000;     // 1 jam tanpa aktivitas -> logout otomatis
+const SESSION_STALE_MS = 5*60*1000;   // sesi dianggap mati kalau tidak ada detak > 5 menit (browser ditutup dll)
+const HEARTBEAT_MS = 60*1000;
+let lastActivityAt = Date.now(), heartbeatTimer = null, idleTimer = null, activityBound = false;
+function newSessToken(){ return randomSalt(); }
+async function acquireSession(username){
+  const key = 'sess_' + username;
+  const cur = await storageGet(key);
+  if(cur && cur.token && (Date.now() - (cur.lastSeen||0)) < SESSION_STALE_MS){
+    return { ok:false, since: cur.lastSeen };
+  }
+  const token = newSessToken();
+  await storageSet(key, { token, lastSeen: Date.now(), since: Date.now() });
+  const chk = await storageGet(key);
+  if(!chk || chk.token !== token) return { ok:false, since: chk && chk.lastSeen };
+  try{ localStorage.setItem('wj_sess', token); }catch(e){}
+  return { ok:true, token };
+}
+async function releaseSession(username, token){
+  try{
+    const key = 'sess_' + username;
+    const cur = await storageGet(key);
+    if(cur && (!token || cur.token === token)) await storageSet(key, { token: null, lastSeen: 0 });
+  }catch(e){}
+}
+async function forceReleaseUser(name){
+  if(!confirm(`Paksa logout "${name}"? Sesi aktifnya akan dihentikan dan user bisa login lagi.`)) return;
+  await releaseSession(name, null);
+  showToast(`Sesi "${name}" dihentikan.`);
+  renderUserActivity();
+}
+window.forceReleaseUser = forceReleaseUser;
+function autoLogout(reason){
+  const u = localStorage.getItem('wj_user'), t = localStorage.getItem('wj_sess');
+  stopSessionWatch();
+  releaseSession(u, t);
+  try{ localStorage.removeItem('wj_sess'); }catch(e){}
+  doLogoutLocal();
+  showToast(reason);
+}
+async function heartbeat(){
+  const u = localStorage.getItem('wj_user'), t = localStorage.getItem('wj_sess');
+  if(localStorage.getItem('wj_logged_in') !== '1' || !u) return;
+  if(!t){ autoLogout('Sesi tidak valid — silakan login ulang.'); return; }
+  try{
+    const key = 'sess_' + u;
+    const cur = await storageGet(key);
+    if(cur && cur.token && cur.token !== t){
+      autoLogout('Akun ini sedang dipakai di perangkat lain — kamu otomatis keluar.'); return;
+    }
+    if(!cur || !cur.token){ // sesi dilepas admin
+      autoLogout('Sesi kamu dihentikan — silakan login ulang.'); return;
+    }
+    await storageSet(key, { token: t, lastSeen: Date.now(), since: cur.since || Date.now() });
+  }catch(e){}
+}
+function startSessionWatch(){
+  stopSessionWatch();
+  lastActivityAt = Date.now();
+  if(!activityBound){
+    activityBound = true;
+    ['mousemove','mousedown','keydown','scroll','touchstart','click'].forEach(ev=>
+      window.addEventListener(ev, ()=>{ lastActivityAt = Date.now(); }, {passive:true}));
+  }
+  heartbeatTimer = setInterval(heartbeat, HEARTBEAT_MS);
+  idleTimer = setInterval(()=>{
+    if(localStorage.getItem('wj_logged_in') === '1' && Date.now() - lastActivityAt > IDLE_LIMIT_MS){
+      autoLogout('Kamu otomatis keluar karena tidak ada aktivitas selama 1 jam.');
+    }
+  }, 30*1000);
+}
+function stopSessionWatch(){
+  if(heartbeatTimer) clearInterval(heartbeatTimer);
+  if(idleTimer) clearInterval(idleTimer);
+  heartbeatTimer = idleTimer = null;
 }
 
 async function doLogin(){
@@ -8926,6 +9092,11 @@ async function doLogin(){
     }
   }
   if(match){
+    const ses = await acquireSession(match.username);
+    if(!ses.ok){
+      errEl.textContent = 'User ini sedang login di perangkat lain. Tunggu sampai user tersebut logout / tidak aktif, atau minta admin untuk memaksa logout.';
+      return;
+    }
     document.getElementById('loginUser').value = '';
     document.getElementById('loginPass').value = '';
     errEl.textContent = '';
@@ -8969,6 +9140,7 @@ async function doForceChangePassword(){
   document.getElementById('forceNewPass').value = '';
   document.getElementById('forceNewPass2').value = '';
   errEl.textContent = '';
+  noteUserActivity(user.username, 'pass');
   finishLogin(user.username, user.role);
   pendingLoginUser = null;
 }
@@ -9004,10 +9176,17 @@ async function doChangePassword(){
   document.getElementById('cpNewPass2').value = '';
   errEl.textContent = '';
   document.getElementById('changePassOverlay').classList.remove('show');
+  noteUserActivity(user.username, 'pass');
   showToast('Password berhasil diganti.');
 }
 
 function doLogout(){
+  stopSessionWatch();
+  releaseSession(localStorage.getItem('wj_user'), localStorage.getItem('wj_sess'));
+  try{ localStorage.removeItem('wj_sess'); }catch(e){}
+  doLogoutLocal();
+}
+function doLogoutLocal(){
   localStorage.removeItem('wj_logged_in');
   localStorage.removeItem('wj_user');
   localStorage.removeItem('wj_user_role');
@@ -9028,6 +9207,7 @@ function renderUserList(){
       </td>
       <td style="white-space:nowrap;">
         <button class="btn btn-ghost btn-sm" data-user="${u.username}" onclick="resetUserPassword(this.dataset.user)">Reset Pass</button>
+        <button class="btn btn-ghost btn-sm" data-user="${u.username}" onclick="forceReleaseUser(this.dataset.user)">Paksa Logout</button>
         <button class="btn btn-ghost btn-sm" data-user="${u.username}" onclick="removeUserByName(this.dataset.user)">Hapus</button>
       </td>
     </tr>`).join('') || '<tr><td colspan="4" style="color:var(--muted);">Belum ada user.</td></tr>';
@@ -9047,6 +9227,7 @@ async function resetUserPassword(name){
     showToast(`Gagal reset password "${name}" — koneksi ke server tidak stabil, coba lagi.`);
     return;
   }
+  noteUserActivity(name, 'reset');
   showToast(`Password "${name}" direset ke default.`);
   renderUserList();
 }
@@ -9315,7 +9496,7 @@ function bindEvents(){
   document.getElementById('btnDoChangePass').addEventListener('click', doChangePassword);
   document.getElementById('cpNewPass2').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doChangePassword(); });
   document.getElementById('btnLogout').addEventListener('click', doLogout);
-  document.getElementById('btnManageUsers').addEventListener('click', ()=>{ renderUserList(); document.getElementById('usersOverlay').classList.add('show'); });
+  document.getElementById('btnManageUsers').addEventListener('click', ()=>{ renderUserList(); renderUserActivity(); document.getElementById('usersOverlay').classList.add('show'); });
   document.getElementById('closeUsers').addEventListener('click', ()=>document.getElementById('usersOverlay').classList.remove('show'));
   document.getElementById('usersOverlay').addEventListener('click', (e)=>{ if(e.target.id==='usersOverlay') e.currentTarget.classList.remove('show'); });
   document.getElementById('btnAddUser').addEventListener('click', addUser);
@@ -9475,6 +9656,7 @@ async function init(){
   // no-op, so this is safe to call every time.
   syncOverlayHide();
   await usersReadyPromise;
+  if(localStorage.getItem('wj_logged_in') === '1'){ if(!localStorage.getItem('wj_sess')){ doLogoutLocal(); } else { startSessionWatch(); heartbeat(); } }
   // "Perbarui data" is hidden by default so people who only have the shared link can
   // view/download but not overwrite the online data. Logging in as admin unlocks it.
   applyLoginState();
