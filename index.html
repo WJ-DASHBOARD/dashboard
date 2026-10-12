@@ -795,10 +795,11 @@
         <th rowspan="2">Nama Outlet</th>
         <th rowspan="2">Outlet ID IM3</th>
         <th rowspan="2">Outlet ID 3ID</th>
+        <th rowspan="2">DSE Code IM3</th>
         <th rowspan="2">Kategori</th>
         <th colspan="3" style="text-align:center;">GA (MTD)</th>
         <th colspan="3" class="rp-col" style="text-align:center;" title="Nilai Sell In SP (Rp) dari file OSA — menu #6 Perbarui data">Sell In SP (Rp, file OSA)</th>
-        <th colspan="3" style="text-align:center;" title="Jumlah SIM (pcs) dari baris kpi=SELLIN di export BigQuery — file yang sama dengan GA, menu #5">Sell In SP (Qty, file GA BigQuery)</th>
+        <th colspan="3" style="text-align:center;" title="Jumlah SIM (pcs) dari baris kpi=SELLIN di export BigQuery — file yang sama dengan GA, menu #5">Sell In SP</th>
       </tr>
       <tr>
         <th style="font-weight:500;">IM3</th>
@@ -4555,11 +4556,28 @@ function renderSellinKpis(){
   }
 }
 
+// Gabungkan sisi IM3 + 3ID dari 1 outlet fisik (pairKey) jadi 1 baris (nilai dijumlah) — supaya outlet tidak dihitung dobel.
+function mergeSellinPairs(arr){
+  const byKey = new Map(), out = [];
+  const NUMI = [IDX_S.rguGa, IDX_S.sellinSp, IDX_S.sellinVou, IDX_S.sellinSaldo, IDX_S.tertiary, IDX_S.secondary, IDX_S.sellinSpPcs];
+  arr.forEach(r=>{
+    const m = MASTER[META.brands[r[IDX_S.brandIdx]]+'|'+r[IDX_S.outletId]];
+    const pk = m && m.pairKey && m.pairKey!=='N/A' ? m.pairKey : null;
+    if(!pk){ out.push(r); return; }
+    const ex = byKey.get(pk);
+    if(!ex){ const c = r.slice(); byKey.set(pk, c); out.push(c); }
+    else NUMI.forEach(i=>{ ex[i] = (ex[i]||0) + (r[i]||0); });
+  });
+  return out;
+}
 function renderCoverageCards(){
-  const n = filteredSellin.length;
+  const merged = mergeSellinPairs(filteredSellin);
+  const _pc = computePairingStatusCounts();
+  const n = Math.max(_pc.Hybrid + _pc['IM3 only'] + _pc['3ID only'], merged.length);   // outlet fisik (sama dengan KPI Total Outlet)
   function coverage(field, label){
-    let withIt=0, zero=0;
-    filteredSellin.forEach(r=>{ if(r[IDX_S[field]]>0) withIt++; else zero++; });
+    let withIt=0;
+    merged.forEach(r=>{ if((r[IDX_S[field]]||0)>0) withIt++; });
+    const zero = n - withIt;
     const pct = n? (withIt/n*100).toFixed(0)+'%' : '–';
     return `<div class="cov-card">
       <div class="cov-title">${label}</div>
@@ -4987,6 +5005,7 @@ function buildFilteredPairedRows(){
       name: nameOr(cleanName(p.im3 && p.im3.name) || cleanName(p.tid && p.tid.name)),   // nama IM3 dulu; kalau kosong, pakai nama 3ID
       idIm3: p.im3 ? (dispOutletId('IM3', p.im3.outletId)||null) : null,
       idTid: p.tid ? (dispOutletId('3ID', p.tid.outletId)||null) : null,
+      dseIm3: (p.im3 && p.im3.dse && p.im3.dse !== 'N/A') ? p.im3.dse : '',
       hasTid: !!p.tid,
       cat: rep.cat,
       remark: (p.im3 && p.tid) ? 'Hybrid' : (p.im3 ? 'IM3 only' : '3ID only'),
@@ -5014,6 +5033,7 @@ function renderPairedDetailTable(){
       <td class="name-cell">${escHtml(row.name)}</td>
       <td>${row.idIm3 || '–'}</td>
       <td>${row.idTid || '–'}</td>
+      <td>${escHtml(row.dseIm3) || '–'}</td>
       <td><span class="badge ${row.cat}">${catDisplayLabel(row.cat)}</span> <span class="badge ${remarkClass(row.remark)}">${row.remark}</span></td>
       <td>${row.idIm3 ? fmtN(row.gaIm3) : '–'}</td>
       <td>${row.hasTid ? fmtN(row.gaTid) : '–'}</td>
@@ -5024,7 +5044,7 @@ function renderPairedDetailTable(){
       <td>${row.idIm3 ? fmtN(row.pcsIm3) : '–'}</td>
       <td>${row.hasTid ? fmtN(row.pcsTid) : '–'}</td>
       <td>${fmtN(row.pcsIoh)}</td>
-    </tr>`).join('') : `<tr><td colspan="14" style="color:var(--muted);">Tidak ada data.</td></tr>`;
+    </tr>`).join('') : `<tr><td colspan="15" style="color:var(--muted);">Tidak ada data.</td></tr>`;
 
   document.getElementById('pairedPageInfo').textContent = `Halaman ${pairedPage} / ${totalPages}`;
   document.getElementById('pairedPrevPage').disabled = pairedPage<=1;
@@ -5033,12 +5053,12 @@ function renderPairedDetailTable(){
 
 function exportPairedCsv(){
   const rows = buildFilteredPairedRows();
-  const headers = ['micro_cluster','nama_outlet','outlet_id_im3','outlet_id_3id','kategori','status_pairing',
+  const headers = ['micro_cluster','nama_outlet','outlet_id_im3','outlet_id_3id','dse_code_im3','kategori','status_pairing',
     'ga_im3','ga_3id','ga_ioh','sellin_sp_rp_im3','sellin_sp_rp_3id','sellin_sp_rp_ioh','sellin_sp_pcs_im3','sellin_sp_pcs_3id','sellin_sp_pcs_ioh'];
   const lines = [headers.join(',')];
   rows.forEach(row=>{
     lines.push([
-      JSON.stringify(row.micro||''), JSON.stringify(row.name||''), row.idIm3||'', row.idTid||'',
+      JSON.stringify(row.micro||''), JSON.stringify(row.name||''), row.idIm3||'', row.idTid||'', row.dseIm3||'',
       catDisplayLabel(row.cat), row.remark,
       row.gaIm3, row.gaTid, row.gaIoh, row.spIm3, row.spTid, row.spIoh, row.pcsIm3, row.pcsTid, row.pcsIoh
     ].join(','));
