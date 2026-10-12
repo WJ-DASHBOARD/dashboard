@@ -5778,6 +5778,16 @@ function handleMasterFile(file){
       uploadInProgress = false;
     }
   };
+  reader.onerror = function(){
+    progressEl.textContent = 'Gagal membaca file dari komputer (' + ((reader.error&&reader.error.message)||'tidak diketahui') + '). Salin file ke Desktop/Downloads lokal (bukan folder OneDrive/jaringan) lalu pilih ulang.';
+    uploadInProgress = false;
+  };
+  reader.onprogress = function(ev){
+    if(ev.lengthComputable) progressEl.textContent = 'Membaca file dari komputer… ' + Math.round(ev.loaded/ev.total*100) + '%';
+  };
+  reader.onloadend = function(){
+    if(reader.result && progressEl.textContent.indexOf('Membaca')===0) progressEl.textContent = 'File dimuat, mengurai Excel (bisa 10-60 detik, halaman mungkin terasa diam)…';
+  };
   reader.readAsArrayBuffer(file);
 }
 
