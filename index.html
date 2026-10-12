@@ -2591,6 +2591,15 @@ function refreshMicroOptions(){
   let micros = META.micros;
   if(area && META.microsByArea) micros = META.microsByArea[area] || [];
   else if(branch) micros = META.microByBranch[branch] || [];
+  else {
+    // Region dipilih (tanpa Area): hanya Micro Cluster dari Area di region itu
+    const region = document.getElementById('fRegion').value;
+    if(region && META.areasByRegion && META.areasByRegion[region] && META.microsByArea){
+      const set = new Set();
+      META.areasByRegion[region].forEach(ar=>(META.microsByArea[ar]||[]).forEach(m=>set.add(m)));
+      micros = META.micros.filter(m=>set.has(m));
+    }
+  }
   fMicro.innerHTML = '<option value="">Semua Micro Cluster</option>' + micros.map(m=>`<option value="${m}">${m}</option>`).join('');
   if(micros.includes(cur)) fMicro.value = cur;
 }
@@ -4107,7 +4116,7 @@ function renderGaSlab(){
 
 function renderGaSlabBreakdown(){
   const ctx = groupContext();
-  document.getElementById('gaSlabBreakdownTitle').textContent = 'Slab GA ' + ctx.title;
+  document.getElementById('gaSlabBreakdownTitle').textContent = 'Slab GA ' + ctx.title + ' — Top ' + topNForCharts();
   const agg = {};
   filteredSellin.forEach(r=>{
     const g = r[ctx.key===IDX.branchIdx ? IDX_S.branchIdx : IDX_S.microIdx];
@@ -4116,7 +4125,7 @@ function renderGaSlabBreakdown(){
     const slab = ga<=0?'s0' : ga<25?'s1' : ga<50?'s2' : ga<100?'s3' : 's4';
     agg[g][slab]++; agg[g].total++;
   });
-  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.total-a.total).slice(0,14);
+  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.total-a.total).slice(0,topNForCharts());
   const segs = [
     {key:'s0',color:'#9B98A8'}, {key:'s1',color:'var(--amber)'}, {key:'s2',color:'#6E8FD9'},
     {key:'s3',color:'#4E9E72'}, {key:'s4',color:'var(--green)'}
@@ -4594,14 +4603,14 @@ function renderCoverageCards(){
 
 function renderSellinBreakdown(){
   const ctx = groupContext();
-  document.getElementById('siBreakdownTitle').textContent = 'Total GA ' + ctx.title;
+  document.getElementById('siBreakdownTitle').textContent = 'Total GA ' + ctx.title + ' — Top ' + topNForCharts();
 
   const agg = {};
   filteredSellin.forEach(r=>{
     const g = r[ctx.key===IDX.branchIdx ? IDX_S.branchIdx : IDX_S.microIdx];
     agg[g] = (agg[g]||0) + r[IDX_S.rguGa];
   });
-  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ga: agg[g]})).sort((a,b)=>b.ga-a.ga).slice(0,14);
+  const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ga: agg[g]})).sort((a,b)=>b.ga-a.ga).slice(0,topNForCharts());
   const maxGa = Math.max(1, ...rows.map(r=>r.ga));
   const grandTotalGa = Object.values(agg).reduce((a,b)=>a+b, 0) || 1;
   document.getElementById('siBreakdownChart').innerHTML = rows.map(r=>{
@@ -5142,6 +5151,8 @@ function renderKpis(){
   }
 }
 
+// Jumlah baris "Top" untuk grafik per Area / Micro Cluster: Region dipilih (mis. West Java) -> Top 5, semua region -> Top 10.
+function topNForCharts(){ return document.getElementById('fRegion').value ? 5 : 10; }
 function groupContext(){
   // Drilling into Micro Cluster used to be keyed off the (now-hidden) Branch filter.
   // Newer pairing data has Branch Name == Area Name (no real separate Branch level),
