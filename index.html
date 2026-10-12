@@ -4519,7 +4519,7 @@ function renderSellinKpis(){
     document.getElementById('siKpiSellinLabel').textContent = 'Total Sell In SP (Qty)';
     document.getElementById('siKpiSellin').textContent = fmtN(spPcs);
     document.getElementById('siKpiSellinSub').textContent = `IM3 ${fmtN(pcsIm3)} · 3ID ${fmtN(pcsTid)} · IOH ${fmtN(pcsIm3+pcsTid)}`;
-    document.getElementById('siSpPcsSub').textContent = 'Sell In (Rp) belum ada — dari file OSA, menu #6';
+    document.getElementById('siSpPcsSub').textContent = '';
     document.getElementById('siSpLabel').textContent = 'Sell In SP (Qty)';
     document.getElementById('siSp').textContent = fmtN(spPcs);
     document.getElementById('siSpPct').textContent = '';
@@ -6062,7 +6062,7 @@ function handleMasterFile(file){
         }
         const entries = {};
         const regionsFound = new Set();
-        let nIm3 = 0, nTid = 0, skippedNoCode = 0;
+        let nIm3 = 0, nTid = 0, skippedNoCode = 0, skippedNoDse = 0;
         // map coordinates: one [lat, lon] per outlet entry key ('IM3|id' / '3ID|id'); BOTH outlets of a
         // pairing row get the row's coordinate (same physical shop). Last row wins for a repeated code,
         // exactly like `entries` above.
@@ -6076,6 +6076,9 @@ function handleMasterFile(file){
           const hasIm3 = isRealOutletCode(codeIm3);
           const hasTid = isRealOutletCode(codeTid);
           if(!hasIm3 && !hasTid){ skippedNoCode++; continue; }
+          // Outlet tanpa DSE Code (IM3 maupun 3ID) = bukan PJP -> tidak dimasukkan ke data outlet maupun summary
+          const noDse = v => { const t = (v==null) ? '' : String(v).trim(); return t==='' || /^(0|-|n\/a|na|#n\/a)$/i.test(t); };
+          if(noDse(iDseIm3>=0 ? r[iDseIm3] : null) && noDse(iDseTid>=0 ? r[iDseTid] : null)){ skippedNoDse++; continue; }
           const statusRaw = iStatus>=0 ? normHeader(r[iStatus]) : '';
           let remark;
           if(statusRaw.indexOf('hybrid')>=0) remark = 'Hybrid';
@@ -6119,7 +6122,7 @@ function handleMasterFile(file){
             if(cc.ok) geo.set(k, [cc.lat, cc.lon]); else geo.delete(k);
           }
         }
-        return {entries, geo, geoStats, nIm3, nTid, skippedNoCode, totalRows: allRows.length - headerRowIdx - 1, regions: regionsFound};
+        return {entries, geo, geoStats, nIm3, nTid, skippedNoCode, skippedNoDse, totalRows: allRows.length - headerRowIdx - 1, regions: regionsFound};
       }
 
       let wideResult = null;
@@ -6141,7 +6144,7 @@ function handleMasterFile(file){
         Object.assign(newMaster, wideResult.entries);
         n1 = wideResult.nIm3; n2 = wideResult.nTid;
         const regionsTxt = Array.from(wideResult.regions).join(', ') || '-';
-        diagnostics.push(`Format baru terdeteksi (1 sheet, kolom "Outlet Code IM3"/"Outlet Code 3ID"). Region di file ini: ${regionsTxt}. ${wideResult.totalRows} baris dibaca, ${wideResult.skippedNoCode} tanpa kode outlet. Kategori KAM/KRO dan region lain dari pairing sebelumnya (jika ada) tetap dipakai.`);
+        diagnostics.push(`Format baru terdeteksi (1 sheet, kolom "Outlet Code IM3"/"Outlet Code 3ID"). Region di file ini: ${regionsTxt}. ${wideResult.totalRows} baris dibaca, ${wideResult.skippedNoCode} tanpa kode outlet, ${wideResult.skippedNoDse} tanpa DSE Code (bukan PJP, tidak dimasukkan). Kategori KAM/KRO dan region lain dari pairing sebelumnya (jika ada) tetap dipakai.`);
       } else {
         n1 = extract('IM3', 'IM3');
         n2 = extract('3ID', '3ID');
