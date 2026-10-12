@@ -2528,13 +2528,14 @@ function populateAreaBranch(){
 // picking e.g. Tasikmalaya still showed every other branch's territories too.
 // DSE filter: one outlet pair = one DSE person. Effective DSE = DSE Code IM3 if present,
 // otherwise DSE Code 3ID (also for 3ID-only outlets).
+function canonDse(d){ return d ? String(d).replace(/3ID$/i,'') : d; }
 function effDseByPair(){
   const m = {};
   Object.keys(MASTER).forEach(key=>{
     const mm = MASTER[key];
     if(!mm.pairKey || mm.pairKey === 'N/A') return;
     const isIm3 = key.slice(0, key.indexOf('|')) === 'IM3';
-    const d = mm.dse && mm.dse !== 'N/A' ? mm.dse : '';
+    const d = mm.dse && mm.dse !== 'N/A' ? canonDse(mm.dse) : '';
     if(isIm3){ if(d) m[mm.pairKey] = d; else if(!(mm.pairKey in m)) m[mm.pairKey] = ''; }
     else if(!m[mm.pairKey]) m[mm.pairKey] = d;
   });
@@ -2547,7 +2548,7 @@ function dsePkSet(dse){
 }
 function dseKeyOk(key, mm, dse, pkSet){
   if(mm.pairKey && mm.pairKey !== 'N/A') return pkSet.has(mm.pairKey);
-  return (mm.dse||'N/A') === dse;
+  return (canonDse(mm.dse)||'N/A') === dse;
 }
 function refreshTerritoryDseOptions(){
   const brand = document.getElementById('fBrand').value;
@@ -2569,7 +2570,7 @@ function refreshTerritoryDseOptions(){
     if(micro && mm.micro !== micro) return;
     if(ptype && (mm.ptype||'N/A') !== ptype) return;
     territorySet.add(mm.territory || 'N/A');
-    if(!(mm.pairKey && mm.pairKey !== 'N/A')) dseSet.add(mm.dse || 'N/A');
+    if(!(mm.pairKey && mm.pairKey !== 'N/A')) dseSet.add(canonDse(mm.dse) || 'N/A');
   });
 
   if(typeof effDseByPair === 'function'){ const em = effDseByPair(); const okPk = new Set(); Object.keys(MASTER).forEach(key=>{ const mm=MASTER[key]; if(mm.pairKey && mm.pairKey!=='N/A' && !(regionAreas && !regionAreas.includes(mm.area)) && !(area && mm.area!==area) && !(branch && mm.branch!==branch) && !(micro && mm.micro!==micro) && !(ptype && (mm.ptype||'N/A')!==ptype) && !(brand && key.slice(0,key.indexOf('|'))!==brand)) okPk.add(mm.pairKey); }); okPk.forEach(pk=>dseSet.add(em[pk]||'N/A')); }
@@ -4299,7 +4300,7 @@ function renderTopProducts(){
     if(microI>=0 && r[IDX_PROD.microIdx]!==microI) return false;
     if(ptypeI>=0 && r[IDX_PROD.ptypeIdx]!==ptypeI) return false;
     if(territoryI>=0 && r[IDX_PROD.territoryIdx]!==territoryI) return false;
-    if(dseI>=0 && r[IDX_PROD.dseIdx]!==dseI) return false;
+    if(dse && (canonDse(META.dses[r[IDX_PROD.dseIdx]])||'N/A') !== dse) return false;
     if(catI>=0 && r[IDX_PROD.catIdx]!==catI) return false;
     return true;
   });
@@ -4948,8 +4949,8 @@ function pairMatchesFilters(p, f){
   if(f.ptype && (rep.ptype||'N/A') !== f.ptype) return false;
   if(f.territory && (rep.territory||'N/A') !== f.territory) return false;
   if(f.dse){
-    const dIm = p.im3 && p.im3.dse && p.im3.dse !== 'N/A' ? p.im3.dse : '';
-    const dTid = p.tid && p.tid.dse && p.tid.dse !== 'N/A' ? p.tid.dse : '';
+    const dIm = p.im3 && p.im3.dse && p.im3.dse !== 'N/A' ? canonDse(p.im3.dse) : '';
+    const dTid = p.tid && p.tid.dse && p.tid.dse !== 'N/A' ? canonDse(p.tid.dse) : '';
     if((dIm || dTid || 'N/A') !== f.dse) return false;
   }
   if(f.searchTokens && f.searchTokens.length){
@@ -6121,6 +6122,7 @@ function handleMasterFile(file){
           // entries — the '...3ID' territory column is not used, by instruction (the two
           // sides are considered the same territory, sourced from the IM3 column alone).
           const dseIm3 = (iDseIm3>=0 && r[iDseIm3]!=null && String(r[iDseIm3]).trim()!=='') ? String(r[iDseIm3]).trim() : 'N/A';
+          // IM3 and 3ID DSE codes on the same row are ONE person: the 3ID entry uses the IM3 code when present.
           const dseTid = (iDseTid>=0 && r[iDseTid]!=null && String(r[iDseTid]).trim()!=='') ? String(r[iDseTid]).trim() : 'N/A';
           const territory = (iTerrIm3>=0 && r[iTerrIm3]) || 'N/A';
           // Ties the IM3 and 3ID entries from this SAME row back together (see
@@ -6142,7 +6144,7 @@ function handleMasterFile(file){
           }
           if(hasTid){
             const k = '3ID|'+normId(codeTid);
-            entries[k] = {area, branch, micro, region, name:nameTid, cat:'PJP', remark, ptype, dse:dseTid, territory, pairKey}; nTid++;
+            entries[k] = {area, branch, micro, region, name:nameTid, cat:'PJP', remark, ptype, dse:(dseIm3 !== 'N/A' ? dseIm3 : dseTid), territory, pairKey}; nTid++;
             if(cc.ok) geo.set(k, [cc.lat, cc.lon]); else geo.delete(k);
           }
         }
