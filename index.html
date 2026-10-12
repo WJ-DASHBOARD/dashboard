@@ -350,6 +350,7 @@
           <tbody id="petaStatList"></tbody>
         </table>
         <div id="petaDataHint" style="margin-top:6px;font-size:10.5px;line-height:1.4;color:var(--muted);"></div>
+        <div id="petaGaByType" style="margin-top:10px;"></div>
         </div>
       </div>
     </div>
@@ -409,9 +410,6 @@
   </div>
   </details>
 
-  <footer class="note">
-    Titik outlet menggunakan koordinat LATITUDE/LONGITUDE dari file mapping populasi outlet (IM3 &amp; 3ID, per 07 Sept 2026). Batas wilayah kabupaten/kota disederhanakan dari file GeoJSON yang diunggah; klik area untuk drill-down (hirarki Area → Branch → Micro Cluster mengikuti filter di atas).
-  </footer>
 
 </div>
 
@@ -571,10 +569,6 @@
   </div>
   </details>
 
-  <footer class="note">
-    DOS dihitung dari total stock amount (SP Ori + SP Inj + Voucher Ori + Voucher Inj + Salmo) dibagi total demand 30 hari per outlet. Baris dengan flag sp_0 / vou_0 tidak dihitung ke dalam stock. Low balance dihitung khusus dari saldo Salmo &lt; Rp100.000. Data stok diperbarui manual melalui tombol "Perbarui data"; data pairing outlet (Area/Branch/Micro Cluster/Flag KAM-KRO) diperbarui terpisah, biasanya sebulan sekali.
-  </footer>
-
 </div>
 
 <div id="tabSellin" class="tab-panel hidden">
@@ -595,7 +589,7 @@
       <div class="kpi-label" id="siKpiSellinLabel">Total Sell In Amount (Bn)</div>
       <div class="kpi-value" id="siKpiSellin">–</div>
       <div class="kpi-sub" id="siKpiSellinSub">SP + Voucher + Saldo</div>
-      <div class="kpi-sub" id="siSpPcsSub">SP (Pcs): –</div>
+      <div class="kpi-sub" id="siSpPcsSub">SP (Qty): –</div>
     </div>
     <div class="kpi-card warn">
       <div class="kpi-label">Total Tertiary + Secondary (Bn)</div>
@@ -805,7 +799,7 @@
         <th rowspan="2">Kategori</th>
         <th colspan="3" style="text-align:center;">GA (MTD)</th>
         <th colspan="3" class="rp-col" style="text-align:center;" title="Nilai Sell In SP (Rp) dari file OSA — menu #6 Perbarui data">Sell In SP (Rp, file OSA)</th>
-        <th colspan="3" style="text-align:center;" title="Jumlah SIM (pcs) dari baris kpi=SELLIN di export BigQuery — file yang sama dengan GA, menu #5">Sell In SP (Pcs, file GA BigQuery)</th>
+        <th colspan="3" style="text-align:center;" title="Jumlah SIM (pcs) dari baris kpi=SELLIN di export BigQuery — file yang sama dengan GA, menu #5">Sell In SP (Qty, file GA BigQuery)</th>
       </tr>
       <tr>
         <th style="font-weight:500;">IM3</th>
@@ -828,10 +822,6 @@
     <button id="pairedNextPage">Berikutnya ›</button>
   </div>
   </details>
-
-  <footer class="note">
-    Sell In bersumber dari file OSA (SP/Voucher/Saldo, menu #6), GA dari file GA (per MSISDN / RGUGA / BigQuery, menu #5), dan Secondary dari export BigQuery (menu #4), semuanya bulan berjalan, dicocokkan ke outlet pairing yang sama dengan tab Low Balance. Nilai GA adalah akumulasi month-to-date sampai tanggal data terakhir.
-  </footer>
 
 </div>
 
@@ -990,10 +980,6 @@
     <button id="supNextPage">Berikutnya ›</button>
   </div>
   </details>
-
-  <footer class="note">
-    Data Supply bersumber dari file SUPPLY_PROD bulan berjalan (kolom category dikelompokkan jadi SP: SIM/SIM Zero/SIM Ori, Rebuy: CVM/ATL/Pulsa, Voucher: eVoucher/SPV/SPV Ori), dicocokkan ke outlet pairing yang sama dengan tab lain via ret_qr_cd. "Hit" = jumlah transaksi, "Rev" = nilai revenue.
-  </footer>
 
 </div>
 
@@ -1154,7 +1140,7 @@
           <tr><td>Outlet &amp; titik peta</td><td>File pairing .xlsx (1 file per region; region lain tidak terhapus)</td><td>#2</td></tr>
           <tr><td><b>GA (MTD)</b> IM3 &amp; 3ID</td><td><code>IM3_OUTLET_RGUGA_YYYYMM.csv</code> <b>dan</b> <code>3ID_OUTLET_RGUGA_YYYYMM.csv</code> (dua file, boleh dipilih sekaligus), <i>atau</i> 1 file GA per MSISDN (<code>GA_Outlet…csv</code>), <i>atau</i> 1 export BigQuery <code>bq-results…</code> yang berisi kpi RET_TAG</td><td>#5</td></tr>
           <tr><td><b>Sell In SP / Voucher / Saldo (Rp)</b></td><td><code>OSA_IM3.CSV</code> <b>dan</b> <code>OSA_3ID.CSV</code> — hanya file OSA. File GA/RGUGA tidak berisi Sell In (Rp)</td><td>#6</td></tr>
-          <tr><td>Sell In SP (Pcs)</td><td><b>1 file "GA &amp; Sell In SP" — export BigQuery</b> (kolom <code>brand, dt_id, inj_dt, kpi, flag_outlet, outlet_id, b_msisdn, product_name</code>; baris <code>kpi = RET_TAG</code> = GA, baris <code>kpi = SELLIN</code> = Sell In SP): upload di #5, <b>GA dan Sell In SP (Pcs) terisi sekaligus untuk IM3 &amp; 3ID</b>. Tanpa file OSA, dashboard menampilkan Sell In SP dalam Pcs.</td><td>#5</td></tr>
+          <tr><td>Sell In SP (Qty)</td><td><b>1 file "GA &amp; Sell In SP" — export BigQuery</b> (kolom <code>brand, dt_id, inj_dt, kpi, flag_outlet, outlet_id, b_msisdn, product_name</code>; baris <code>kpi = RET_TAG</code> = GA, baris <code>kpi = SELLIN</code> = Sell In SP): upload di #5, <b>GA dan Sell In SP (Qty) terisi sekaligus untuk IM3 &amp; 3ID</b>. Tanpa file OSA, dashboard menampilkan Sell In SP dalam Qty.</td><td>#5</td></tr>
         </tbody>
       </table>
     </div>
@@ -1193,10 +1179,10 @@
 
     <div class="upload-block">
       <h4>5. Update GA — file RGUGA atau file GA per MSISDN (CSV)</h4>
-      <p class="hint" style="color:var(--ink);"><b>File yang diterima:</b> (a) <b>export BigQuery "GA &amp; Sell In SP"</b> — kolom <code>brand, dt_id, inj_dt, kpi, flag_outlet, outlet_id, b_msisdn, product_name</code>: baris <code>kpi = RET_TAG</code> jadi GA, baris <code>kpi = SELLIN</code> jadi Sell In SP (Pcs), IM3 &amp; 3ID sekaligus dalam 1 file; (b) RGUGA per brand; (c) GA per MSISDN. <b>Sell In dalam Rp (SP/Voucher/Saldo) TIDAK terisi dari sini</b> — itu dari file OSA di menu #6; kalau belum ada OSA, Sell In SP tampil dalam Pcs. File RGUGA dipisah per brand: upload <b>IM3_OUTLET_RGUGA</b> dan <b>3ID_OUTLET_RGUGA</b> (keduanya), kalau tidak, GA brand yang tidak diupload tetap kosong.</p>
+      <p class="hint" style="color:var(--ink);"><b>File yang diterima:</b> (a) <b>export BigQuery "GA &amp; Sell In SP"</b> — kolom <code>brand, dt_id, inj_dt, kpi, flag_outlet, outlet_id, b_msisdn, product_name</code>: baris <code>kpi = RET_TAG</code> jadi GA, baris <code>kpi = SELLIN</code> jadi Sell In SP (Qty), IM3 &amp; 3ID sekaligus dalam 1 file; (b) RGUGA per brand; (c) GA per MSISDN. <b>Sell In dalam Rp (SP/Voucher/Saldo) TIDAK terisi dari sini</b> — itu dari file OSA di menu #6; kalau belum ada OSA, Sell In SP tampil dalam Qty. File RGUGA dipisah per brand: upload <b>IM3_OUTLET_RGUGA</b> dan <b>3ID_OUTLET_RGUGA</b> (keduanya), kalau tidak, GA brand yang tidak diupload tetap kosong.</p>
       <p class="hint">Ganti angka <b>GA (MTD)</b> di data Sell In &amp; GA. Format file dikenali otomatis (bisa pilih beberapa file sekaligus):<br>
       • <b>RGUGA harian</b> — <code>IM3_OUTLET_RGUGA_YYYYMM.csv</code> / <code>3ID_OUTLET_RGUGA_YYYYMM.csv</code> (⚠ angka RGUGA 3ID jauh lebih besar dari GA di DSE_PROD dan GA per MSISDN — untuk 3ID sebaiknya pakai export BigQuery atau file GA per MSISDN): kolom <b>dt01…dt31 dijumlahkan</b> dari tanggal 1 sampai <b>tanggal terakhir yang ada datanya</b> (kolom hari setelahnya yang nol semua diabaikan), semua baris &amp; parameter per outlet dijumlah, hanya region WEST JAVA / INNER JAKARTA / OUTER JAKARTA (outlet yang ada di pairing). <b>File RGUGA hanya berisi GA</b> — tidak ada data Sell In SP di dalamnya.<br>
-      • <b>Export BigQuery</b> — file berkolom <code>brand, dt_id, kpi, outlet_id, b_msisdn</code>: <b>hanya baris kpi = RET_TAG yang dihitung sebagai GA</b> (huruf besar/kecil dan spasi tidak masalah; semua <code>flag_outlet</code>, termasuk 0). GA outlet = jumlah MSISDN unik per <code>outlet_id</code> di bulan terakhir pada file; IM3 &amp; 3ID sekaligus, tanggal terakhir = <code>dt_id</code> terbaru per brand. <b>File ini juga otomatis mengisi Sell In SP (Pcs)</b> dari baris kpi = SELLIN yang ada di file yang sama — tidak perlu upload terpisah ke menu #9 lagi.<br>
+      • <b>Export BigQuery</b> — file berkolom <code>brand, dt_id, kpi, outlet_id, b_msisdn</code>: <b>hanya baris kpi = RET_TAG yang dihitung sebagai GA</b> (huruf besar/kecil dan spasi tidak masalah; semua <code>flag_outlet</code>, termasuk 0). GA outlet = jumlah MSISDN unik per <code>outlet_id</code> di bulan terakhir pada file; IM3 &amp; 3ID sekaligus, tanggal terakhir = <code>dt_id</code> terbaru per brand. <b>File ini juga otomatis mengisi Sell In SP (Qty)</b> dari baris kpi = SELLIN yang ada di file yang sama — tidak perlu upload terpisah ke menu #9 lagi.<br>
       • <b>GA per MSISDN</b> — file berkolom <code>msisdn, brand, ga_dt, tag_outlet</code>: 1 baris = 1 aktivasi, <b>GA outlet = jumlah baris (MSISDN unik) per <code>tag_outlet</code></b> di bulan terakhir pada file; IM3 &amp; 3ID sekaligus dalam 1 file, tanggal terakhir = <code>ga_dt</code> terbaru per brand. Baris yang <code>tag_outlet</code>-nya kosong tidak bisa dihubungkan ke outlet, jadi tidak dihitung (jumlahnya ditampilkan setelah upload).<br>
       Outlet yang tidak muncul di file dianggap GA = 0. Hanya kolom GA yang diganti — Sell In, Tertiary, Secondary tidak disentuh. Berbeda dengan data Stock, yang memakai nilai <i>as of</i> tanggal terakhir (tidak dijumlah). Perlu data Sell In &amp; GA (menu #3) sudah pernah diupload dulu. File 3ID besar (~150 MB), prosesnya bisa 1–2 menit.</p>
       <input type="file" id="gaFile" accept=".csv" multiple>
@@ -1424,15 +1410,15 @@ function buildPairsFromMaster(){
 
 const FIELDS_S = ['brandIdx','areaIdx','branchIdx','microIdx','outletId','outletName','catIdx',
   'rguGa','qsso','sellinSp','sellinVou','sellinSaldo','tertiary','secondary','sellinSpPcs','remarkIdx','ptypeIdx'];
-// sellinSpPcs (SP Sell In, satuan Pcs — jumlah baris kpi=SELLIN unik per outlet dari export
+// sellinSpPcs (SP Sell In, satuan Qty — jumlah baris kpi=SELLIN unik per outlet dari export
 // BigQuery, field sellinSpPcs) was added after everything above it; rows saved before this feature
 // existed are 1 element shorter, so any read of this field falls back to 0 (see spPcsOf()).
 function spPcsOf(row){ const v = row[IDX_S.sellinSpPcs]; return v == null ? 0 : v; }
 const IDX_S = Object.fromEntries(FIELDS_S.map((k,i)=>[k,i]));
 // Which Sell In measure is real for each brand. Sell In SP (Rp) / Voucher / Saldo only come from the OSA files (menu #6);
 // the BigQuery export (menu #5, kpi = SELLIN) only gives Sell In SP in PCS. When a brand has no Rp data at all but does have
-// Pcs data, "Sell In SP" means Pcs for that brand: the flags (No Sell In SP / All / Alert) test Pcs > 0 instead of Rp > 0, and the
-// KPI cards / summary show Pcs instead of an empty 0 Rp. As soon as OSA data exists for the brand, everything is Rp-based as before.
+// Qty data, "Sell In SP" means Qty for that brand: the flags (No Sell In SP / All / Alert) test Qty > 0 instead of Rp > 0, and the
+// KPI cards / summary show Qty instead of an empty 0 Rp. As soon as OSA data exists for the brand, everything is Rp-based as before.
 // Computed lazily from SELLIN_OUTLETS and reset by applyFilters() (every upload ends with it).
 let SP_MODE = null;
 function spMode(){
@@ -1448,8 +1434,8 @@ function spMode(){
   }
   return SP_MODE;
 }
-function spUsePcs(brandIdx){ const m = spMode()[brandIdx]; return !!m && !m.sp && m.pcs; }     // "Sell In SP" = Pcs for this brand
-function allUsePcs(brandIdx){ const m = spMode()[brandIdx]; return !!m && !m.any && m.pcs; }   // "Sell In (any)" = Pcs for this brand
+function spUsePcs(brandIdx){ const m = spMode()[brandIdx]; return !!m && !m.sp && m.pcs; }     // "Sell In SP" = Qty for this brand
+function allUsePcs(brandIdx){ const m = spMode()[brandIdx]; return !!m && !m.any && m.pcs; }   // "Sell In (any)" = Qty for this brand
 function sellInPcsPrimary(){ const v = Object.values(spMode()); return v.length > 0 && !v.some(m=>m.any) && v.some(m=>m.pcs); }
 
 let META = null;
@@ -1594,7 +1580,7 @@ let uploadInProgress = false;
 // Name of the file currently being processed — set by every handle*File() entry point and read by
 // the finish*Processing() functions (which run after the parse step and have no `file` of their own)
 // when they write the update log. Reading a bare `file.name` there threw a ReferenceError AFTER the
-// data was saved, which silently aborted everything that followed (the other brand, Sell In SP (Pcs),
+// data was saved, which silently aborted everything that followed (the other brand, Sell In SP (Qty),
 // WoW/MoM baselines and the screen refresh).
 let lastUploadName = '';
 
@@ -2809,7 +2795,7 @@ function sellinMetricOk(key){
   const grp = ({ ga:'ga', wGa:'ga', s0:'ga', s1:'ga', s2:'ga', s3:'ga', s4:'ga',
     sp:'dse', vou:'dse', saldo:'dse', wSp:'dse', wVou:'dse', wSaldo:'dse',
     secondary:'secondary', tertiary:'tertiary',   // 'tertiary' part is populated once menu #7's Tertiary file has been uploaded
-    sellinSpPcs:'spPcs' })[key];   // Sell In SP (Pcs) has no LMTD source yet — always hidden under Compare LMTD
+    sellinSpPcs:'spPcs' })[key];   // Sell In SP (Qty) has no LMTD source yet — always hidden under Compare LMTD
   return grp ? !!a[grp] : true;
 }
 
@@ -3001,7 +2987,7 @@ async function saveSellinForMode(brand, rows, parts, mode){
 }
 async function lmtdSellinBaseline(brand){ return sellinBaselineForMode(brand, 'lmtd'); }
 async function lmtdSaveSellin(brand, rows, parts){ return saveSellinForMode(brand, rows, parts, 'lmtd'); }
-// Same idea for the WoW ('week') Sell In baseline: GA / Sell In (OSA) / Sell In SP (Pcs) /
+// Same idea for the WoW ('week') Sell In baseline: GA / Sell In (OSA) / Sell In SP (Qty) /
 // Secondary / Tertiary each derive their own "~7 days ago" values straight from the file being
 // uploaded (see each upload's finish function) and merge them into this ONE shared snapshot,
 // the same way the LMTD parts above do — so one metric's derived value doesn't erase another's.
@@ -3446,8 +3432,8 @@ const sellinCmpVal = r => sellInPcsPrimary() ? spPcsOf(r) : (r[IDX_S.sellinSp]+r
 const CMP_METRICS = [
   { key:'stock',     label:'Stock Amount (Saldo)',                   fmt:fmtBn, goodUp:true },
   { key:'ga',        label:'GA (MTD)',                                fmt:fmtN,  goodUp:true },
-  // with no OSA (Rp) data at all this metric switches to Sell In SP in Pcs (see sellInPcsPrimary)
-  { key:'sellin',    get label(){ return sellInPcsPrimary() ? 'Sell In SP (Pcs)' : 'Sell In Amount (SP + Voucher + Saldo)'; },
+  // with no OSA (Rp) data at all this metric switches to Sell In SP in Qty (see sellInPcsPrimary)
+  { key:'sellin',    get label(){ return sellInPcsPrimary() ? 'Sell In SP (Qty)' : 'Sell In Amount (SP + Voucher + Saldo)'; },
                       get fmt(){ return sellInPcsPrimary() ? fmtN : fmtBn; }, goodUp:true },
   { key:'supply',    label:'Supply Revenue',                          fmt:fmtBn, goodUp:true },
   { key:'secondary', label:'Secondary',                               fmt:fmtBn, goodUp:true },
@@ -4503,7 +4489,7 @@ function renderSellinKpis(){
   // spIm3+spTid, matching the same IM3/3ID/IOH convention as the paired Detail
   // Outlet table above (sub-request 5: an aggregate version of that per-outlet split).
   document.getElementById('siSpBreakdown').textContent = `IM3 ${fmtBn(spIm3)} · 3ID ${fmtBn(spTid)} · IOH ${fmtBn(spIm3+spTid)}`;
-  // Pcs per brand (for the Pcs-primary display below)
+  // Qty per brand (for the Qty-primary display below)
   let pcsIm3 = 0, pcsTid = 0;
   filteredSellin.forEach(r=>{ const b = META.brands[r[IDX_S.brandIdx]]; if(b==='IM3') pcsIm3 += spPcsOf(r); else if(b==='3ID') pcsTid += spPcsOf(r); });
   const pcsPrimary = sellInPcsPrimary();
@@ -4515,22 +4501,22 @@ function renderSellinKpis(){
   document.getElementById('siKpiGa').textContent = fmtN(ga);
   document.getElementById('siKpiGaSub').textContent = n ? (ga/n).toFixed(2)+' per outlet' : '–';
   if(pcsPrimary){
-    // no OSA data at all: Sell In SP is known in Pcs only (BigQuery export, kpi = SELLIN) — show that, not an empty 0 Rp
-    document.getElementById('siKpiSellinLabel').textContent = 'Total Sell In SP (Pcs)';
+    // no OSA data at all: Sell In SP is known in Qty only (BigQuery export, kpi = SELLIN) — show that, not an empty 0 Rp
+    document.getElementById('siKpiSellinLabel').textContent = 'Total Sell In SP (Qty)';
     document.getElementById('siKpiSellin').textContent = fmtN(spPcs);
     document.getElementById('siKpiSellinSub').textContent = `IM3 ${fmtN(pcsIm3)} · 3ID ${fmtN(pcsTid)} · IOH ${fmtN(pcsIm3+pcsTid)}`;
     document.getElementById('siSpPcsSub').textContent = 'Sell In (Rp) belum ada — dari file OSA, menu #6';
-    document.getElementById('siSpLabel').textContent = 'Sell In SP (Pcs)';
+    document.getElementById('siSpLabel').textContent = 'Sell In SP (Qty)';
     document.getElementById('siSp').textContent = fmtN(spPcs);
     document.getElementById('siSpPct').textContent = '';
     document.getElementById('siSpBreakdown').textContent = `IM3 ${fmtN(pcsIm3)} · 3ID ${fmtN(pcsTid)} · IOH ${fmtN(pcsIm3+pcsTid)}`;
-    rpNote.style.display = 'block';
-    rpNote.textContent = 'ℹ Sell In (Rp: SP / Voucher / Saldo) belum ada karena belum ada file OSA (menu #6). Sell In SP ditampilkan dalam Pcs dari file BigQuery (kpi = SELLIN); outlet "No Sell In SP" dihitung dari Pcs. Kolom Rp di tabel di bawah akan terisi setelah file OSA_IM3 / OSA_3ID diupload.';
+    rpNote.style.display = 'none';
+    rpNote.textContent = '';
   } else {
     document.getElementById('siKpiSellinLabel').textContent = 'Total Sell In Amount (Bn)';
     document.getElementById('siKpiSellin').textContent = fmtBn(sellinTotal);
     document.getElementById('siKpiSellinSub').textContent = 'SP + Voucher + Saldo';
-    document.getElementById('siSpPcsSub').textContent = 'SP (Pcs): ' + fmtN(spPcs);
+    document.getElementById('siSpPcsSub').textContent = 'SP (Qty): ' + fmtN(spPcs);
     document.getElementById('siSpLabel').textContent = 'Sell In SP (Bn)';
     rpNote.style.display = 'none'; rpNote.textContent = '';
   }
@@ -4582,7 +4568,7 @@ function renderCoverageCards(){
     </div>`;
   }
   document.getElementById('covGrid').innerHTML =
-    (sellInPcsPrimary() ? coverage('sellinSpPcs','SELLIN SP (Pcs)') : coverage('sellinSp','SELLIN SP')) + coverage('sellinVou','SELLIN VOUCHER') +
+    (sellInPcsPrimary() ? coverage('sellinSpPcs','SELLIN SP (Qty)') : coverage('sellinSp','SELLIN SP')) + coverage('sellinVou','SELLIN VOUCHER') +
     coverage('sellinSaldo','SELLIN SALDO') + coverage('rguGa','GA');
 }
 
@@ -4686,11 +4672,13 @@ function renderSellinSummaryTable(){
   document.querySelector('#siSummaryTable thead th').textContent = ctx.label==='branch' ? 'Area' : 'Micro Cluster';
   const gKey = ctx.key===IDX.branchIdx ? IDX_S.branchIdx : IDX_S.microIdx;
 
-  const initSI = () => ({outlet:0, ga:0, sp:0, vou:0, saldo:0, tertiary:0, secondary:0, wSp:0, wVou:0, wSaldo:0, wGa:0, s0:0,s1:0,s2:0,s3:0,s4:0});
+  const PCS = sellInPcsPrimary();
+  const initSI = () => ({spPcs:0, outlet:0, ga:0, sp:0, vou:0, saldo:0, tertiary:0, secondary:0, wSp:0, wVou:0, wSaldo:0, wGa:0, s0:0,s1:0,s2:0,s3:0,s4:0});
   const accumSI = (a,r) => {
     a.outlet++; a.ga+=r[IDX_S.rguGa]; a.sp+=r[IDX_S.sellinSp]; a.vou+=r[IDX_S.sellinVou];
     a.saldo+=r[IDX_S.sellinSaldo]; a.tertiary+=r[IDX_S.tertiary]; a.secondary+=r[IDX_S.secondary];
-    if(r[IDX_S.sellinSp]>0) a.wSp++;
+    a.spPcs+=spPcsOf(r);
+    if(PCS ? spPcsOf(r)>0 : r[IDX_S.sellinSp]>0) a.wSp++;
     if(r[IDX_S.sellinVou]>0) a.wVou++;
     if(r[IDX_S.sellinSaldo]>0) a.wSaldo++;
     if(r[IDX_S.rguGa]>0) a.wGa++;
@@ -4698,9 +4686,23 @@ function renderSellinSummaryTable(){
     const slab = gaVal<=0?'s0' : gaVal<25?'s1' : gaVal<50?'s2' : gaVal<100?'s3' : 's4';
     a[slab]++;
   };
+  // 1 outlet fisik = 1 baris: sisi IM3 + 3ID dari outlet yang sama (pairKey) digabung (nilai dijumlah), supaya Outlet tidak dihitung dobel.
+  const mergePairs = (arr) => {
+    const byKey = new Map(), out = [];
+    const NUMI = [IDX_S.rguGa, IDX_S.sellinSp, IDX_S.sellinVou, IDX_S.sellinSaldo, IDX_S.tertiary, IDX_S.secondary, IDX_S.sellinSpPcs];
+    arr.forEach(r=>{
+      const m = MASTER[META.brands[r[IDX_S.brandIdx]]+'|'+r[IDX_S.outletId]];
+      const pk = m && m.pairKey && m.pairKey!=='N/A' ? m.pairKey : null;
+      if(!pk){ out.push(r); return; }
+      const ex = byKey.get(pk);
+      if(!ex){ const c = r.slice(); byKey.set(pk, c); out.push(c); }
+      else NUMI.forEach(i=>{ ex[i] = (ex[i]||0) + (r[i]||0); });
+    });
+    return out;
+  };
   const aggregateBy = (arr, keyIdx) => {
     const agg = {};
-    arr.forEach(r=>{
+    mergePairs(arr).forEach(r=>{
       const g = r[keyIdx];
       if(!agg[g]) agg[g] = initSI();
       accumSI(agg[g], r);
@@ -4708,16 +4710,19 @@ function renderSellinSummaryTable(){
     return agg;
   };
 
+  { const ths = document.querySelectorAll('#siSummaryTable thead tr:nth-child(2) th');
+    if(ths[2]) ths[2].textContent = PCS ? 'Qty' : 'Amount (Bn)'; }
+  const NA = '<span style="color:var(--muted);" title="Belum ada file OSA (menu #6)">–</span>';
   const pct = (w,t) => t? (w/t*100).toFixed(0)+'%' : '–';
   // Last Week comparison (toggle on + a Sell In & GA snapshot exists)
   const cmpOn = false && prevAvail('sellin');   // chips moved to the Performance tab
   const dk = (r, p, k, good, fmt) => (cmpOn && p && sellinMetricOk(k)) ? dl(r[k], p[k], good, fmt) : '';
   const rowCells = (r, p) => `
       <td>${fmtN(r.outlet)}</td><td>${fmtN(r.ga)}${dk(r,p,'ga',true)}</td>
-      <td>${fmtN(r.wSp)}</td><td>${pct(r.wSp,r.outlet)}</td><td>${fmtBn(r.sp)}${dk(r,p,'sp',true,fmtBn)}</td>
-      <td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td><td>${fmtBn(r.vou)}${dk(r,p,'vou',true,fmtBn)}</td>
+      <td>${fmtN(r.wSp)}</td><td>${pct(r.wSp,r.outlet)}</td><td>${PCS ? fmtN(r.spPcs) : fmtBn(r.sp)+dk(r,p,'sp',true,fmtBn)}</td>
+      ${PCS ? `<td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td>` : `<td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td><td>${fmtBn(r.vou)}${dk(r,p,'vou',true,fmtBn)}</td>
       <td>${fmtN(r.wSaldo)}</td><td>${pct(r.wSaldo,r.outlet)}</td><td>${fmtBn(r.saldo)}${dk(r,p,'saldo',true,fmtBn)}</td>
-      <td>${fmtBn(r.secondary)}${dk(r,p,'secondary',true,fmtBn)}</td><td>${fmtBn(r.tertiary)}${dk(r,p,'tertiary',true,fmtBn)}</td>
+      <td>${fmtBn(r.secondary)}${dk(r,p,'secondary',true,fmtBn)}</td><td>${fmtBn(r.tertiary)}${dk(r,p,'tertiary',true,fmtBn)}</td>`}
       <td>${fmtN(r.s0)}${dk(r,p,'s0',false)}</td><td>${fmtN(r.s1)}</td><td>${fmtN(r.s2)}</td><td>${fmtN(r.s3)}</td><td>${fmtN(r.s4)}</td>
       <td>${fmtN(r.wGa)}${dk(r,p,'wGa',true)}</td>`;
 
@@ -4750,20 +4755,20 @@ function renderSellinSummaryTable(){
   document.getElementById('siSummaryTbody').innerHTML = bodyHtml || '<tr><td colspan="20" style="color:var(--muted);">Tidak ada data.</td></tr>';
 
   const grand = rows.reduce((acc,r)=>{
-    acc.outlet+=r.outlet; acc.ga+=r.ga; acc.sp+=r.sp; acc.vou+=r.vou; acc.saldo+=r.saldo;
+    acc.outlet+=r.outlet; acc.spPcs+=r.spPcs; acc.ga+=r.ga; acc.sp+=r.sp; acc.vou+=r.vou; acc.saldo+=r.saldo;
     acc.tertiary+=r.tertiary; acc.secondary+=r.secondary;
     acc.wSp+=r.wSp; acc.wVou+=r.wVou; acc.wSaldo+=r.wSaldo; acc.wGa+=r.wGa;
     acc.s0+=r.s0; acc.s1+=r.s1; acc.s2+=r.s2; acc.s3+=r.s3; acc.s4+=r.s4;
     return acc;
-  }, {outlet:0,ga:0,sp:0,vou:0,saldo:0,tertiary:0,secondary:0,wSp:0,wVou:0,wSaldo:0,wGa:0,s0:0,s1:0,s2:0,s3:0,s4:0});
+  }, {spPcs:0,outlet:0,ga:0,sp:0,vou:0,saldo:0,tertiary:0,secondary:0,wSp:0,wVou:0,wSaldo:0,wGa:0,s0:0,s1:0,s2:0,s3:0,s4:0});
   const prevGrand = prevAgg ? Object.values(prevAgg).reduce((acc,x)=>{ Object.keys(acc).forEach(k=>acc[k]+=x[k]); return acc; }, initSI()) : null;
   document.getElementById('siSummaryTfoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
       <td>Total West Java</td><td>${fmtN(grand.outlet)}</td><td>${fmtN(grand.ga)}${dk(grand,prevGrand,'ga',true)}</td>
-      <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td><td>${fmtBn(grand.sp)}${dk(grand,prevGrand,'sp',true,fmtBn)}</td>
-      <td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td><td>${fmtBn(grand.vou)}${dk(grand,prevGrand,'vou',true,fmtBn)}</td>
+      <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td><td>${PCS ? fmtN(grand.spPcs) : fmtBn(grand.sp)+dk(grand,prevGrand,'sp',true,fmtBn)}</td>
+      ${PCS ? `<td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td>` : `<td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td><td>${fmtBn(grand.vou)}${dk(grand,prevGrand,'vou',true,fmtBn)}</td>
       <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td><td>${fmtBn(grand.saldo)}${dk(grand,prevGrand,'saldo',true,fmtBn)}</td>
-      <td>${fmtBn(grand.secondary)}${dk(grand,prevGrand,'secondary',true,fmtBn)}</td><td>${fmtBn(grand.tertiary)}${dk(grand,prevGrand,'tertiary',true,fmtBn)}</td>
+      <td>${fmtBn(grand.secondary)}${dk(grand,prevGrand,'secondary',true,fmtBn)}</td><td>${fmtBn(grand.tertiary)}${dk(grand,prevGrand,'tertiary',true,fmtBn)}</td>`}
       <td>${fmtN(grand.s0)}${dk(grand,prevGrand,'s0',false)}</td><td>${fmtN(grand.s1)}</td><td>${fmtN(grand.s2)}</td><td>${fmtN(grand.s3)}</td><td>${fmtN(grand.s4)}</td>
       <td>${fmtN(grand.wGa)}${dk(grand,prevGrand,'wGa',true)}</td>
     </tr>` : '';
@@ -4782,7 +4787,7 @@ function supplyStatusFlags(r){
 
 function sellinStatusFlags(r){
   const flags = [];
-  if(allUsePcs(r[IDX_S.brandIdx])) return spPcsOf(r) > 0 ? ['Sell In SP (Pcs) ada'] : ['No Sell In (All)'];   // only Pcs data exists for this brand
+  if(allUsePcs(r[IDX_S.brandIdx])) return spPcsOf(r) > 0 ? ['Sell In SP (Qty) ada'] : ['No Sell In (All)'];   // only Qty data exists for this brand
   if(r[IDX_S.sellinSp]<=0) flags.push('No SP');
   if(r[IDX_S.sellinVou]<=0) flags.push('No Voucher');
   if(r[IDX_S.sellinSaldo]<=0) flags.push('No Sell In Saldo');
@@ -4890,7 +4895,7 @@ function pairMatchesFilters(p, f){
   }
   if(f.searchTokens && f.searchTokens.length){
     const name = (p.im3&&p.im3.name) || (p.tid&&p.tid.name) || '';
-    const hay = (String(p.im3?p.im3.outletId:'')+' '+String(p.tid?p.tid.outletId:'')+' '+String(name)+' '+rep.branch).toLowerCase();
+    const hay = (String(p.im3?p.im3.outletId:'')+' '+String(p.tid?p.tid.outletId:'')+' '+dispOutletId('3ID',p.tid?p.tid.outletId:'')+' '+String(name)+' '+rep.branch).toLowerCase();
     if(!f.searchTokens.every(t=>hay.includes(t))) return false;
   }
   return true;
@@ -4929,6 +4934,32 @@ function pairingBreakdownText(counts){
 // via pairKey) instead of one row per brand side. Replaces the old per-brand
 // "Detail Outlet — Sell In & GA" table above (kept in the DOM but hidden, not
 // deleted — renderSellinTable() above still runs so its data/CSV stay correct).
+// Tampilan ID outlet: 3ID = teks 8 digit berawalan nol (setara =IF(brand="3ID",TEXT(id,"00000000"),id)); ID semua-nol = kosong.
+function dispOutletId(brand, id){
+  if(id==null) return '';
+  const t = String(id).trim();
+  if(t==='' || /^0+$/.test(t)) return '';
+  return (brand==='3ID' && /^[0-9]+$/.test(t)) ? t.padStart(8,'0') : t;
+}
+function renderGaByType(){
+  const el = document.getElementById('petaGaByType'); if(!el) return;
+  if(!Object.keys(MASTER).length){ el.innerHTML=''; return; }
+  const rows = buildFilteredPairedRows();
+  const mk=()=>({n:0,ga:0,v:0,i:0,t:0});
+  const g = {'IM3 only':mk(),'3ID only':mk(),'Hybrid':mk()};
+  rows.forEach(r=>{ const x=g[r.remark]; x.n++; if(r.gaIm3>0||r.gaTid>0){x.ga++; if(r.gaIm3>0)x.i++; if(r.gaTid>0)x.t++;} x.v+=r.gaIoh; });
+  const T={n:0,ga:0,v:0}; Object.values(g).forEach(x=>{T.n+=x.n;T.ga+=x.ga;T.v+=x.v;});
+  const pct=(a,b)=>b?(a/b*100).toFixed(1)+'%':'–';
+  const h=g['Hybrid'], a=g['IM3 only'], b=g['3ID only'];
+  const th='style="text-align:right;padding:3px 6px;"', td='style="text-align:right;padding:3px 6px;"';
+  el.innerHTML = `<div style="font-weight:600;font-size:11px;margin-bottom:3px;">GA per tipe outlet <span style="font-weight:400;color:var(--muted);">(1 outlet fisik PJP = 1 baris, mengikuti filter)</span></div>
+  <table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="color:var(--muted);"><th style="text-align:left;padding:3px 6px;"></th><th ${th}>IM3 only</th><th ${th}>3ID only</th><th ${th}>Hybrid</th><th ${th}>Total</th></tr></thead><tbody>
+  <tr><td style="padding:3px 6px;">Jumlah outlet</td><td ${td}>${fmtN(a.n)}</td><td ${td}>${fmtN(b.n)}</td><td ${td}>${fmtN(h.n)}</td><td ${td}><b>${fmtN(T.n)}</b></td></tr>
+  <tr><td style="padding:3px 6px;">Outlet punya GA</td><td ${td}>${fmtN(a.ga)}</td><td ${td}>${fmtN(b.ga)}</td><td ${td}>${fmtN(h.ga)}<div style="font-size:9.5px;color:var(--muted);">IM3 ${fmtN(h.i)} · 3ID ${fmtN(h.t)}</div></td><td ${td}><b>${fmtN(T.ga)}</b></td></tr>
+  <tr><td style="padding:3px 6px;">% punya GA</td><td ${td}>${pct(a.ga,a.n)}</td><td ${td}>${pct(b.ga,b.n)}</td><td ${td}>${pct(h.ga,h.n)}</td><td ${td}>${pct(T.ga,T.n)}</td></tr>
+  <tr><td style="padding:3px 6px;">Total GA</td><td ${td}>${fmtN(a.v)}</td><td ${td}>${fmtN(b.v)}</td><td ${td}>${fmtN(h.v)}</td><td ${td}><b>${fmtN(T.v)}</b></td></tr></tbody></table>
+  <div style="font-size:10px;color:var(--muted);margin-top:2px;">Hybrid dihitung punya GA bila IM3 atau 3ID-nya punya GA.</div>`;
+}
 function buildFilteredPairedRows(){
   const filters = currentPairFilters();
   const sellinIdx = new Map();
@@ -4949,8 +4980,9 @@ function buildFilteredPairedRows(){
       micro: rep.micro,
       // IM3 name first, else the 3ID name; '', '0', '-' etc. count as missing (see cleanName)
       name: nameOr(cleanName(p.im3 && p.im3.name) || cleanName(p.tid && p.tid.name)),
-      idIm3: p.im3 ? p.im3.outletId : null,
-      idTid: p.tid ? p.tid.outletId : null,
+      idIm3: p.im3 ? (dispOutletId('IM3', p.im3.outletId)||null) : null,
+      idTid: p.tid ? (dispOutletId('3ID', p.tid.outletId)||null) : null,
+      hasTid: !!p.tid,
       cat: rep.cat,
       remark: (p.im3 && p.tid) ? 'Hybrid' : (p.im3 ? 'IM3 only' : '3ID only'),
       gaIm3, gaTid, gaIoh: gaIm3+gaTid,
@@ -4969,8 +5001,7 @@ function renderPairedDetailTable(){
   const start = (pairedPage-1)*PAGE_SIZE;
   const pageRows = pairedRows.slice(start, start+PAGE_SIZE);
 
-  document.getElementById('pairedTableCount').textContent = `${fmtN(pairedRows.length)} outlet (gabungan IM3+3ID) cocok dengan filter`
-    + (sellInPcsPrimary() ? ' · Kolom Sell In SP (Rp) disembunyikan karena belum ada file OSA (menu #6) — Sell In SP ditampilkan dalam Pcs.' : '');
+  document.getElementById('pairedTableCount').textContent = `${fmtN(pairedRows.length)} outlet (gabungan IM3+3ID) cocok dengan filter`;
   document.getElementById('pairedTable').classList.toggle('hide-rp', sellInPcsPrimary());
   document.getElementById('pairedTbody').innerHTML = pageRows.length ? pageRows.map(row=>`
     <tr>
@@ -4980,13 +5011,13 @@ function renderPairedDetailTable(){
       <td>${row.idTid || '–'}</td>
       <td><span class="badge ${row.cat}">${catDisplayLabel(row.cat)}</span> <span class="badge ${remarkClass(row.remark)}">${row.remark}</span></td>
       <td>${row.idIm3 ? fmtN(row.gaIm3) : '–'}</td>
-      <td>${row.idTid ? fmtN(row.gaTid) : '–'}</td>
+      <td>${row.hasTid ? fmtN(row.gaTid) : '–'}</td>
       <td>${fmtN(row.gaIoh)}</td>
       <td class="rp-col">${row.idIm3 ? fmtN(row.spIm3) : '–'}</td>
-      <td class="rp-col">${row.idTid ? fmtN(row.spTid) : '–'}</td>
+      <td class="rp-col">${row.hasTid ? fmtN(row.spTid) : '–'}</td>
       <td class="rp-col">${fmtN(row.spIoh)}</td>
       <td>${row.idIm3 ? fmtN(row.pcsIm3) : '–'}</td>
-      <td>${row.idTid ? fmtN(row.pcsTid) : '–'}</td>
+      <td>${row.hasTid ? fmtN(row.pcsTid) : '–'}</td>
       <td>${fmtN(row.pcsIoh)}</td>
     </tr>`).join('') : `<tr><td colspan="14" style="color:var(--muted);">Tidak ada data.</td></tr>`;
 
@@ -6442,7 +6473,7 @@ async function finishSellinProcessing(brand, byKey, progressEl, maxAsOfDt){
   SMETA = { fields_sellin: FIELDS_S, asOf: newAsOf, asOfByBrand: Object.assign({}, snapOldMap, {[brand]: newAsOf}),
     gaAsOfByBrand: newGaBy, gaMonth: gaMonthNow,
     mth: SMETA.mth, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString(),
-    // the OSA upload must not drop what the GA / Sell In SP (Pcs) uploads recorded
+    // the OSA upload must not drop what the GA / Sell In SP (Qty) uploads recorded
     gaRecon: SMETA.gaRecon, spPcsRecon: SMETA.spPcsRecon, spPcsAsOfByBrand: SMETA.spPcsAsOfByBrand };
 
   progressEl.textContent = `Menyimpan data Sell In & GA online (${SELLIN_OUTLETS.length.toLocaleString('id-ID')} outlet)…`;
@@ -6457,7 +6488,7 @@ async function finishSellinProcessing(brand, byKey, progressEl, maxAsOfDt){
       const base = progressEl.textContent;
       progressEl.textContent = base + ' Menyimpan snapshot WoW…';
       // Parts-aware: only overwrite the SP/Voucher/Saldo columns, keeping whatever GA/
-      // Secondary/Tertiary/Sell In SP (Pcs) values this WoW snapshot already had (a blind
+      // Secondary/Tertiary/Sell In SP (Qty) values this WoW snapshot already had (a blind
       // full-row overwrite here would erase those other metrics' own WoW baselines).
       const oldByOutlet = new Map(); snapBrandRows.forEach(r=>oldByOutlet.set(r[IDX_S.outletId], r));
       const blFallback = await weekSellinBaseline(brand);
@@ -6642,7 +6673,7 @@ function parseGaBody(file, brand, progressEl){
         setTimeout(()=>(gaSink || finishGaProcessing)(brand, byKey, lastDay, ym, wjRows, progressEl).then(()=>{
           pendingGaRecon = null;
           if(!gaSink && /^Selesai/.test(progressEl.textContent) && pendingNote(brand)) progressEl.textContent += ' ' + pendingNote(brand);
-          if(!gaSink && /^Selesai/.test(progressEl.textContent)) progressEl.textContent += ' Catatan: file RGUGA hanya berisi GA — tidak ada data Sell In SP di dalamnya. Sell In SP (Pcs) terisi dari export BigQuery yang punya baris kpi=SELLIN (menu #5), Sell In SP (Rp) dari file OSA (menu #6).';
+          if(!gaSink && /^Selesai/.test(progressEl.textContent)) progressEl.textContent += ' Catatan: file RGUGA hanya berisi GA — tidak ada data Sell In SP di dalamnya. Sell In SP (Qty) terisi dari export BigQuery yang punya baris kpi=SELLIN (menu #5), Sell In SP (Rp) dari file OSA (menu #6).';
           resolve();
         }, (err)=>{
           console.error('GA upload failed', err);
@@ -6665,7 +6696,7 @@ function parseGaTxBody(file, delim, fmt, progressEl){
   return new Promise((resolve) => {
     const B = {};   // brand -> { maxDate, seen:Set(msisdn), rowsByMonth:{ym:n}, tagged:{ym:n}, byMonth:{ym: Map(key->Float64Array(31))} }
     // The BigQuery export (fmt.id==='retTag') has BOTH kpi=RET_TAG (GA) and kpi=SELLIN rows in the
-    // SAME file — so a live (non-LMTD) upload of it also derives Sell In SP (Pcs) from the very same
+    // SAME file — so a live (non-LMTD) upload of it also derives Sell In SP (Qty) from the very same
     // pass, with no separate upload needed. (LMTD mode skips this — gaSink is set — since that field
     // has no LMTD baseline yet.)
     const wantSpPcs = fmt.id === 'retTag' && !gaSink;
@@ -6794,7 +6825,7 @@ function parseGaTxBody(file, delim, fmt, progressEl){
             SMETA = { ...SMETA, spPcsAsOfByBrand: pcsAsOf, spPcsRecon: spRecon };
             await finishSellinPcsProcessing(combined, spBrands, progressEl, 0);
             msgs.push(progressEl.textContent);
-            // WoW baseline: same idea as GA — Sell In SP (Pcs) is a running MTD count, so
+            // WoW baseline: same idea as GA — Sell In SP (Qty) is a running MTD count, so
             // "~7 days ago" is the same count truncated at an earlier day, straight from
             // this file's own per-day breakdown.
             for(const brand of spBrands){
@@ -6815,7 +6846,7 @@ function parseGaTxBody(file, delim, fmt, progressEl){
               });
               bl.parts.spPcs = { asOf: weekTarget };
               const okW = await weekSaveSellin(brand, bl.rows, bl.parts);
-              msgs.push(okW ? `WoW Sell In SP (Pcs) ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : `Gagal menyimpan WoW Sell In SP (Pcs) ${brand} dari file ini.`);
+              msgs.push(okW ? `WoW Sell In SP (Qty) ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : `Gagal menyimpan WoW Sell In SP (Qty) ${brand} dari file ini.`);
 
               // MoM baseline: same idea, a month back — usable when this file also carries
               // last month's dates (e.g. it spans both August and September at once).
@@ -6833,18 +6864,26 @@ function parseGaTxBody(file, delim, fmt, progressEl){
                 });
                 blM.parts.spPcs = { asOf: momTarget };
                 const okM = await lmtdSaveSellin(brand, blM.rows, blM.parts);
-                msgs.push(okM ? `MoM Sell In SP (Pcs) ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${momTarget}).` : `Gagal menyimpan MoM Sell In SP (Pcs) ${brand} dari file ini.`);
+                msgs.push(okM ? `MoM Sell In SP (Qty) ${brand} otomatis dari file ini tersimpan (dibandingkan dengan ${momTarget}).` : `Gagal menyimpan MoM Sell In SP (Qty) ${brand} dari file ini.`);
               }
             }
           }
         } else if(skippedRows) msgs.push(`(${skippedRows.toLocaleString('id-ID')} baris bukan GA — kpi selain RET_TAG diabaikan.)`);
-        else if(fmt.id === 'msisdn' && !gaSink) msgs.push('Catatan: file GA per MSISDN hanya berisi GA — tidak ada data Sell In SP. Sell In SP (Pcs) terisi dari export BigQuery yang punya baris kpi=SELLIN (menu #5), Sell In SP (Rp) dari file OSA (menu #6).');
+        else if(fmt.id === 'msisdn' && !gaSink) msgs.push('Catatan: file GA per MSISDN hanya berisi GA — tidak ada data Sell In SP. Sell In SP (Qty) terisi dari export BigQuery yang punya baris kpi=SELLIN (menu #5), Sell In SP (Rp) dari file OSA (menu #6).');
         if(dupRows) msgs.push(`(${dupRows.toLocaleString('id-ID')} baris MSISDN ganda dilewati.)`);
         deferGapNote = false;
         if(!gaSink){
           reconMsg(SMETA.gaRecon, '').forEach(t=>msgs.push(t + '.'));
-          reconMsg(SMETA.spPcsRecon, 'Sell In SP (Pcs) ').forEach(t=>msgs.push(t + '.'));
+          reconMsg(SMETA.spPcsRecon, 'Sell In SP (Qty) ').forEach(t=>msgs.push(t + '.'));
           const gn = sellinGapNote('ga'); if(gn) msgs.push(gn.trim());
+          try{
+            const gs = sellinGapSums();
+            const parts = Object.keys(gs).map(b=>`${b} ${Math.round(gs[b].pcs||0).toLocaleString('id-ID')}`);
+            if(parts.length){
+              const none = Object.keys(gs).filter(b=>!(gs[b].pcs>0));
+              msgs.push(`Sell In SP (Qty) tersimpan saat ini: ${parts.join(' · ')}.` + (none.length ? ` ${none.join(' & ')} masih 0 — file ini harus berisi baris kpi=SELLIN (export BigQuery "GA & SELLIN SP"); file RGUGA / GA per MSISDN tidak berisi Sell In SP.` : ''));
+            }
+          }catch(e){}
         }
         if(msgs.length > 1) progressEl.innerHTML = msgs.map(r=>'• '+r).join('<br>');
         resolve();
@@ -6862,7 +6901,7 @@ function parseGaTxBody(file, delim, fmt, progressEl){
 
 // What is still empty in the Sell In & GA data after an upload, per brand, in plain words — so a person who uploaded
 // only one brand's GA file, or who expected the GA file to also fill Sell In (Rp), is told right away.
-// ---- reconciliation of an uploaded GA / Sell In SP (Pcs) file against the pairing ----
+// ---- reconciliation of an uploaded GA / Sell In SP (Qty) file against the pairing ----
 // Counters per brand, saved in sellin_meta (SMETA.gaRecon / SMETA.spPcsRecon — a few hundred characters) and overwritten
 // per brand on every upload of that kind: rows read, rows matched to an outlet of the pairing, rows whose outlet is not in
 // the pairing (not counted anywhere on the dashboard), rows with a blank / 0 outlet id, duplicate MSISDNs, rows of other months.
@@ -6905,7 +6944,7 @@ function reconMsg(recs, prefix){
 }
 function reconLines(){
   if(!SMETA) return [];
-  return reconText(SMETA.gaRecon, 'Total GA').concat(reconText(SMETA.spPcsRecon, 'Total Sell In SP (Pcs)'));
+  return reconText(SMETA.gaRecon, 'Total GA').concat(reconText(SMETA.spPcsRecon, 'Total Sell In SP (Qty)'));
 }
 function pendingNote(brand){ const r = SMETA && SMETA.gaRecon && SMETA.gaRecon[brand]; return r ? reconMsg({[brand]: r}, '')[0] + '.' : ''; }
 function gaSinkIsLmtd(){ return typeof gaSink !== 'undefined' && !!gaSink; }
@@ -6925,7 +6964,7 @@ function sellinGapNote(kind){
   if(kind === 'ga' && rpMissing.length){
     const havePcs = rpMissing.filter(b=>g[b].pcs > 0);
     parts.push(havePcs.length === rpMissing.length
-      ? `ℹ Sell In SP ${rpMissing.join(' & ')} terisi dalam Pcs (dari baris kpi=SELLIN di file ini); Sell In dalam Rp (SP/Voucher/Saldo) baru ada setelah file OSA_IM3 / OSA_3ID diupload di menu #6.`
+      ? `ℹ Sell In SP ${rpMissing.join(' & ')} terisi dalam Qty (dari baris kpi=SELLIN di file ini); Sell In dalam Rp (SP/Voucher/Saldo) baru ada setelah file OSA_IM3 / OSA_3ID diupload di menu #6.`
       : `ℹ Sell In (Rp) ${rpMissing.join(' & ')} masih kosong: file GA tidak berisi Sell In (Rp). Sell In SP/Voucher/Saldo hanya terisi dari file OSA_IM3 / OSA_3ID di menu #6.`);
   }
   if(kind === 'osa' && rpMissing.length) parts.push(`⚠ Sell In ${rpMissing.join(' & ')} masih kosong — upload juga file OSA untuk ${rpMissing.join(' & ')} (${rpMissing.map(b=>'OSA_'+b).join(' / ')}).`);
@@ -7314,7 +7353,7 @@ async function finishTertiaryProcessing(byKey, brandsSeen, progressEl, byDayKey,
   applyFilters();
 }
 
-// ---------- update: Sell In SP (Pcs) — count of kpi=SELLIN rows, from the same BigQuery
+// ---------- update: Sell In SP (Qty) — count of kpi=SELLIN rows, from the same BigQuery
 // export format menu #5 uses (just a different kpi value). Full replace, like Secondary/Tertiary. ----------
 function handleSellinPcsFile(file){
   lastUploadName = file.name;
@@ -7325,7 +7364,7 @@ function handleSellinPcsFile(file){
       resolve(); return;
     }
     if(!SMETA || !SELLIN_OUTLETS.length){
-      progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In belum ada</b> — upload data Sell In (menu #6, OSA) dulu sebelum mengisi Sell In SP (Pcs).';
+      progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In belum ada</b> — upload data Sell In (menu #6, OSA) dulu sebelum mengisi Sell In SP (Qty).';
       resolve(); return;
     }
     progressEl.textContent = `Membaca header file (${file.name})…`;
@@ -7376,7 +7415,7 @@ function parseSellinPcsBody(file, progressEl){
           progressEl.textContent = `Tidak ada baris kpi=SELLIN untuk brand IM3/3ID di file ini.`;
           resolve(); return;
         }
-        progressEl.textContent = `Menggabungkan data Sell In SP (Pcs) (${matched.toLocaleString('id-ID')} unit, ${Object.keys(byKey).length.toLocaleString('id-ID')} outlet)…`;
+        progressEl.textContent = `Menggabungkan data Sell In SP (Qty) (${matched.toLocaleString('id-ID')} unit, ${Object.keys(byKey).length.toLocaleString('id-ID')} outlet)…`;
         setTimeout(()=>finishSellinPcsProcessing(byKey, brandsSeen, progressEl, skippedOther).then(resolve), 30);
       },
       error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
@@ -7404,19 +7443,19 @@ async function finishSellinPcsProcessing(byKey, brandsSeen, progressEl, skippedO
       updated++;
     });
     totalUpdated += updated;
-    brandSummaries.push(`${brand}: ${updated.toLocaleString('id-ID')} outlet, total ${fmtN(total)} pcs`);
+    brandSummaries.push(`${brand}: ${updated.toLocaleString('id-ID')} outlet, total ${fmtN(total)} qty`);
   });
 
   SMETA = { ...SMETA, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString() };
 
-  progressEl.textContent = `Menyimpan data Sell In SP (Pcs) online (${totalUpdated.toLocaleString('id-ID')} outlet)…`;
-  const saveOk = await persistSellin((done,total)=>{ progressEl.textContent = `Menyimpan data Sell In SP (Pcs) online — bagian ${done}/${total}…`; });
+  progressEl.textContent = `Menyimpan data Sell In SP (Qty) online (${totalUpdated.toLocaleString('id-ID')} outlet)…`;
+  const saveOk = await persistSellin((done,total)=>{ progressEl.textContent = `Menyimpan data Sell In SP (Qty) online — bagian ${done}/${total}…`; });
   if(saveOk){
-    progressEl.textContent = `Selesai. Data Sell In SP (Pcs) diganti — ` + brandSummaries.join(' · ') + '.'
+    progressEl.textContent = `Selesai. Data Sell In SP (Qty) diganti — ` + brandSummaries.join(' · ') + '.'
       + (skippedOther ? ` (${skippedOther.toLocaleString('id-ID')} baris bukan kpi=SELLIN diabaikan.)` : '');
-    await logUpdate('Sell In SP (Pcs)', brandSummaries.join(' · '), totalUpdated, lastUploadName);
+    await logUpdate('Sell In SP (Qty)', brandSummaries.join(' · '), totalUpdated, lastUploadName);
   } else {
-    progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data Sell In SP (Pcs) tidak berhasil disimpan online. Coba upload ulang file ini.`;
+    progressEl.innerHTML = `<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — sebagian data Sell In SP (Qty) tidak berhasil disimpan online. Coba upload ulang file ini.`;
   }
   refreshHeaderMeta();
   applyFilters();
@@ -7930,8 +7969,8 @@ function refreshHeaderMeta(){
   // shown separately, which also makes it obvious when one is stale relative to the other.
   if(SMETA){
     const pcsDates = Object.values(SMETA.spPcsAsOfByBrand || {}).filter(Boolean).sort().reverse();
-    // no OSA file yet: the Sell In date is that of the Sell In SP (Pcs) data from the BigQuery export
-    const sellinDate = SMETA.asOf || (pcsDates.length ? pcsDates[0] + ' (SP Pcs)' : '–');
+    // no OSA file yet: the Sell In date is that of the Sell In SP (Qty) data from the BigQuery export
+    const sellinDate = SMETA.asOf || (pcsDates.length ? pcsDates[0] + ' (SP Qty)' : '–');
     document.getElementById('metaSellinDate').textContent = sellinDate;
     // GA can now come from its own RGUGA file with its own as-of date; otherwise it
     // shares the Sell In file's date like before
@@ -8179,12 +8218,13 @@ function renderPetaStatList(){
   if(SELLIN_OUTLETS.length){
     if(gaEmpty.length) gapMsgs.push(`GA ${gaEmpty.join(' & ')} belum ada — upload file GA ${gaEmpty.join(' & ')} di menu #5 (RGUGA per brand, atau GA per MSISDN / BigQuery).`);
     if(rpEmpty.length) gapMsgs.push(`Sell In (Rp) ${rpEmpty.join(' & ')} belum ada — hanya terisi dari file OSA_IM3 / OSA_3ID di menu #6.`
-      + (rpEmpty.every(b=>gap[b].pcs > 0) ? ' Sell In SP saat ini tersedia dalam Pcs (dari file BigQuery) dan dipakai untuk flag "No Sell In SP".' : ' File GA tidak berisi Sell In.'));
+      + (rpEmpty.every(b=>gap[b].pcs > 0) ? ' Sell In SP saat ini tersedia dalam Qty (dari file BigQuery) dan dipakai untuk flag "No Sell In SP".' : ' File GA tidak berisi Sell In.'));
   }
   const rl = reconLines();
   if(rl.length) gapMsgs.push(...rl.map(t=>t), '(Angka di tabel mengikuti filter yang aktif; baris "di file" di atas adalah rekonsiliasi seluruh file saat diupload.)');
   document.getElementById('petaDataHint').innerHTML = gapMsgs.map(m=>'ℹ '+escHtml(m)).join('<br>');
-  const pcsFlagNote = Object.keys(spMode()).some(b=>spUsePcs(+b) || allUsePcs(+b)) ? ' (dari Pcs)' : '';
+  renderGaByType();
+  const pcsFlagNote = Object.keys(spMode()).some(b=>spUsePcs(+b) || allUsePcs(+b)) ? ' (dari Qty)' : '';
   const flagRow = (lbl, k) => statRowSplit(lbl, curFlags[k].im3, curFlags[k].tid, 'ownpct',
     {im3Base:geoTotal.im3, tidBase:geoTotal.tid, hy:{val:H[k].total, base:hyGeoBase}}, null, {prev:pf(k), goodUp:false});
   document.getElementById('petaStatList').innerHTML = [
@@ -8193,11 +8233,11 @@ function renderPetaStatList(){
     statRowSplit('Jumlah Micro Cluster tercakup', microSetIm3.size, microSetTid.size, 'plain', {hy:{val:microSetH.size}}),
     statRowSplit('Total Stock Amount', stockTotal.im3, stockTotal.tid, 'share', {hy:{val:stockH.total}}, null, {prev:pv.stock, goodUp:true}),
     statRowSplit('Total GA (MTD)', gaTotal.im3, gaTotal.tid, 'share', {hy:{val:gaH.total}}, null, {prev:pv.ga, goodUp:true}),
-    // With no OSA (Rp) data anywhere, a Rp row would only show a confusing 0 — Sell In SP is shown in Pcs instead
+    // With no OSA (Rp) data anywhere, a Rp row would only show a confusing 0 — Sell In SP is shown in Qty instead
     ...(sellInPcsPrimary()
-      ? [statRowSplit('Total Sell In SP (Pcs)', pcsTotal.im3, pcsTotal.tid, 'share', {hy:{val:pcsH.total}})]
+      ? [statRowSplit('Total Sell In SP (Qty)', pcsTotal.im3, pcsTotal.tid, 'share', {hy:{val:pcsH.total}})]
       : [statRowSplit('Total Sell In Amount (Rp, file OSA)', sellinTotal.im3, sellinTotal.tid, 'share', {hy:{val:sellinH.total}}, null, {prev:pv.sellin, goodUp:true}),
-         statRowSplit('Total Sell In SP (Pcs, file BigQuery)', pcsTotal.im3, pcsTotal.tid, 'share', {hy:{val:pcsH.total}})]),
+         statRowSplit('Total Sell In SP (Qty, file BigQuery)', pcsTotal.im3, pcsTotal.tid, 'share', {hy:{val:pcsH.total}})]),
     statRowSplit('Rata-rata DOS All Product', avgDosIm3, avgDosTid, 'rate', {hy:{val:avgDosH}}, null, {prev:pv.dos, goodUp:true}),
     statRowSplit('Low Balance Salmo (&lt;100K)', lowBal.im3, lowBal.tid, 'ownpct', {im3Base:outletsIm3, tidBase:outletsTid, hy:{val:lowBalH.total, base:hyOutletBase}}, null, {prev:pv.lowBal, goodUp:false}),
     flagRow('Low Stock All (&lt;100K)', 'lowStock'),
@@ -8511,7 +8551,7 @@ function renderMapPoints(){
     if(catI>=0 && p[GIDX.catIdx]!==catI) return;
     if(keySet && !keySet.has(META.brands[p[GIDX.brandIdx]]+'|'+p[GIDX.outletId])) return;
     if(searchTokens.length){
-      const hay = (String(p[GIDX.outletId]) + ' ' + String(p[GIDX.outletName]) + ' ' + META.branches[p[GIDX.branchIdx]]).toLowerCase();
+      const hay = (String(p[GIDX.outletId]) + ' ' + dispOutletId(META.brands[p[GIDX.brandIdx]], p[GIDX.outletId]) + ' ' + String(p[GIDX.outletName]) + ' ' + META.branches[p[GIDX.branchIdx]]).toLowerCase();
       if(!searchTokens.every(t=>hay.includes(t))) return;
     }
     shown++;
@@ -8539,7 +8579,7 @@ function renderMapPoints(){
       fillOpacity: 0.75, weight: isRed ? 1 : 0.6, interactive: true
     });
     marker.bindPopup(()=>{
-      return `<b>${escHtml(displayName)}</b><br>Outlet ID: ${p[GIDX.outletId]}<br>Brand: ${brandName} · Branch: ${META.branches[p[GIDX.branchIdx]]} · MC: ${META.micros[p[GIDX.microIdx]]}<br>Kategori: ${META.cats[p[GIDX.catIdx]]}<br>Lat/Long: ${p[GIDX.lat]}, ${p[GIDX.lon]}<br>Sell In SP (Rp): ${sellinSp!==null ? fmtN(sellinSp) : '-'}<br>Sell In SP (Pcs): ${sellinSpPcs!==null ? fmtN(sellinSpPcs) : '-'}<br>Sell In Saldo: ${sellinSaldo!==null ? fmtN(sellinSaldo) : '-'}<br>Stock Saldo (Salmo): ${stockSaldo!==null ? fmtN(stockSaldo) : '-'}<br>Status: ${isRed ? '<span style="color:#C81E3A;font-weight:600;">Ada masalah (cek GA/Sell In SP/Sell In Saldo/Stock)</span>' : '<span style="color:#1B8A5A;font-weight:600;">Lengkap</span>'}${isNoStock ? '<br><span style="color:#C81E3A;font-weight:600;">⚠ Tidak ada stock sama sekali</span>' : ''}`;
+      return `<b>${escHtml(displayName)}</b><br>Outlet ID: ${dispOutletId(brandName, p[GIDX.outletId])||'–'}<br>Brand: ${brandName} · Branch: ${META.branches[p[GIDX.branchIdx]]} · MC: ${META.micros[p[GIDX.microIdx]]}<br>Kategori: ${META.cats[p[GIDX.catIdx]]}<br>Lat/Long: ${p[GIDX.lat]}, ${p[GIDX.lon]}<br>Sell In SP (Rp): ${sellinSp!==null ? fmtN(sellinSp) : '-'}<br>Sell In SP (Qty): ${sellinSpPcs!==null ? fmtN(sellinSpPcs) : '-'}<br>Sell In Saldo: ${sellinSaldo!==null ? fmtN(sellinSaldo) : '-'}<br>Stock Saldo (Salmo): ${stockSaldo!==null ? fmtN(stockSaldo) : '-'}<br>Status: ${isRed ? '<span style="color:#C81E3A;font-weight:600;">Ada masalah (cek GA/Sell In SP/Sell In Saldo/Stock)</span>' : '<span style="color:#1B8A5A;font-weight:600;">Lengkap</span>'}${isNoStock ? '<br><span style="color:#C81E3A;font-weight:600;">⚠ Tidak ada stock sama sekali</span>' : ''}`;
     });
     mapMarkerLayer.addLayer(marker);
     if(searchTokens.length) shownLatLngs.push([p[GIDX.lat], p[GIDX.lon]]);
