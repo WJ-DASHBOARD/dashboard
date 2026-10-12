@@ -604,6 +604,7 @@
     </div>
   </div>
 
+  <div id="siReconNote" style="display:none;margin:-4px 0 8px;font-size:11.5px;color:var(--muted);line-height:1.45;"></div>
   <div id="siRpNote" style="display:none;margin:-4px 0 10px;font-size:11.5px;color:var(--muted);line-height:1.45;"></div>
   <div class="cov-grid" id="covGrid"></div>
 
@@ -4507,6 +4508,9 @@ function renderSellinKpis(){
   filteredSellin.forEach(r=>{ const b = META.brands[r[IDX_S.brandIdx]]; if(b==='IM3') pcsIm3 += spPcsOf(r); else if(b==='3ID') pcsTid += spPcsOf(r); });
   const pcsPrimary = sellInPcsPrimary();
   const rpNote = document.getElementById('siRpNote');
+  const reconEl = document.getElementById('siReconNote'), rlines = reconLines();
+  reconEl.style.display = rlines.length ? 'block' : 'none';
+  reconEl.innerHTML = rlines.map(t=>'ℹ ' + escHtml(t)).join('<br>') + (rlines.length ? '<br><i>Kartu KPI mengikuti filter yang aktif; baris di atas adalah rekonsiliasi seluruh file saat diupload (outlet di luar pairing tidak dihitung).</i>' : '');
 
   document.getElementById('siKpiGa').textContent = fmtN(ga);
   document.getElementById('siKpiGaSub').textContent = n ? (ga/n).toFixed(2)+' per outlet' : '–';
@@ -6437,7 +6441,9 @@ async function finishSellinProcessing(brand, byKey, progressEl, maxAsOfDt){
   const gaMonthNow = (SMETA && SMETA.gaMonth) || monthOfDate(gaDate) || null;
   SMETA = { fields_sellin: FIELDS_S, asOf: newAsOf, asOfByBrand: Object.assign({}, snapOldMap, {[brand]: newAsOf}),
     gaAsOfByBrand: newGaBy, gaMonth: gaMonthNow,
-    mth: SMETA.mth, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString() };
+    mth: SMETA.mth, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString(),
+    // the OSA upload must not drop what the GA / Sell In SP (Pcs) uploads recorded
+    gaRecon: SMETA.gaRecon, spPcsRecon: SMETA.spPcsRecon, spPcsAsOfByBrand: SMETA.spPcsAsOfByBrand };
 
   progressEl.textContent = `Menyimpan data Sell In & GA online (${SELLIN_OUTLETS.length.toLocaleString('id-ID')} outlet)…`;
   const saveOk = await persistSellin((done,total)=>{ progressEl.textContent = `Menyimpan data Sell In & GA online — bagian ${done}/${total}…`; });
@@ -6581,6 +6587,7 @@ function parseGaBody(file, brand, progressEl){
   return new Promise((resolve) => {
     const idCol = GA_ID_COLS[brand];
     const perDayAll = new Array(31).fill(0);   // whole file — decides the last day that has data
+    const perDayM = new Array(31).fill(0), perDayBlank = new Array(31).fill(0), perDayOther = new Array(31).fill(0);   // GA value matched / blank id / other regions
     const byKey = new Map();                   // "brand|outletId" -> Float64Array(31) of per-day sums (WEST JAVA, in pairing)
     let rowCount = 0, wjRows = 0, matchedRows = 0;
 
@@ -6593,11 +6600,13 @@ function parseGaBody(file, brand, progressEl){
           const row = rows[i];
           rowCount++;
           const isWj = isDashRegion(row.region);
-          let arr = null;
+          let arr = null, bucket = null;
+          if(!isWj) bucket = perDayOther;
           if(isWj){
             wjRows++;
             const oid = normId(row[idCol] == null ? '' : row[idCol]);
             const key = brand + '|' + oid;
+            if(isZeroId(oid)) bucket = perDayBlank;
             if(oid && MASTER[key]){
               matchedRows++;
               arr = byKey.get(key);
@@ -6606,7 +6615,7 @@ function parseGaBody(file, brand, progressEl){
           }
           for(let d=0; d<31; d++){
             const v = +row[GA_DAY_COLS[d]] || 0;
-            if(v){ perDayAll[d] += v; if(arr) arr[d] += v; }
+            if(v){ perDayAll[d] += v; if(arr){ arr[d] += v; perDayM[d] += v; } else if(bucket) bucket[d] += v; }
           }
         }
         if(rowCount % 50000 < rows.length) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris (${brand})…`;
@@ -6626,7 +6635,13 @@ function parseGaBody(file, brand, progressEl){
         const fm = /(\d{4})(\d{2})(?=\D*\.csv$)/i.exec(file.name);
         const ym = fm ? `${fm[1]}-${fm[2]}` : (monthOfDate(SMETA && SMETA.asOf) || new Date().toISOString().slice(0,7));
         progressEl.textContent = `Menggabungkan data GA ${brand} (${byKey.size.toLocaleString('id-ID')} outlet punya GA, sampai tgl ${lastDay})…`;
+        // reconciliation in GA units (sum of dt01…dt{lastDay}): what the file holds vs what lands on pairing outlets
+        const sumTo = a => { let t = 0; for(let d=0; d<lastDay; d++) t += a[d]; return Math.round(t); };
+        const rd = sumTo(perDayAll), mt = sumTo(perDayM), bl = sumTo(perDayBlank), ot = sumTo(perDayOther);
+        pendingGaRecon = gaSink ? null : { [brand]: reconRecord(`RGUGA ${brand}`, 'GA', `${ym}-${String(lastDay).padStart(2,'0')}`, { read:rd, matched:mt, blank:bl, otherRegion:ot, outside: Math.max(0, rd - mt - bl - ot) }) };
         setTimeout(()=>(gaSink || finishGaProcessing)(brand, byKey, lastDay, ym, wjRows, progressEl).then(()=>{
+          pendingGaRecon = null;
+          if(!gaSink && /^Selesai/.test(progressEl.textContent) && pendingNote(brand)) progressEl.textContent += ' ' + pendingNote(brand);
           if(!gaSink && /^Selesai/.test(progressEl.textContent)) progressEl.textContent += ' Catatan: file RGUGA hanya berisi GA — tidak ada data Sell In SP di dalamnya. Sell In SP (Pcs) terisi dari export BigQuery yang punya baris kpi=SELLIN (menu #5), Sell In SP (Rp) dari file OSA (menu #6).';
           resolve();
         }, (err)=>{
@@ -6655,6 +6670,8 @@ function parseGaTxBody(file, delim, fmt, progressEl){
     // has no LMTD baseline yet.)
     const wantSpPcs = fmt.id === 'retTag' && !gaSink;
     const SP = {};  // brand -> { seen:Set(msisdn), byKey:{key:count} }
+    const R = {}, SPR = {};   // reconciliation counters per brand: {read, bad, byMonth:{ym:{n,dup,blank,outside,matched}}} (GA rows / SELLIN rows)
+    const monthCnt = (T, brand, ym) => { const t = T[brand] || (T[brand] = {read:0, bad:0, byMonth:{}}); return t.byMonth[ym] || (t.byMonth[ym] = {n:0, dup:0, blank:0, outside:0, matched:0}); };
     let rowCount = 0, dupRows = 0, badDate = 0, skippedRows = 0;
     Papa.parse(file, {
       header: true, delimiter: delim, skipEmptyLines: true, worker: true,
@@ -6667,10 +6684,16 @@ function parseGaTxBody(file, delim, fmt, progressEl){
           if(fmt.keep && !fmt.keep(row)){
             if(wantSpPcs && normKpiValue(row.kpi) === 'SELLIN'){
               let sb = SP[brand]; if(!sb) sb = SP[brand] = { seen:new Set(), byKey:{}, maxDate:'', byMonth:{} };
+              const rcs = SPR[brand] || (SPR[brand] = {read:0, bad:0, byMonth:{}}); rcs.read++;
+              const spM0 = /^(\d{4})-(\d{2})/.exec(String(row[fmt.date] || '').trim());
+              const mcs = spM0 ? monthCnt(SPR, brand, spM0[1]+'-'+spM0[2]) : null;
+              if(!spM0) rcs.bad++; else mcs.n++;
               const ms = String(row[fmt.msisdn] || '').trim();
+              if(ms && sb.seen.has(ms)){ if(mcs) mcs.dup++; }
               if(!ms || !sb.seen.has(ms)){
                 if(ms) sb.seen.add(ms);
                 const key = brand + '|' + normId(row[fmt.outlet] == null ? '' : row[fmt.outlet]);
+                if(mcs){ if(isZeroId(row[fmt.outlet])) mcs.blank++; else if(MASTER[key]) mcs.matched++; else mcs.outside++; }
                 if(MASTER[key]){
                   sb.byKey[key] = (sb.byKey[key] || 0) + 1;
                   // also keep a per-day breakdown, purely so a WoW ("~7 days ago") baseline
@@ -6691,19 +6714,22 @@ function parseGaTxBody(file, delim, fmt, progressEl){
           }
           const dt = String(row[fmt.date] || '').trim();
           const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dt);
-          if(!m){ badDate++; continue; }
+          const rcg = R[brand] || (R[brand] = {read:0, bad:0, byMonth:{}}); rcg.read++;
+          if(!m){ badDate++; rcg.bad++; continue; }
+          const mcg = monthCnt(R, brand, m[1]+'-'+m[2]); mcg.n++;
           let b = B[brand];
           if(!b) b = B[brand] = { maxDate:'', seen:new Set(), rowsByMonth:{}, tagged:{}, matched:{}, byMonth:{} };
           const date = m[0], ym = m[1]+'-'+m[2], day = +m[3];
           if(date > b.maxDate) b.maxDate = date;
           const ms = String(row[fmt.msisdn] || '').trim();
-          if(ms){ if(b.seen.has(ms)){ dupRows++; continue; } b.seen.add(ms); }
+          if(ms){ if(b.seen.has(ms)){ dupRows++; mcg.dup++; continue; } b.seen.add(ms); }
           b.rowsByMonth[ym] = (b.rowsByMonth[ym]||0) + 1;
           const tagRaw = row[fmt.outlet] == null ? '' : String(row[fmt.outlet]).trim();
-          if(!tagRaw) continue;
+          if(isZeroId(tagRaw)){ mcg.blank++; continue; }   // blank or all-zero outlet id: cannot be attributed to any outlet
           b.tagged[ym] = (b.tagged[ym]||0) + 1;
           const key = brand + '|' + normId(tagRaw);
-          if(!MASTER[key]) continue;
+          if(!MASTER[key]){ mcg.outside++; continue; }
+          mcg.matched++;
           b.matched[ym] = (b.matched[ym]||0) + 1;
           let mp = b.byMonth[ym]; if(!mp) mp = b.byMonth[ym] = new Map();
           let arr = mp.get(key); if(!arr){ arr = new Float64Array(31); mp.set(key, arr); }
@@ -6730,7 +6756,12 @@ function parseGaTxBody(file, delim, fmt, progressEl){
             + ((total-tagged) ? `, ${(total-tagged).toLocaleString('id-ID')} tanpa outlet (tidak bisa dihubungkan ke outlet)` : '') + '.'
             + (older ? ` ${older.toLocaleString('id-ID')} baris bulan sebelumnya diabaikan.` : '');
           progressEl.textContent = `Menggabungkan data GA ${brand} (${(b.byMonth[ym]||new Map()).size.toLocaleString('id-ID')} outlet punya GA, sampai tgl ${lastDay})…`;
+          const rcg = R[brand], mcur = (rcg && rcg.byMonth[ym]) || {n:0, dup:0, blank:0, outside:0, matched:0};
+          const olderRows = rcg ? Object.keys(rcg.byMonth).filter(k=>k!==ym).reduce((a,k)=>a+rcg.byMonth[k].n, 0) : 0;
+          pendingGaRecon = gaSink ? null : { [brand]: reconRecord(fmt.id === 'retTag' ? 'GA RET_TAG' : fmt.label, 'baris', lastDate,
+            { read: rcg ? rcg.read : 0, matched: mcur.matched, outside: mcur.outside, blank: mcur.blank, dup: mcur.dup, older: olderRows, bad: rcg ? rcg.bad : 0 }) };
           await (gaSink || finishGaProcessing)(brand, b.byMonth[ym] || new Map(), lastDay, ym, total, progressEl, note, b.byMonth);
+          pendingGaRecon = null;
           msgs.push(progressEl.textContent);
         }
         if(wantSpPcs){
@@ -6753,7 +6784,14 @@ function parseGaTxBody(file, delim, fmt, progressEl){
             });
             const pcsAsOf = Object.assign({}, (SMETA && SMETA.spPcsAsOfByBrand) || {});
             Object.keys(SP).forEach(b=>{ if(SP[b].maxDate) pcsAsOf[b] = SP[b].maxDate; });
-            SMETA = { ...SMETA, spPcsAsOfByBrand: pcsAsOf };
+            const spRecon = Object.assign({}, (SMETA && SMETA.spPcsRecon) || {});
+            Object.keys(SP).forEach(b=>{
+              const sb = SP[b], rcs = SPR[b]; if(!sb.maxDate || !rcs) return;
+              const yy = sb.maxDate.slice(0,7), mc = rcs.byMonth[yy] || {n:0, dup:0, blank:0, outside:0, matched:0};
+              const older = Object.keys(rcs.byMonth).filter(k=>k!==yy).reduce((a,k)=>a+rcs.byMonth[k].n, 0);
+              spRecon[b] = reconRecord('SELLIN', 'baris', sb.maxDate, { read:rcs.read, matched:mc.matched, outside:mc.outside, blank:mc.blank, dup:mc.dup, older, bad:rcs.bad });
+            });
+            SMETA = { ...SMETA, spPcsAsOfByBrand: pcsAsOf, spPcsRecon: spRecon };
             await finishSellinPcsProcessing(combined, spBrands, progressEl, 0);
             msgs.push(progressEl.textContent);
             // WoW baseline: same idea as GA — Sell In SP (Pcs) is a running MTD count, so
@@ -6803,7 +6841,11 @@ function parseGaTxBody(file, delim, fmt, progressEl){
         else if(fmt.id === 'msisdn' && !gaSink) msgs.push('Catatan: file GA per MSISDN hanya berisi GA — tidak ada data Sell In SP. Sell In SP (Pcs) terisi dari export BigQuery yang punya baris kpi=SELLIN (menu #5), Sell In SP (Rp) dari file OSA (menu #6).');
         if(dupRows) msgs.push(`(${dupRows.toLocaleString('id-ID')} baris MSISDN ganda dilewati.)`);
         deferGapNote = false;
-        if(!gaSink){ const gn = sellinGapNote('ga'); if(gn) msgs.push(gn.trim()); }
+        if(!gaSink){
+          reconMsg(SMETA.gaRecon, '').forEach(t=>msgs.push(t + '.'));
+          reconMsg(SMETA.spPcsRecon, 'Sell In SP (Pcs) ').forEach(t=>msgs.push(t + '.'));
+          const gn = sellinGapNote('ga'); if(gn) msgs.push(gn.trim());
+        }
         if(msgs.length > 1) progressEl.innerHTML = msgs.map(r=>'• '+r).join('<br>');
         resolve();
        }catch(err){
@@ -6820,6 +6862,52 @@ function parseGaTxBody(file, delim, fmt, progressEl){
 
 // What is still empty in the Sell In & GA data after an upload, per brand, in plain words — so a person who uploaded
 // only one brand's GA file, or who expected the GA file to also fill Sell In (Rp), is told right away.
+// ---- reconciliation of an uploaded GA / Sell In SP (Pcs) file against the pairing ----
+// Counters per brand, saved in sellin_meta (SMETA.gaRecon / SMETA.spPcsRecon — a few hundred characters) and overwritten
+// per brand on every upload of that kind: rows read, rows matched to an outlet of the pairing, rows whose outlet is not in
+// the pairing (not counted anywhere on the dashboard), rows with a blank / 0 outlet id, duplicate MSISDNs, rows of other months.
+let pendingGaRecon = null;   // set by the GA parsers right before finishGaProcessing(brand…) saves SMETA
+function isZeroId(v){ const t = String(v == null ? '' : v).trim(); return t === '' || /^0+$/.test(t); }
+function reconRecord(src, unit, asOf, c){
+  return { src, unit, file: lastUploadName, asOf, read:c.read||0, matched:c.matched||0, outside:(c.outside||0)+(c.otherRegion||0),
+    blank:c.blank||0, dup:c.dup||0, older:c.older||0, bad:c.bad||0, at: new Date().toISOString() };
+}
+function reconText(recs, what){
+  // recs: {brand: record}; same-source brands are summed, with the "outside the pairing" part split per brand
+  const groups = {};
+  Object.keys(recs || {}).forEach(b=>{ const r = recs[b]; if(!r) return; const k = r.src + '|' + (r.file||''); (groups[k] = groups[k] || []).push([b, r]); });
+  return Object.keys(groups).map(k=>{
+    const list = groups[k], sum = f => list.reduce((a,[,r])=>a+(r[f]||0), 0), r0 = list[0][1];
+    const unit = r0.unit === 'GA' ? '' : ' baris';
+    const extra = [];
+    if(sum('blank')) extra.push(`tanpa ID outlet: ${fmtN(sum('blank'))}`);
+    if(sum('dup')) extra.push(`MSISDN ganda: ${fmtN(sum('dup'))}`);
+    if(sum('older')) extra.push(`bulan lain: ${fmtN(sum('older'))}`);
+    if(sum('bad')) extra.push(`tanggal tidak valid: ${fmtN(sum('bad'))}`);
+    return `${what} di file (${r0.src}${r0.file ? ', ' + r0.file : ''}): ${fmtN(sum('read'))}${unit} · dihitung (outlet pairing): ${fmtN(sum('matched'))}`
+      + ` · di luar pairing: ${fmtN(sum('outside'))}` + (list.length > 1 || sum('outside') ? ` (${list.map(([b,r])=>b+' '+fmtN(r.outside||0)).join(' · ')})` : '')
+      + (extra.length ? ' · ' + extra.join(' · ') : '');
+  });
+}
+// One-line result message per source, e.g. "GA RET_TAG: 177.589 baris dibaca → 154.853 cocok dengan pairing, 22.736 outlet di luar pairing tidak dihitung (IM3 15.433 · 3ID 7.303)"
+function reconMsg(recs, prefix){
+  const groups = {};
+  Object.keys(recs || {}).forEach(b=>{ const r = recs[b]; if(!r) return; (groups[r.src] = groups[r.src] || []).push([b, r]); });
+  return Object.keys(groups).map(k=>{
+    const list = groups[k], sum = f => list.reduce((a,[,r])=>a+(r[f]||0), 0), unit = list[0][1].unit === 'GA' ? ' GA' : ' baris';
+    const extra = [];
+    if(sum('blank')) extra.push(`${fmtN(sum('blank'))} tanpa ID outlet`);
+    if(sum('dup')) extra.push(`${fmtN(sum('dup'))} MSISDN ganda`);
+    if(sum('older')) extra.push(`${fmtN(sum('older'))} bulan lain`);
+    return `${prefix}${k}: ${fmtN(sum('read'))}${unit} dibaca → ${fmtN(sum('matched'))} cocok dengan pairing, ${fmtN(sum('outside'))} outlet di luar pairing tidak dihitung`
+      + (list.length > 1 ? ` (${list.map(([b,r])=>b+' '+fmtN(r.outside||0)).join(' · ')})` : '') + (extra.length ? '; ' + extra.join(', ') : '');
+  });
+}
+function reconLines(){
+  if(!SMETA) return [];
+  return reconText(SMETA.gaRecon, 'Total GA').concat(reconText(SMETA.spPcsRecon, 'Total Sell In SP (Pcs)'));
+}
+function pendingNote(brand){ const r = SMETA && SMETA.gaRecon && SMETA.gaRecon[brand]; return r ? reconMsg({[brand]: r}, '')[0] + '.' : ''; }
 function gaSinkIsLmtd(){ return typeof gaSink !== 'undefined' && !!gaSink; }
 function sellinGapSums(){
   const out = {};
@@ -6873,6 +6961,7 @@ async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl,
   const monthWarn = (SMETA.asOf && monthOfDate(SMETA.asOf) && monthOfDate(SMETA.asOf) !== ym)
     ? ` ⚠ bulan file GA (${ym}) berbeda dari bulan data Sell In (${monthOfDate(SMETA.asOf)}).` : '';
   SMETA = { ...SMETA, gaAsOfByBrand: gaBy, gaMonth: ym, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString() };
+  if(pendingGaRecon && pendingGaRecon[brand]) SMETA.gaRecon = Object.assign({}, SMETA.gaRecon || {}, {[brand]: pendingGaRecon[brand]});
 
   progressEl.textContent = `Menyimpan data GA ${brand} online (${updated.toLocaleString('id-ID')} outlet)…`;
   const saveOk = await persistSellin((done,total)=>{ progressEl.textContent = `Menyimpan data GA ${brand} online — bagian ${done}/${total}…`; });
@@ -8092,6 +8181,8 @@ function renderPetaStatList(){
     if(rpEmpty.length) gapMsgs.push(`Sell In (Rp) ${rpEmpty.join(' & ')} belum ada — hanya terisi dari file OSA_IM3 / OSA_3ID di menu #6.`
       + (rpEmpty.every(b=>gap[b].pcs > 0) ? ' Sell In SP saat ini tersedia dalam Pcs (dari file BigQuery) dan dipakai untuk flag "No Sell In SP".' : ' File GA tidak berisi Sell In.'));
   }
+  const rl = reconLines();
+  if(rl.length) gapMsgs.push(...rl.map(t=>t), '(Angka di tabel mengikuti filter yang aktif; baris "di file" di atas adalah rekonsiliasi seluruh file saat diupload.)');
   document.getElementById('petaDataHint').innerHTML = gapMsgs.map(m=>'ℹ '+escHtml(m)).join('<br>');
   const pcsFlagNote = Object.keys(spMode()).some(b=>spUsePcs(+b) || allUsePcs(+b)) ? ' (dari Pcs)' : '';
   const flagRow = (lbl, k) => statRowSplit(lbl, curFlags[k].im3, curFlags[k].tid, 'ownpct',
