@@ -346,11 +346,10 @@
         <h3 style="margin:0 0 6px;font-size:13px;font-weight:600;">Summary (sesuai filter)</h3>
         <div style="overflow:auto;">
         <table class="summary" id="petaStatTable">
-          <thead><tr><th style="text-align:left;">Metrik</th><th>IM3</th><th>3ID</th><th title="Hanya outlet Hybrid (outlet fisik yang punya IM3 dan 3ID sekaligus), sesuai filter yang aktif. Kolom IM3 dan 3ID tetap menghitung semua outlet per brand.">Hybrid</th><th id="petaCmpTh" style="display:none;">vs LW</th></tr></thead>
+          <thead><tr><th style="text-align:left;">Metrik</th><th title="Outlet fisik yang hanya punya IM3">IM3 only</th><th title="Outlet fisik yang hanya punya 3ID">3ID only</th><th title="Outlet fisik yang punya IM3 dan 3ID sekaligus (dihitung 1 outlet)">Hybrid</th><th title="IM3 only + 3ID only + Hybrid = jumlah outlet fisik, tanpa hitung ganda">Total</th></tr></thead>
           <tbody id="petaStatList"></tbody>
         </table>
         <div id="petaDataHint" style="margin-top:6px;font-size:10.5px;line-height:1.4;color:var(--muted);"></div>
-        <div id="petaGaByType" style="margin-top:10px;"></div>
         </div>
       </div>
     </div>
@@ -4043,7 +4042,8 @@ function stockCleared(){
   return OUTLETS.length > 0 && !OUTLETS.some(r => stockAmt(r) > 0 || totalDemandAmt(r) > 0);
 }
 function renderEmptyLowBalance(){
-  document.getElementById('kpiTotal').textContent = fmtN(filtered.length);
+  const _pc = computePairingStatusCounts(); const _n = _pc.Hybrid + _pc['IM3 only'] + _pc['3ID only'];
+  document.getElementById('kpiTotal').textContent = fmtN(_n);
   document.getElementById('kpiTotalBreakdown').textContent = pairingBreakdownText(computePairingStatusCounts());
   document.getElementById('kpiStock').innerHTML = '–';
   document.getElementById('kpiDos').textContent = '–';
@@ -4142,7 +4142,8 @@ function renderSupplyAll(){
 
 function renderSupplyKpis(){
   const n = filteredSupply.length;
-  document.getElementById('supKpiTotal').textContent = fmtN(n);
+  const _pc = computePairingStatusCounts(); const _n = _pc.Hybrid + _pc['IM3 only'] + _pc['3ID only'];
+  document.getElementById('supKpiTotal').textContent = fmtN(_n);
   document.getElementById('supKpiTotalBreakdown').textContent = pairingBreakdownText(computePairingStatusCounts());
   let spHit=0, spRev=0, rebuyHit=0, rebuyRev=0, vouHit=0, vouRev=0, vouOriHit=0, vouOriRev=0, noSupply=0;
   filteredSupply.forEach(r=>{
@@ -4474,7 +4475,8 @@ function exportSupplyCsv(){
 
 function renderSellinKpis(){
   const n = filteredSellin.length;
-  document.getElementById('siKpiTotal').textContent = fmtN(n);
+  const _pc = computePairingStatusCounts(); const _n = _pc.Hybrid + _pc['IM3 only'] + _pc['3ID only'];
+  document.getElementById('siKpiTotal').textContent = fmtN(_n);
   document.getElementById('siKpiTotalBreakdown').textContent = pairingBreakdownText(computePairingStatusCounts());
 
   let ga=0, sp=0, vou=0, saldo=0, tertiary=0, secondary=0, spPcs=0, spIm3=0, spTid=0;
@@ -4864,7 +4866,8 @@ function currentPairFilters(){
   const search = document.getElementById('fSearch').value.trim().toLowerCase();
   const searchTokens = search ? search.split(/\s+/).filter(Boolean) : [];
   const regionAreaSet = (region && !area && META.areasByRegion && META.areasByRegion[region]) ? new Set(META.areasByRegion[region]) : null;
-  return {area, branch, micro, ptype, territory, dse, searchTokens, regionAreaSet, cat: activeCat};
+  const brand = document.getElementById('fBrand').value;
+  return {brand, area, branch, micro, ptype, territory, dse, searchTokens, regionAreaSet, cat: activeCat};
 }
 
 // Ignores the Brand filter on purpose: a Hybrid/Only-IM3/Only-3ID comparison needs
@@ -4881,6 +4884,8 @@ function currentPairFilters(){
 function pairMatchesFilters(p, f){
   const rep = p.im3 || p.tid;
   if(!rep) return false;
+  if(f.brand === 'IM3' && !p.im3) return false;
+  if(f.brand === '3ID' && !p.tid) return false;
   if(f.area && rep.area !== f.area) return false;
   if(f.regionAreaSet && !f.regionAreaSet.has(rep.area)) return false;
   if(f.branch && rep.branch !== f.branch) return false;
@@ -5048,7 +5053,8 @@ function exportPairedCsv(){
 
 function renderKpis(){
   const n = filtered.length;
-  document.getElementById('kpiTotal').textContent = fmtN(n);
+  const _pc = computePairingStatusCounts(); const _n = _pc.Hybrid + _pc['IM3 only'] + _pc['3ID only'];
+  document.getElementById('kpiTotal').textContent = fmtN(_n);
   document.getElementById('kpiTotalBreakdown').textContent = pairingBreakdownText(computePairingStatusCounts());
 
   let low=0, zero=0, ok=0, stockTotal=0, demand=0;
@@ -8058,6 +8064,79 @@ function statRowSplit(lbl, im3Val, tidVal, mode, extra, totalOverride, cmp){
   return `<tr><td>${lbl}</td><td${styleAttr}>${im3Cell}</td><td${styleAttr}>${tidCell}</td><td${styleAttr}>${totalCell}</td>${cmpCell}</tr>`;
 }
 
+
+// Matrix Summary: SEMUA angka dihitung per OUTLET FISIK (1 pasangan IM3+3ID = 1 outlet), dikelompokkan IM3 only / 3ID only / Hybrid.
+// IM3 only + 3ID only + Hybrid = Total (tanpa hitung ganda), sama dengan jumlah baris Detail Outlet dan KPI "Total Outlet" tiap tab.
+function computePairMatrix(oIdx, sIdx, uIdx){
+  const f = currentPairFilters();
+  const mkC = () => ({n:0, stock:0, demand:0, low:0, ga:0, gaN:0, sellin:0, pcs:0, br:new Set(), mc:new Set(),
+    fl:{red:0,lowStock:0,noGa:0,noSellIn:0,noSp:0,noVou:0,noSalmo:0,noSpInj:0,noVouInj:0,noRebuyCvm:0}});
+  const C = {'IM3 only':mkC(), '3ID only':mkC(), 'Hybrid':mkC(), 'Total':mkC()};
+  const FL = {red:'isAlert',lowStock:'lowStockAll',noGa:'noGaAll',noSellIn:'noSellInAll',noSp:'noSellInSp',noVou:'noSellInVou',noSalmo:'noSellInSalmo',noSpInj:'noSpInject',noVouInj:'noVouInject',noRebuyCvm:'noRebuyCvm'};
+  buildPairsFromMaster().forEach(p=>{
+    if(!pairMatchesFilters(p, f)) return;
+    const type = (p.im3 && p.tid) ? 'Hybrid' : (p.im3 ? 'IM3 only' : '3ID only');
+    const sides = [];
+    if(p.im3 && f.brand !== '3ID') sides.push('IM3|'+p.im3.outletId);   // dengan filter Brand, hanya sisi brand itu yang dijumlah
+    if(p.tid && f.brand !== 'IM3') sides.push('3ID|'+p.tid.outletId);
+    const rep = p.im3 || p.tid;
+    let stock=0, demand=0, ga=0, sellin=0, pcs=0, lowAll=true, anyO=false;
+    const flagAll = {}; Object.keys(FL).forEach(k=>flagAll[k]=true);
+    sides.forEach(key=>{
+      const o = oIdx.get(key), sr = sIdx.get(key), ur = uIdx.get(key);
+      if(o){ anyO = true; stock += stockAmt(o); demand += totalDemandAmt(o); const st = outletStatus(o[IDX.salAmt]); if(!(st==='zero'||st==='low')) lowAll = false; }
+      if(sr){ ga += sr[IDX_S.rguGa]; sellin += sr[IDX_S.sellinSp]+sr[IDX_S.sellinVou]+sr[IDX_S.sellinSaldo]; pcs += spPcsOf(sr); }
+      const fl = computeOutletFlags(o, sr, ur);
+      Object.keys(FL).forEach(k=>{ if(!fl[FL[k]]) flagAll[k] = false; });
+    });
+    [C[type], C.Total].forEach(c=>{
+      c.n++; c.stock+=stock; c.demand+=demand; c.ga+=ga; if(ga>0) c.gaN++; c.sellin+=sellin; c.pcs+=pcs;
+      if(anyO && lowAll) c.low++;
+      c.br.add(rep.branch); c.mc.add(rep.micro);
+      Object.keys(FL).forEach(k=>{ if(flagAll[k]) c.fl[k]++; });
+    });
+  });
+  return C;
+}
+function renderPetaMatrix(oIdx, sIdx, uIdx){
+  const C = computePairMatrix(oIdx, sIdx, uIdx);
+  const cols = ['IM3 only','3ID only','Hybrid','Total'];
+  const cell = (c, i, v, mode) => {
+    const b = i===3 ? ' style="font-weight:700;"' : '';
+    if(v==null) return `<td${b}>–</td>`;
+    if(mode==='rate') return `<td${b}>${v.toFixed(2)}</td>`;
+    if(mode==='red'){ const n = C[cols[i]].n; return `<td style="color:var(--red);font-weight:700;">${fmtN(v)}${n>0?` (${(v/n*100).toFixed(1)}%)`:''}</td>`; }
+    if(mode==='pct'){ const n = C[cols[i]].n; return `<td${b}>${fmtN(v)}${n>0?` (${(v/n*100).toFixed(1)}%)`:''}</td>`; }
+    return `<td${b}>${fmtN(v)}</td>`;
+  };
+  const row = (lbl, get, mode) => `<tr><td>${lbl}</td>${cols.map((k,i)=>cell(C[k], i, get(C[k]), mode)).join('')}</tr>`;
+  const pcsNote = Object.keys(spMode()).some(b=>spUsePcs(+b) || allUsePcs(+b)) ? ' (dari Qty)' : '';
+  const flagRow = (lbl, k) => row(lbl, c=>c.fl[k], 'red');
+  document.getElementById('petaStatList').innerHTML = [
+    row('Total Outlet (sesuai filter)', c=>c.n, 'plain'),
+    row('Jumlah Branch tercakup', c=>c.br.size, 'plain'),
+    row('Jumlah Micro Cluster tercakup', c=>c.mc.size, 'plain'),
+    row('Total Stock Amount', c=>c.stock, 'plain'),
+    row('Total GA (MTD)', c=>c.ga, 'plain'),
+    row('Outlet punya GA', c=>c.gaN, 'pct'),
+    ...(sellInPcsPrimary()
+      ? [row('Total Sell In SP (Qty)', c=>c.pcs, 'plain')]
+      : [row('Total Sell In Amount (Rp, file OSA)', c=>c.sellin, 'plain'), row('Total Sell In SP (Qty, file BigQuery)', c=>c.pcs, 'plain')]),
+    row('Rata-rata DOS All Product', c=>c.demand>0 ? c.stock/c.demand : null, 'rate'),
+    row('Low Balance Salmo (&lt;100K)', c=>c.low, 'red'),
+    flagRow('Low Stock All (&lt;100K)', 'lowStock'),
+    flagRow('Outlet No GA', 'noGa'),
+    flagRow('Outlet No Sell In All' + pcsNote, 'noSellIn'),
+    flagRow('Outlet No Sell In SP' + pcsNote, 'noSp'),
+    flagRow('Outlet No Sell In Voucher', 'noVou'),
+    flagRow('Outlet No Sell In Salmo', 'noSalmo'),
+    flagRow('Outlet No SP Inject', 'noSpInj'),
+    flagRow('Outlet No Voucher Inject', 'noVouInj'),
+    flagRow('Outlet No Rebuy CVM', 'noRebuyCvm'),
+    flagRow('Outlet Alert (No Stock All + No Sell In All + No GA)', 'red'),
+  ].join('');
+}
+
 function renderPetaStatList(){
   const brandSel = document.getElementById('fBrand').value;
   const brandI = brandSel ? META.brands.indexOf(brandSel) : -1;
@@ -8214,7 +8293,6 @@ function renderPetaStatList(){
     + `<div><b>${fmtN(hyOutletCount)}</b></div><div><span>IM3 ${fmtN(outletsH.im3)} · 3ID ${fmtN(outletsH.tid)}</span></div></div>`;
   const hyOutletBase = outletsH.total;              // Hybrid column's own base for % (Hybrid outlet rows, both brands)
   const hyGeoBase = H.geoTotal.total;                // ... and for the flag rows (Hybrid outlets that have map coordinates)
-  document.getElementById('petaCmpTh').style.display = 'none';   // chips moved to the Performance tab
   // what is still missing in the loaded data as a whole (NOT the filtered view), so an empty column is explained
   const gap = sellinGapSums(), gapMsgs = [];
   const gaEmpty = Object.keys(gap).filter(b=>!(gap[b].ga > 0)), rpEmpty = Object.keys(gap).filter(b=>!(gap[b].rp > 0));
@@ -8226,34 +8304,10 @@ function renderPetaStatList(){
   const rl = reconLines();
   if(rl.length) gapMsgs.push(...rl.map(t=>t), '(Angka di tabel mengikuti filter yang aktif; baris "di file" di atas adalah rekonsiliasi seluruh file saat diupload.)');
   document.getElementById('petaDataHint').innerHTML = gapMsgs.map(m=>'ℹ '+escHtml(m)).join('<br>');
-  renderGaByType();
   const pcsFlagNote = Object.keys(spMode()).some(b=>spUsePcs(+b) || allUsePcs(+b)) ? ' (dari Qty)' : '';
   const flagRow = (lbl, k) => statRowSplit(lbl, curFlags[k].im3, curFlags[k].tid, 'ownpct',
     {im3Base:geoTotal.im3, tidBase:geoTotal.tid, hy:{val:H[k].total, base:hyGeoBase}}, null, {prev:pf(k), goodUp:false});
-  document.getElementById('petaStatList').innerHTML = [
-    statRowSplit('Total Outlet (sesuai filter)', outletsIm3, outletsTid, 'share', {totalHtml: hybridOutletHtml}, null, {prev:pv.outlets, goodUp:true}),
-    statRowSplit('Jumlah Branch tercakup', branchSetIm3.size, branchSetTid.size, 'plain', {hy:{val:branchSetH.size}}),
-    statRowSplit('Jumlah Micro Cluster tercakup', microSetIm3.size, microSetTid.size, 'plain', {hy:{val:microSetH.size}}),
-    statRowSplit('Total Stock Amount', stockTotal.im3, stockTotal.tid, 'share', {hy:{val:stockH.total}}, null, {prev:pv.stock, goodUp:true}),
-    statRowSplit('Total GA (MTD)', gaTotal.im3, gaTotal.tid, 'share', {hy:{val:gaH.total}}, null, {prev:pv.ga, goodUp:true}),
-    // With no OSA (Rp) data anywhere, a Rp row would only show a confusing 0 — Sell In SP is shown in Qty instead
-    ...(sellInPcsPrimary()
-      ? [statRowSplit('Total Sell In SP (Qty)', pcsTotal.im3, pcsTotal.tid, 'share', {hy:{val:pcsH.total}})]
-      : [statRowSplit('Total Sell In Amount (Rp, file OSA)', sellinTotal.im3, sellinTotal.tid, 'share', {hy:{val:sellinH.total}}, null, {prev:pv.sellin, goodUp:true}),
-         statRowSplit('Total Sell In SP (Qty, file BigQuery)', pcsTotal.im3, pcsTotal.tid, 'share', {hy:{val:pcsH.total}})]),
-    statRowSplit('Rata-rata DOS All Product', avgDosIm3, avgDosTid, 'rate', {hy:{val:avgDosH}}, null, {prev:pv.dos, goodUp:true}),
-    statRowSplit('Low Balance Salmo (&lt;100K)', lowBal.im3, lowBal.tid, 'ownpct', {im3Base:outletsIm3, tidBase:outletsTid, hy:{val:lowBalH.total, base:hyOutletBase}}, null, {prev:pv.lowBal, goodUp:false}),
-    flagRow('Low Stock All (&lt;100K)', 'lowStock'),
-    flagRow('Outlet No GA', 'noGa'),
-    flagRow('Outlet No Sell In All' + pcsFlagNote, 'noSellIn'),
-    flagRow('Outlet No Sell In SP' + pcsFlagNote, 'noSp'),
-    flagRow('Outlet No Sell In Voucher', 'noVou'),
-    flagRow('Outlet No Sell In Salmo', 'noSalmo'),
-    flagRow('Outlet No SP Inject', 'noSpInj'),
-    flagRow('Outlet No Voucher Inject', 'noVouInj'),
-    flagRow('Outlet No Rebuy CVM', 'noRebuyCvm'),
-    flagRow('Outlet Alert (No Stock All + No Sell In All + No GA)', 'red'),
-  ].join('');
+  renderPetaMatrix(outletIdx, sellinIdx, supplyIdx);
 }
 
 // KABKOT (geojson) names don't always match BRANCH names 1:1 — this mapping is derived
