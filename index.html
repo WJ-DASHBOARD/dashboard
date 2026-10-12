@@ -6529,6 +6529,9 @@ const GA_ID_COLS = { 'IM3': 'organization_id', '3ID': 'partner_qr_cd' };
 const GA_TX_FORMATS = [
   { id:'msisdn', need:['msisdn','brand','ga_dt','tag_outlet'], msisdn:'msisdn', date:'ga_dt', outlet:'tag_outlet', keep:null,
     label:'GA per MSISDN' },
+  // Same export without the msisdn column: every row is one GA, outlet in tag_outlet (blank = not attributable). No MSISDN => no de-duplication.
+  { id:'gaTag', need:['brand','ga_dt','tag_outlet'], msisdn:'msisdn', date:'ga_dt', outlet:'tag_outlet', keep:null,
+    label:'GA per outlet (tag_outlet)' },
   { id:'retTag', need:['brand','dt_id','kpi','outlet_id','b_msisdn'], msisdn:'b_msisdn', date:'dt_id', outlet:'outlet_id',
     keep: row => normKpiValue(row.kpi) === 'RET_TAG', label:'export BigQuery (kpi RET_TAG)' },
 ];
@@ -6586,7 +6589,7 @@ function handleGaFile(file){
           if(!brand || !cols.includes('region') || !cols.includes('dt01')){
             const looksOsa = cols.includes('parameter') && cols.includes('amt') && (cols.includes('qr_code') || cols.includes('outlet_id'));
             const looksDse = cols.includes('rgu_ga') && cols.includes('id_outlet');
-            progressEl.textContent = `Format file "${file.name}" tidak dikenali. Yang didukung: file RGUGA harian (kolom organization_id / partner_qr_cd, region, dt01…dt31), file GA per MSISDN (kolom msisdn, brand, ga_dt, tag_outlet), atau export BigQuery (kolom brand, dt_id, kpi, outlet_id, b_msisdn).`
+            progressEl.textContent = `Format file "${file.name}" tidak dikenali. Yang didukung: file RGUGA harian (kolom organization_id / partner_qr_cd, region, dt01…dt31), file GA per MSISDN / per outlet (kolom brand, ga_dt, tag_outlet, msisdn boleh tidak ada), atau export BigQuery (kolom brand, dt_id, kpi, outlet_id, b_msisdn).`
               + (looksOsa ? ' File ini adalah file OSA (Sell In) — upload di menu #6, bukan di sini.' : '')
               + (looksDse ? ' File ini adalah DSE_PROD — format itu sudah tidak dipakai: untuk GA pakai RGUGA / GA per MSISDN / BigQuery (di sini), untuk Sell In pakai OSA_IM3 / OSA_3ID (menu #6).' : '');
             resolve(); return;
