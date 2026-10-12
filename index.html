@@ -327,7 +327,7 @@
     <button class="tab-btn" id="tabBtnLowbalance" data-tab="lowbalance" style="display:none">Low Balance</button>
     <button class="tab-btn" data-tab="sellin">Sell In &amp; GA</button>
     <button class="tab-btn" id="tabBtnSupply" data-tab="supply" style="display:none">Supply</button>
-    <button class="tab-btn" data-tab="comparison">Performance WoW/MoM</button>
+    <button class="tab-btn" id="tabBtnComparison" data-tab="comparison" style="display:none">Performance WoW/MoM</button>
   </div>
 </div>
 
@@ -4497,8 +4497,8 @@ function renderSellinKpis(){
   const pcsPrimary = sellInPcsPrimary();
   const rpNote = document.getElementById('siRpNote');
   const reconEl = document.getElementById('siReconNote'), rlines = reconLines();
-  reconEl.style.display = rlines.length ? 'block' : 'none';
-  reconEl.innerHTML = rlines.map(t=>'ℹ ' + escHtml(t)).join('<br>') + (rlines.length ? '<br><i>Kartu KPI mengikuti filter yang aktif; baris di atas adalah rekonsiliasi seluruh file saat diupload (outlet di luar pairing tidak dihitung).</i>' : '');
+  reconEl.style.display = 'none';
+  reconEl.innerHTML = '';
 
   document.getElementById('siKpiGa').textContent = fmtN(ga);
   document.getElementById('siKpiGaSub').textContent = n ? (ga/n).toFixed(2)+' per outlet' : '–';
