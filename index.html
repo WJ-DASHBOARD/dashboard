@@ -2526,6 +2526,29 @@ function populateAreaBranch(){
 // Without this, these two dropdowns always listed every territory/DSE in the whole
 // dataset regardless of what else was already selected, which looked broken —
 // picking e.g. Tasikmalaya still showed every other branch's territories too.
+// DSE filter: one outlet pair = one DSE person. Effective DSE = DSE Code IM3 if present,
+// otherwise DSE Code 3ID (also for 3ID-only outlets).
+function effDseByPair(){
+  const m = {};
+  Object.keys(MASTER).forEach(key=>{
+    const mm = MASTER[key];
+    if(!mm.pairKey || mm.pairKey === 'N/A') return;
+    const isIm3 = key.slice(0, key.indexOf('|')) === 'IM3';
+    const d = mm.dse && mm.dse !== 'N/A' ? mm.dse : '';
+    if(isIm3){ if(d) m[mm.pairKey] = d; else if(!(mm.pairKey in m)) m[mm.pairKey] = ''; }
+    else if(!m[mm.pairKey]) m[mm.pairKey] = d;
+  });
+  return m;
+}
+function dsePkSet(dse){
+  const m = effDseByPair(), set = new Set();
+  Object.keys(m).forEach(pk=>{ if((m[pk]||'N/A') === dse) set.add(pk); });
+  return set;
+}
+function dseKeyOk(key, mm, dse, pkSet){
+  if(mm.pairKey && mm.pairKey !== 'N/A') return pkSet.has(mm.pairKey);
+  return (mm.dse||'N/A') === dse;
+}
 function refreshTerritoryDseOptions(){
   const brand = document.getElementById('fBrand').value;
   const region = document.getElementById('fRegion').value;
@@ -2546,9 +2569,10 @@ function refreshTerritoryDseOptions(){
     if(micro && mm.micro !== micro) return;
     if(ptype && (mm.ptype||'N/A') !== ptype) return;
     territorySet.add(mm.territory || 'N/A');
-    dseSet.add(mm.dse || 'N/A');
+    if(!(mm.pairKey && mm.pairKey !== 'N/A')) dseSet.add(mm.dse || 'N/A');
   });
 
+  if(typeof effDseByPair === 'function'){ const em = effDseByPair(); const okPk = new Set(); Object.keys(MASTER).forEach(key=>{ const mm=MASTER[key]; if(mm.pairKey && mm.pairKey!=='N/A' && !(regionAreas && !regionAreas.includes(mm.area)) && !(area && mm.area!==area) && !(branch && mm.branch!==branch) && !(micro && mm.micro!==micro) && !(ptype && (mm.ptype||'N/A')!==ptype) && !(brand && key.slice(0,key.indexOf('|'))!==brand)) okPk.add(mm.pairKey); }); okPk.forEach(pk=>dseSet.add(em[pk]||'N/A')); }
   const fTerritory = document.getElementById('fTerritory');
   const curT = fTerritory.value;
   const territoryList = Array.from(territorySet).filter(t=>t && t!=='N/A').sort();
@@ -3942,11 +3966,12 @@ function applyFilters(){
   let keySet = null;
   if(ptype || territory || dse){
     keySet = new Set();
+    const dsePk = dse ? dsePkSet(dse) : null;
     Object.keys(MASTER).forEach(key=>{
       const mm = MASTER[key];
       if(ptype && (mm.ptype||'N/A') !== ptype) return;
       if(territory && (mm.territory||'N/A') !== territory) return;
-      if(dse && (mm.dse||'N/A') !== dse) return;
+      if(dse && !dseKeyOk(key, mm, dse, dsePk)) return;
       keySet.add(key);
     });
   }
@@ -4923,9 +4948,9 @@ function pairMatchesFilters(p, f){
   if(f.ptype && (rep.ptype||'N/A') !== f.ptype) return false;
   if(f.territory && (rep.territory||'N/A') !== f.territory) return false;
   if(f.dse){
-    const im3Dse = p.im3 ? (p.im3.dse||'N/A') : null;
-    const tidDse = p.tid ? (p.tid.dse||'N/A') : null;
-    if(im3Dse !== f.dse && tidDse !== f.dse) return false;
+    const dIm = p.im3 && p.im3.dse && p.im3.dse !== 'N/A' ? p.im3.dse : '';
+    const dTid = p.tid && p.tid.dse && p.tid.dse !== 'N/A' ? p.tid.dse : '';
+    if((dIm || dTid || 'N/A') !== f.dse) return false;
   }
   if(f.searchTokens && f.searchTokens.length){
     const name = cleanName(p.im3&&p.im3.name) || cleanName(p.tid&&p.tid.name) || '';
@@ -8616,11 +8641,12 @@ function renderMapPoints(){
   let keySet = null;
   if(ptype || territory || dse){
     keySet = new Set();
+    const dsePk = dse ? dsePkSet(dse) : null;
     Object.keys(MASTER).forEach(key=>{
       const mm = MASTER[key];
       if(ptype && (mm.ptype||'N/A') !== ptype) return;
       if(territory && (mm.territory||'N/A') !== territory) return;
-      if(dse && (mm.dse||'N/A') !== dse) return;
+      if(dse && !dseKeyOk(key, mm, dse, dsePk)) return;
       keySet.add(key);
     });
   }
