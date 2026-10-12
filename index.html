@@ -1779,13 +1779,10 @@ async function saveChunked(prefix, rows, previousNumChunks, onProgress){
     }, ()=>{ if(onProgress) onProgress(chunks.length, chunks.length); });
   }
   const allOk = failed.length === 0;
-  if(allOk && previousNumChunks){
-    // best-effort cleanup of now-unused straggler keys — not worth parallelizing
-    // (usually few or none) and not fatal if any single delete fails
-    for(let i=chunks.length;i<previousNumChunks;i++){
-      await storageSet(prefix+i, null).catch(()=>{});
-    }
-  }
+  // NOTE: no cleanup of leftover higher-numbered chunk keys. Each delete is a slow
+  // Apps Script call (and invalidates its row-index cache), so removing ~250 old
+  // chunks after a reset made the sync overlay sit at 100% for minutes. Reads are
+  // driven by meta.numChunks*, so orphaned chunks are never read — harmless.
   return { allOk, numChunks: chunks.length };
 }
 
