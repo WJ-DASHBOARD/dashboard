@@ -284,8 +284,8 @@
     </div>
     <div style="display:flex;gap:10px;">
       <button class="btn" id="btnRefresh"><span class="refresh-dot"></span>Cek update</button>
-      <button class="btn" id="btnDownloadAll">Unduh detail (terfilter)</button>
-      <button class="btn" id="btnDownloadCombined">Unduh Laporan Gabungan (CSV)</button>
+      <button class="btn" id="btnDownloadAll" style="display:none;">Unduh detail (terfilter)</button>
+      <button class="btn" id="btnDownloadCombined" style="display:none;">Unduh Laporan Gabungan (CSV)</button>
       <button class="btn btn-primary hidden" id="btnOpenUpdate">Perbarui data</button>
       <button class="btn hidden" id="btnManageUsers">Kelola User</button>
       <button class="btn hidden" id="btnChangePass">Ganti Password</button>
@@ -313,7 +313,7 @@
       </div>
     </div>
     <div class="search-wrap">
-      <input type="text" id="fSearch" placeholder="Cari Outlet ID / Nama / Branch (mis. &quot;cell abc kuningan&quot;)…" style="min-width:260px;">
+      <input type="text" id="fSearch" placeholder="Cari Outlet ID / Nama / Area (mis. &quot;cell abc kuningan&quot;)…" style="min-width:260px;">
     </div>
   </div>
 </div>
@@ -351,7 +351,7 @@
           <thead><tr><th style="text-align:left;">Metrik</th><th title="Outlet fisik yang hanya punya IM3">IM3 only</th><th title="Outlet fisik yang hanya punya 3ID">3ID only</th><th title="Outlet fisik yang punya IM3 dan 3ID sekaligus (dihitung 1 outlet)">Hybrid</th><th title="IM3 only + 3ID only + Hybrid = jumlah outlet fisik, tanpa hitung ganda">Total</th></tr></thead>
           <tbody id="petaStatList"></tbody>
         </table>
-        <div id="petaDataHint" style="margin-top:6px;font-size:10.5px;line-height:1.4;color:var(--muted);"></div>
+        <div id="petaDataHint" style="display:none;margin-top:6px;font-size:10.5px;line-height:1.4;color:var(--muted);"></div>
         </div>
       </div>
     </div>
@@ -365,7 +365,7 @@
         </div>
       </div>
       <div>
-        <h3 style="margin:0 0 6px;font-size:13px;font-weight:600;">Warna Wilayah per Branch</h3>
+        <h3 style="margin:0 0 6px;font-size:13px;font-weight:600;">Warna Wilayah per Area</h3>
         <div class="legend" id="kabLegend" style="flex-wrap:wrap;gap:10px 18px;"></div>
       </div>
     </div>
@@ -384,7 +384,7 @@
     <thead>
       <tr>
         <th>Brand</th>
-        <th>Branch</th>
+        <th>Area</th>
         <th>Micro Cluster</th>
         <th>Outlet ID</th>
         <th>Nama Outlet</th>
@@ -463,7 +463,7 @@
 
   <div class="two-col" style="grid-template-columns:1fr;">
     <div class="panel">
-      <h3 id="breakdownTitle">Slab Saldo per Branch</h3>
+      <h3 id="breakdownTitle">Slab Saldo per Area</h3>
       <div id="breakdownChart"></div>
       <div class="legend">
         <span><i class="dot" style="background:#9B98A8"></i>Saldo 0</span>
@@ -473,14 +473,14 @@
     </div>
     <div class="panel">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-        <h3 id="summaryTableTitle" style="margin:0;">Summary per Branch</h3>
+        <h3 id="summaryTableTitle" style="margin:0;">Summary per Area</h3>
         <button class="btn btn-ghost btn-sm" id="btnDownloadSummaryTable">Unduh CSV</button>
       </div>
       <div style="overflow:auto;max-height:360px;">
       <table class="summary" id="summaryTable">
         <thead>
           <tr>
-            <th style="text-align:left;" rowspan="2">Branch</th>
+            <th style="text-align:left;" rowspan="2">Area</th>
             <th rowspan="2">Outlet</th>
             <th rowspan="2">Total Stock Amount (Bn)</th>
             <th colspan="2" style="text-align:center;">SP Qty</th>
@@ -529,7 +529,7 @@
     <thead>
       <tr>
         <th rowspan="2" data-k="brandIdx">Brand</th>
-        <th rowspan="2" data-k="branchIdx">Branch</th>
+        <th rowspan="2" data-k="branchIdx">Area</th>
         <th rowspan="2" data-k="microIdx">Micro Cluster</th>
         <th rowspan="2" data-k="outletId">Outlet ID</th>
         <th rowspan="2" data-k="outletName">Nama Outlet</th>
@@ -653,7 +653,7 @@
 
   <div class="two-col">
     <div class="panel">
-      <h3 id="gaSlabBreakdownTitle">Slab GA per Branch</h3>
+      <h3 id="gaSlabBreakdownTitle">Slab GA per Area</h3>
       <div id="gaSlabBreakdownChart" style="max-height:330px;overflow-y:auto;padding-right:6px;"></div>
       <div class="legend">
         <span><i class="dot" style="background:#9B98A8"></i>No GA</span>
@@ -664,18 +664,21 @@
       </div>
     </div>
     <div class="panel">
-      <h3 id="siBreakdownTitle">Total GA per Branch</h3>
+      <h3 id="siBreakdownTitle">Total GA per Area</h3>
       <div id="siBreakdownChart" style="max-height:330px;overflow-y:auto;padding-right:6px;"></div>
     </div>
   </div>
 
   <div class="panel">
-    <h3 id="siSummaryTitle">Summary Sell In &amp; GA per Branch</h3>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+      <h3 id="siSummaryTitle" style="margin:0;">Summary Sell In &amp; GA per Area</h3>
+      <button class="btn btn-ghost btn-sm" id="siBtnDownloadSummary">Unduh CSV</button>
+    </div>
     <div style="overflow:auto;max-height:360px;">
     <table class="summary" id="siSummaryTable">
         <thead>
           <tr>
-            <th style="text-align:left;" rowspan="2">Branch</th>
+            <th style="text-align:left;" rowspan="2">Area</th>
             <th rowspan="2">Outlet</th>
             <th rowspan="2">Total GA</th>
             <th colspan="9" style="text-align:center;">#OUTLET with Sell in</th>
@@ -756,7 +759,7 @@
     <thead>
       <tr>
         <th data-sk="brandIdx">Brand</th>
-        <th data-sk="branchIdx">Branch</th>
+        <th data-sk="branchIdx">Area</th>
         <th data-sk="microIdx">Micro Cluster</th>
         <th data-sk="outletId">Outlet ID</th>
         <th data-sk="outletName">Nama Outlet</th>
@@ -912,14 +915,14 @@
 
   <div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-      <h3 style="margin:0;" id="supSummaryTitle">Summary Supply per Branch</h3>
+      <h3 style="margin:0;" id="supSummaryTitle">Summary Supply per Area</h3>
       <button class="btn btn-ghost btn-sm" id="supBtnDownloadSummary">Unduh CSV</button>
     </div>
     <div style="overflow:auto;max-height:360px;">
       <table class="summary" id="supSummaryTable">
         <thead>
           <tr>
-            <th style="text-align:left;" rowspan="2" id="supSummaryHeadCol">Branch</th>
+            <th style="text-align:left;" rowspan="2" id="supSummaryHeadCol">Area</th>
             <th rowspan="2">Outlet</th>
             <th colspan="3" style="text-align:center;">SP Inject (Outlet / Hit / Rev Bn)</th>
             <th colspan="3" style="text-align:center;">Rebuy (Outlet / Hit / Rev Bn)</th>
@@ -952,7 +955,7 @@
       <thead>
         <tr>
           <th rowspan="2">Brand</th>
-          <th rowspan="2">Branch</th>
+          <th rowspan="2">Area</th>
           <th rowspan="2">Micro Cluster</th>
           <th rowspan="2">Outlet ID</th>
           <th rowspan="2">Nama Outlet</th>
@@ -996,7 +999,7 @@
   </div>
   <div id="cmpContent" style="display:none;">
     <div class="panel">
-      <h3 style="margin:0 0 8px;">Summary per Area / Branch / Micro Cluster</h3>
+      <h3 style="margin:0 0 8px;">Summary per Area / Micro Cluster</h3>
       <div style="overflow:auto;">
       <table class="summary" id="cmpMetricTable">
         <thead id="cmpMetricHead"></thead>
@@ -3571,7 +3574,7 @@ function cmpRowCells(fmt, goodUp, curVal, weekTree, weekNode, lmtdTree, lmtdNode
 function renderCmpMetricsTable(){
   const T = {}; CMP_METRICS.forEach(m=>{ T[m.key] = cmpMetricTrees(m); });
   document.getElementById('cmpMetricHead').innerHTML =
-    `<tr><th rowspan="2" style="text-align:left;">Area / Branch / Micro Cluster</th>${CMP_METRICS.map(m=>`<th colspan="5">${m.label}</th>`).join('')}</tr>`
+    `<tr><th rowspan="2" style="text-align:left;">Area / Micro Cluster</th>${CMP_METRICS.map(m=>`<th colspan="5">${m.label}</th>`).join('')}</tr>`
     + `<tr>${CMP_METRICS.map(()=>`<th style="font-weight:500;">MTD</th><th style="font-weight:500;">Last Week</th><th style="font-weight:500;">Growth</th><th style="font-weight:500;">LMTD</th><th style="font-weight:500;">Growth</th>`).join('')}</tr>`;
 
   // canonical area/branch/micro list = the union across every metric's current tree, ordered
@@ -3764,7 +3767,7 @@ function renderCmpDetail(){
 
   document.getElementById('cmpDetailHead').innerHTML = `
     <tr>
-      <th rowspan="2" style="text-align:left;">Brand</th><th rowspan="2" style="text-align:left;">Branch</th><th rowspan="2" style="text-align:left;">Micro Cluster</th>
+      <th rowspan="2" style="text-align:left;">Brand</th><th rowspan="2" style="text-align:left;">Area</th><th rowspan="2" style="text-align:left;">Micro Cluster</th>
       <th rowspan="2" style="text-align:left;">Outlet ID</th><th rowspan="2" style="text-align:left;">Nama</th><th rowspan="2">Kategori</th>
       ${CMP_METRICS.map(m=>`<th colspan="5">${m.label}</th>`).join('')}
     </tr>
@@ -4487,7 +4490,7 @@ function exportSupplySummaryCsv(){
     a.vouOriHit += vouOriHit; a.vouOriRev += r[IDX_SUP.vouori_spvoriRev];
   });
   const rows = Object.keys(agg).map(g=>({name: META.branches[g], ...agg[g]}));
-  const headers = ['Branch','Outlet','SP Inject #Outlet','SP Inject Hit','SP Inject Revenue','Rebuy #Outlet','Rebuy Hit','Rebuy Revenue',
+  const headers = ['Area','Outlet','SP Inject #Outlet','SP Inject Hit','SP Inject Revenue','Rebuy #Outlet','Rebuy Hit','Rebuy Revenue',
     'Voucher Inject #Outlet','Voucher Inject Hit','Voucher Inject Revenue','Voucher ORI #Outlet','Voucher ORI Hit','Voucher ORI Revenue'];
   const lines = [headers.join(',')];
   rows.forEach(r=>lines.push([r.name,r.outlet,r.spOutlet,r.spHit,Math.round(r.spRev),r.rebuyOutlet,r.rebuyHit,Math.round(r.rebuyRev),
@@ -4498,6 +4501,44 @@ function exportSupplySummaryCsv(){
   a.href = url; a.download = 'summary_supply_per_branch.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// Unduh isi tabel yang sedang tampil (sesuai filter) sebagai CSV; header 2 baris diratakan.
+function exportTableCsv(tableId, fileName){
+  const t = document.getElementById(tableId);
+  if(!t){ return; }
+  const q = v => '"' + String(v==null?'':v).replace(/\s+/g,' ').trim().replace(/"/g,'""') + '"';
+  const heads = Array.from(t.tHead ? t.tHead.rows : []);
+  const grid = [];
+  heads.forEach((tr, ri)=>{
+    grid[ri] = grid[ri] || [];
+    let ci = 0;
+    Array.from(tr.cells).forEach(c=>{
+      while(grid[ri][ci] !== undefined) ci++;
+      const cs = c.colSpan||1, rs = c.rowSpan||1, txt = c.textContent.replace(/\s+/g,' ').trim();
+      for(let r=0;r<rs;r++){ grid[ri+r] = grid[ri+r] || []; for(let k=0;k<cs;k++) grid[ri+r][ci+k] = txt; }
+      ci += cs;
+    });
+  });
+  const lines = [];
+  if(grid.length){
+    const n = Math.max(...grid.map(r=>r.length));
+    const hdr = [];
+    for(let c=0;c<n;c++){
+      const parts = []; grid.forEach(r=>{ const v = r[c]; if(v && parts[parts.length-1] !== v) parts.push(v); });
+      hdr.push(parts.join(' - '));
+    }
+    lines.push(hdr.map(q).join(','));
+  }
+  Array.from(t.tBodies).forEach(tb=>Array.from(tb.rows).forEach(tr=>{
+    lines.push(Array.from(tr.cells).map((c,i)=>q(i===0 ? c.textContent.replace(/^[\u229E\u229F\u25B6\u25BC\u25B8\u25BE]\s*/,'') : c.textContent)).join(','));
+  }));
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
 
 function exportSupplyCsv(){
@@ -8187,7 +8228,7 @@ function renderPetaMatrix(oIdx, sIdx, uIdx){
   const flagRow = (lbl, k) => row(lbl, c=>c.fl[k], 'red');
   document.getElementById('petaStatList').innerHTML = [
     row('Total Outlet (sesuai filter)', c=>c.n, 'plain'),
-    row('Jumlah Branch tercakup', c=>c.br.size, 'plain'),
+    row('Jumlah Area tercakup', c=>c.br.size, 'plain'),
     row('Jumlah Micro Cluster tercakup', c=>c.mc.size, 'plain'),
     row('Total Stock Amount', c=>c.stock, 'plain'),
     row('Total GA (MTD)', c=>c.ga, 'plain'),
@@ -8376,7 +8417,7 @@ function renderPetaStatList(){
   }
   const rl = reconLines();
   if(rl.length) gapMsgs.push(...rl.map(t=>t), '(Angka di tabel mengikuti filter yang aktif; baris "di file" di atas adalah rekonsiliasi seluruh file saat diupload.)');
-  document.getElementById('petaDataHint').innerHTML = gapMsgs.map(m=>'ℹ '+escHtml(m)).join('<br>');
+  document.getElementById('petaDataHint').innerHTML = ''; // catatan info dihilangkan atas permintaan
   const pcsFlagNote = Object.keys(spMode()).some(b=>spUsePcs(+b) || allUsePcs(+b)) ? ' (dari Qty)' : '';
   const flagRow = (lbl, k) => statRowSplit(lbl, curFlags[k].im3, curFlags[k].tid, 'ownpct',
     {im3Base:geoTotal.im3, tidBase:geoTotal.tid, hy:{val:H[k].total, base:hyGeoBase}}, null, {prev:pf(k), goodUp:false});
@@ -8710,7 +8751,7 @@ function renderMapPoints(){
       fillOpacity: 0.75, weight: isRed ? 1 : 0.6, interactive: true
     });
     marker.bindPopup(()=>{
-      return `<b>${escHtml(displayName)}</b><br>Outlet ID: ${dispOutletId(brandName, p[GIDX.outletId])||'–'}<br>Brand: ${brandName} · Branch: ${META.branches[p[GIDX.branchIdx]]} · MC: ${META.micros[p[GIDX.microIdx]]}<br>Kategori: ${META.cats[p[GIDX.catIdx]]}<br>Lat/Long: ${p[GIDX.lat]}, ${p[GIDX.lon]}<br>Sell In SP (Rp): ${sellinSp!==null ? fmtN(sellinSp) : '-'}<br>Sell In SP (Qty): ${sellinSpPcs!==null ? fmtN(sellinSpPcs) : '-'}<br>Sell In Saldo: ${sellinSaldo!==null ? fmtN(sellinSaldo) : '-'}<br>Stock Saldo (Salmo): ${stockSaldo!==null ? fmtN(stockSaldo) : '-'}<br>Status: ${isRed ? '<span style="color:#C81E3A;font-weight:600;">Ada masalah (cek GA/Sell In SP/Sell In Saldo/Stock)</span>' : '<span style="color:#1B8A5A;font-weight:600;">Lengkap</span>'}${isNoStock ? '<br><span style="color:#C81E3A;font-weight:600;">⚠ Tidak ada stock sama sekali</span>' : ''}`;
+      return `<b>${escHtml(displayName)}</b><br>Outlet ID: ${dispOutletId(brandName, p[GIDX.outletId])||'–'}<br>Brand: ${brandName} · Area: ${META.branches[p[GIDX.branchIdx]]} · MC: ${META.micros[p[GIDX.microIdx]]}<br>Kategori: ${META.cats[p[GIDX.catIdx]]}<br>Lat/Long: ${p[GIDX.lat]}, ${p[GIDX.lon]}<br>Sell In SP (Rp): ${sellinSp!==null ? fmtN(sellinSp) : '-'}<br>Sell In SP (Qty): ${sellinSpPcs!==null ? fmtN(sellinSpPcs) : '-'}<br>Sell In Saldo: ${sellinSaldo!==null ? fmtN(sellinSaldo) : '-'}<br>Stock Saldo (Salmo): ${stockSaldo!==null ? fmtN(stockSaldo) : '-'}<br>Status: ${isRed ? '<span style="color:#C81E3A;font-weight:600;">Ada masalah (cek GA/Sell In SP/Sell In Saldo/Stock)</span>' : '<span style="color:#1B8A5A;font-weight:600;">Lengkap</span>'}${isNoStock ? '<br><span style="color:#C81E3A;font-weight:600;">⚠ Tidak ada stock sama sekali</span>' : ''}`;
     });
     mapMarkerLayer.addLayer(marker);
     if(searchTokens.length) shownLatLngs.push([p[GIDX.lat], p[GIDX.lon]]);
@@ -9487,6 +9528,7 @@ function bindEvents(){
 
   document.getElementById('btnDownloadAll').addEventListener('click', exportCsv);
   document.getElementById('btnDownloadCombined').addEventListener('click', exportCombinedCsv);
+  document.getElementById('siBtnDownloadSummary').addEventListener('click', ()=>exportTableCsv('siSummaryTable', 'summary_sellin_ga_per_area.csv'));
   document.getElementById('btnDownloadSummaryTable').addEventListener('click', exportSummaryTableCsv);
   document.getElementById('btnDownloadCombinedTable').addEventListener('click', exportCombinedCsv);
   document.getElementById('combinedPrevPage').addEventListener('click', ()=>{ if(combinedPage>1){combinedPage--; renderCombinedTable();} });
