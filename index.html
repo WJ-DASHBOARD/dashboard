@@ -364,7 +364,7 @@
           <span id="mapPointCount" style="color:var(--muted);"></span>
         </div>
       </div>
-      <div style="display:none;">
+      <div>
         <h3 style="margin:0 0 6px;font-size:13px;font-weight:600;">Warna Wilayah per Area</h3>
         <div class="legend" id="kabLegend" style="flex-wrap:wrap;gap:10px 18px;"></div>
       </div>
@@ -1575,7 +1575,7 @@ function checkCoord(rawLat, rawLon){
   return {ok:true, lat: Math.round(lat*1e6)/1e6, lon: Math.round(lon*1e6)/1e6};
 }
 let KAB_GEOJSON = null;
-const HIDE_BOUNDARIES = true;   // batas wilayah (poligon Area/Region) disembunyikan dulu
+const HIDE_BOUNDARIES = false;  // batas wilayah (poligon Area/Region) ditampilkan
 let mapInstance = null;
 let mapMarkerLayer = null;
 let kabLayer = null;
