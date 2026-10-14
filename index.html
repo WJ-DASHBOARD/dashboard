@@ -364,7 +364,7 @@
           <span id="mapPointCount" style="color:var(--muted);"></span>
         </div>
       </div>
-      <div>
+      <div style="display:none;">
         <h3 style="margin:0 0 6px;font-size:13px;font-weight:600;">Warna Wilayah per Area</h3>
         <div class="legend" id="kabLegend" style="flex-wrap:wrap;gap:10px 18px;"></div>
       </div>
@@ -1061,6 +1061,11 @@
       <div class="progress-line" id="bulkUserMsg"></div>
     </div>
     <div class="upload-block">
+      <label style="font-size:12.5px;display:block;margin-bottom:4px;">Upload nama user (.csv/.txt/.xlsx — kolom 1 = username, kolom 2 = nama). Hanya mengisi nama; password &amp; sesi login tidak berubah.</label>
+      <input type="file" id="userNameFile" accept=".csv,.txt,.xlsx,.xls">
+      <div class="progress-line" id="userNameMsg"></div>
+    </div>
+    <div class="upload-block">
       <label style="font-size:12.5px;display:block;margin-bottom:4px;">Reset password semua user sekaligus (kembali ke default, semua wajib bikin password baru saat login berikutnya)</label>
       <button class="btn btn-ghost btn-sm" id="btnResetAllPass" style="color:var(--red);border-color:var(--red);">Reset Password Semua User</button>
       <div class="progress-line" id="resetAllMsg"></div>
@@ -1071,14 +1076,14 @@
       <div class="progress-line" id="userActMsg"></div>
       <div style="max-height:220px;overflow:auto;margin-top:8px;">
         <table class="summary" style="width:100%;font-size:11.5px;">
-          <thead><tr><th style="text-align:left;">Username</th><th style="text-align:left;">Role</th><th style="text-align:left;">Login terakhir</th><th>Jml login</th><th style="text-align:left;">Ganti password</th><th style="text-align:left;">Status</th></tr></thead>
+          <thead><tr><th style="text-align:left;">Username</th><th style="text-align:left;">Nama</th><th style="text-align:left;">Area</th><th style="text-align:left;">Role</th><th style="text-align:left;">Login terakhir</th><th>Jml login</th><th style="text-align:left;">Ganti password</th><th style="text-align:left;">Status</th></tr></thead>
           <tbody id="userActBody"></tbody>
         </table>
       </div>
     </div>
     <div style="max-height:300px;overflow:auto;margin-top:10px;">
       <table class="summary" style="width:100%;">
-        <thead><tr><th style="text-align:left;">Username</th><th style="text-align:left;">Password</th><th style="text-align:left;">Role</th><th></th></tr></thead>
+        <thead><tr><th style="text-align:left;">Username</th><th style="text-align:left;">Nama</th><th style="text-align:left;">Password</th><th style="text-align:left;">Role</th><th></th></tr></thead>
         <tbody id="userListBody"></tbody>
       </table>
     </div>
@@ -1570,6 +1575,7 @@ function checkCoord(rawLat, rawLon){
   return {ok:true, lat: Math.round(lat*1e6)/1e6, lon: Math.round(lon*1e6)/1e6};
 }
 let KAB_GEOJSON = null;
+const HIDE_BOUNDARIES = true;   // batas wilayah (poligon Area/Region) disembunyikan dulu
 let mapInstance = null;
 let mapMarkerLayer = null;
 let kabLayer = null;
@@ -2020,6 +2026,7 @@ async function loadChunked(prefix, numChunks){
   }
   let rows = [];
   parts.forEach(c=>{ if(c) rows = rows.concat(c); });
+  if(parts.some(c=>c===null)) setTimeout(()=>{ try{ showToast('⚠ Sebagian data gagal dimuat dari server (koneksi/server sibuk). Refresh halaman (Ctrl+F5) sebelum memakai angka di dashboard.'); }catch(e){} }, 500);
   return rows;
 }
 
@@ -8493,7 +8500,7 @@ function initMapOnce(){
     });
     cyclLayer.addTo(mapInstance);
 
-    if(KAB_GEOJSON && KAB_GEOJSON.features && KAB_GEOJSON.features.length){
+    if(!HIDE_BOUNDARIES && KAB_GEOJSON && KAB_GEOJSON.features && KAB_GEOJSON.features.length){
       // The Branch/Area a polygon belongs to is looked up when it is DRAWN / HOVERED / CLICKED (not once
       // here): the map can be created before the pairing data is loaded or re-uploaded, and META.branches
       // (what branchOfKab() checks against) is replaced on every upload.
@@ -8977,27 +8984,54 @@ async function loadUserActivity(){
   }
   USER_ACT = out;
 }
+// Area per user: dicocokkan dari username -> DSE Code (IM3/3ID) atau Outlet ID di data pairing.
+function buildUserAreaLookup(){
+  const byDse = {}, byId = {};
+  Object.keys(MASTER).forEach(key=>{
+    const mm = MASTER[key];
+    if(!mm.area) return;
+    const d = mm.dse && mm.dse !== 'N/A' ? String(canonDse(mm.dse)).toUpperCase() : '';
+    if(d){ (byDse[d] = byDse[d] || new Set()).add(mm.area); }
+    const id = normId(key.slice(key.indexOf('|')+1));
+    if(id){ (byId[id] = byId[id] || new Set()).add(mm.area); }
+  });
+  return (username)=>{
+    const u = String(username||'').trim();
+    const set = byDse[canonDse(u).toUpperCase()] || byId[normId(u)];
+    return set ? Array.from(set).sort().join('; ') : '-';
+  };
+}
+async function setUserName(username, val){
+  const u = USERS.find(x=>x.username===username); if(!u) return;
+  const old = u.name; u.name = String(val||'').trim();
+  const ok = await saveUsers();
+  if(!ok){ u.name = old; showToast('Gagal menyimpan nama (koneksi tidak stabil) — coba lagi.'); renderUserList(); return; }
+  renderUserActivity();
+}
+window.setUserName = setUserName;
 function fmtActTime(iso){ return iso ? new Date(iso).toLocaleString('id-ID') : '-'; }
 async function renderUserActivity(){
   const body = document.getElementById('userActBody');
   if(!body) return;
-  body.innerHTML = '<tr><td colspan="6" style="color:var(--muted);">Memuat…</td></tr>';
+  body.innerHTML = '<tr><td colspan="8" style="color:var(--muted);">Memuat…</td></tr>';
   await loadUserActivity();
+  const areaOf = buildUserAreaLookup();
   body.innerHTML = USERS.map(u=>{
     const a = USER_ACT[u.username] || {};
     const st = u.mustChangePassword !== false ? '<span style="color:var(--red);">Belum ganti password</span>' : 'Sudah ganti';
-    return `<tr><td>${u.username}</td><td>${u.role==='admin'?'admin':'viewer'}</td><td>${fmtActTime(a.lastLogin)}</td><td style="text-align:right;">${a.loginCount||0}</td><td>${fmtActTime(a.lastPassChange)}</td><td>${st}</td></tr>`;
-  }).join('') || '<tr><td colspan="6" style="color:var(--muted);">Belum ada user.</td></tr>';
+    return `<tr><td>${u.username}</td><td>${escHtml(u.name||'-')}</td><td>${escHtml(areaOf(u.username))}</td><td>${u.role==='admin'?'admin':'viewer'}</td><td>${fmtActTime(a.lastLogin)}</td><td style="text-align:right;">${a.loginCount||0}</td><td>${fmtActTime(a.lastPassChange)}</td><td>${st}</td></tr>`;
+  }).join('') || '<tr><td colspan="8" style="color:var(--muted);">Belum ada user.</td></tr>';
 }
 async function downloadAllUsersCsv(){
   const msg = document.getElementById('userActMsg');
   if(msg) msg.textContent = 'Menyiapkan data…';
   await loadUserActivity();
   const q = v => '"' + String(v==null?'':v).replace(/"/g,'""') + '"';
-  const lines = [['Username','Role','Status Password','Login Pertama','Login Terakhir','Jumlah Login','Terakhir Ganti Password','Jumlah Ganti Password','Terakhir Direset Admin'].map(q).join(',')];
+  const areaOf = buildUserAreaLookup();
+  const lines = [['Username','Nama','Area','Role','Status Password','Login Pertama','Login Terakhir','Jumlah Login','Terakhir Ganti Password','Jumlah Ganti Password','Terakhir Direset Admin'].map(q).join(',')];
   USERS.forEach(u=>{
     const a = USER_ACT[u.username] || {};
-    lines.push([u.username, u.role==='admin'?'admin':'viewer', u.mustChangePassword!==false?'Belum ganti (default)':'Sudah ganti',
+    lines.push([u.username, u.name||'', areaOf(u.username), u.role==='admin'?'admin':'viewer', u.mustChangePassword!==false?'Belum ganti (default)':'Sudah ganti',
       fmtActTime(a.firstLogin), fmtActTime(a.lastLogin), a.loginCount||0, fmtActTime(a.lastPassChange), a.passChangeCount||0, fmtActTime(a.lastReset)].map(q).join(','));
   });
   const blob = new Blob(['\uFEFF' + lines.join('\n')], {type:'text/csv;charset=utf-8;'});
@@ -9012,8 +9046,8 @@ window.downloadAllUsersCsv = downloadAllUsersCsv;
 
 // ---- Sesi login: 1 user = 1 sesi aktif, auto-logout setelah 1 jam tanpa aktivitas ----
 const IDLE_LIMIT_MS = 60*60*1000;     // 1 jam tanpa aktivitas -> logout otomatis
-const SESSION_STALE_MS = 5*60*1000;   // sesi dianggap mati kalau tidak ada detak > 5 menit (browser ditutup dll)
-const HEARTBEAT_MS = 60*1000;
+const SESSION_STALE_MS = 12*60*1000;   // sesi dianggap mati kalau tidak ada detak > 5 menit (browser ditutup dll)
+const HEARTBEAT_MS = 5*60*1000;   // jarang supaya server Apps Script tidak terbebani (upload & muat data jadi lambat kalau banyak user)
 let lastActivityAt = Date.now(), heartbeatTimer = null, idleTimer = null, activityBound = false;
 function newSessToken(){ return randomSalt(); }
 function deviceId(){
@@ -9069,7 +9103,7 @@ async function heartbeat(){
     const cur = r.found ? r.value : null;
     if(cur && cur.token && cur.token !== t){
       // butuh 2 detak berturut-turut supaya bacaan sesaat yang basi tidak langsung mengeluarkan user
-      if(++hbMismatch >= 2){ hbMismatch = 0; autoLogout('Akun ini sedang dipakai di perangkat lain — kamu otomatis keluar.'); }
+      if(++hbMismatch >= 1){ hbMismatch = 0; autoLogout('Akun ini sedang dipakai di perangkat lain — kamu otomatis keluar.'); }
       return;
     }
     hbMismatch = 0;
@@ -9088,6 +9122,7 @@ function startSessionWatch(){
       window.addEventListener(ev, ()=>{ lastActivityAt = Date.now(); }, {passive:true}));
   }
   heartbeatTimer = setInterval(heartbeat, HEARTBEAT_MS);
+  if(!window.__hbVis){ window.__hbVis = true; document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible' && localStorage.getItem('wj_logged_in') === '1') heartbeat(); }); }
   idleTimer = setInterval(()=>{
     if(localStorage.getItem('wj_logged_in') === '1' && Date.now() - lastActivityAt > IDLE_LIMIT_MS){
       autoLogout('Kamu otomatis keluar karena tidak ada aktivitas selama 1 jam.');
@@ -9251,6 +9286,7 @@ function renderUserList(){
   document.getElementById('userListBody').innerHTML = USERS.map(u=>`
     <tr>
       <td>${u.username}</td>
+      <td><input type="text" value="${escHtml(u.name||'')}" placeholder="isi nama" data-user="${u.username}" onchange="setUserName(this.dataset.user, this.value)" style="width:130px;font-size:11.5px;padding:3px 4px;"></td>
       <td class="mono">${u.mustChangePassword!==false ? '<i style="color:var(--muted);">(belum diganti)</i>' : '••••••••'}</td>
       <td>
         <select data-user="${u.username}" onchange="setUserRole(this.dataset.user, this.value)" style="font-size:11.5px;padding:3px 4px;">
@@ -9263,7 +9299,7 @@ function renderUserList(){
         <button class="btn btn-ghost btn-sm" data-user="${u.username}" onclick="forceReleaseUser(this.dataset.user)">Paksa Logout</button>
         <button class="btn btn-ghost btn-sm" data-user="${u.username}" onclick="removeUserByName(this.dataset.user)">Hapus</button>
       </td>
-    </tr>`).join('') || '<tr><td colspan="4" style="color:var(--muted);">Belum ada user.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="5" style="color:var(--muted);">Belum ada user.</td></tr>';
 }
 
 async function resetUserPassword(name){
@@ -9325,6 +9361,42 @@ async function addUser(){
   msg.textContent = `User "${name}" ditambahkan sebagai Viewer dengan password default.`;
   input.value = '';
   renderUserList();
+}
+
+async function handleUserNameFile(file){
+  const msg = document.getElementById('userNameMsg');
+  msg.textContent = 'Membaca file...';
+  try{
+    let rows = [];
+    if(/\.xlsx?$/i.test(file.name)){
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array'});
+      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:false, defval:''});
+    } else {
+      const text = (await file.text()).replace(/^\uFEFF/, '');
+      rows = text.split(/\r?\n/).filter(l=>l.trim()).map(l=>{
+        const sep = l.includes('\t') ? '\t' : (l.includes(';') ? ';' : ',');
+        return l.split(sep).map(x=>x.trim().replace(/^"|"$/g,''));
+      });
+    }
+    const byLower = new Map(USERS.map(u=>[u.username.toLowerCase(), u]));
+    const backup = USERS.map(u=>u.name);
+    let updated = 0; const notFound = [];
+    rows.forEach((r, i)=>{
+      const uname = String(r[0]==null?'':r[0]).trim(), nm = String(r[1]==null?'':r[1]).trim();
+      if(!uname || !nm) return;
+      if(i === 0 && /^(username|user)$/i.test(uname)) return;   // baris judul
+      const u = byLower.get(uname.toLowerCase());
+      if(!u){ notFound.push(uname); return; }
+      u.name = nm; updated++;
+    });
+    if(!updated){ msg.textContent = 'Tidak ada username yang cocok.' + (notFound.length ? ' Tidak ditemukan: ' + notFound.slice(0,5).join(', ') : ''); return; }
+    msg.textContent = 'Menyimpan...';
+    const ok = await saveUsers();
+    if(!ok){ USERS.forEach((u,i)=>{ u.name = backup[i]; }); msg.textContent = 'Gagal menyimpan ke server (koneksi tidak stabil) — coba lagi.'; return; }
+    msg.textContent = `${updated} nama diperbarui.` + (notFound.length ? ` ${notFound.length} username tidak ditemukan (dilewati): ${notFound.slice(0,5).join(', ')}${notFound.length>5?' …':''}` : '') + ' Password tidak diubah.';
+    renderUserList(); renderUserActivity();
+  }catch(e){ msg.textContent = 'Gagal membaca file: ' + (e && e.message || e); }
 }
 
 function handleBulkUserFile(file){
@@ -9555,6 +9627,7 @@ function bindEvents(){
   document.getElementById('usersOverlay').addEventListener('click', (e)=>{ if(e.target.id==='usersOverlay') e.currentTarget.classList.remove('show'); });
   document.getElementById('btnAddUser').addEventListener('click', addUser);
   document.getElementById('btnResetAllPass').addEventListener('click', resetAllPasswords);
+  document.getElementById('userNameFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleUserNameFile(e.target.files[0]); e.target.value=''; });
   document.getElementById('bulkUserFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleBulkUserFile(e.target.files[0]); });
   document.getElementById('newUserInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') addUser(); });
   document.getElementById('updateOverlay').addEventListener('click', (e)=>{ if(e.target.id==='updateOverlay') e.currentTarget.classList.remove('show'); });
