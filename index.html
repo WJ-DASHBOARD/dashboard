@@ -1490,6 +1490,15 @@ let filteredSellin = [];
 // only valid against the PREVIOUS META.areas/branches/micros arrays — once those
 // arrays change shape (new region added), the raw stored indices point at the
 // wrong names under the new META unless remapped here first.
+// Bangun kerangka data Sell In (semua outlet pairing, nilai 0) bila belum ada, supaya file GA / Sell In (Qty)
+// bisa langsung diupload tanpa harus upload file OSA dulu.
+function ensureSellinBase(){
+  if(SELLIN_OUTLETS.length || !MASTER || !Object.keys(MASTER).length) return;
+  reconcileSellinToMaster();
+  if(!SMETA || typeof SMETA !== 'object') SMETA = {};
+  SMETA.totalOutlets = SELLIN_OUTLETS.length;
+}
+
 function reconcileSellinToMaster(){
   if(!SMETA) return;
   const masterKeys = Object.keys(MASTER);
@@ -6699,6 +6708,7 @@ function handleGaFile(file){
       progressEl.innerHTML = '<b style="color:var(--red);">Data pairing outlet belum termuat</b> — refresh halaman ini dulu (Ctrl+Shift+R), tunggu sampai selesai loading, baru coba upload lagi.';
       resolve(); return;
     }
+    if(!SELLIN_OUTLETS.length) ensureSellinBase();   // GA / Sell In Qty tidak butuh file OSA: kerangka outlet dibuat dari data pairing
     if(!SMETA || !SELLIN_OUTLETS.length){
       progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In &amp; GA belum ada</b> — upload data Sell In (menu #6, OSA) dulu sebelum mengganti data GA.';
       resolve(); return;
@@ -7499,6 +7509,7 @@ function handleSellinPcsFile(file){
       progressEl.innerHTML = '<b style="color:var(--red);">Data pairing outlet belum termuat</b> — refresh halaman ini dulu (Ctrl+Shift+R), tunggu sampai selesai loading, baru coba upload lagi.';
       resolve(); return;
     }
+    if(!SELLIN_OUTLETS.length) ensureSellinBase();   // GA / Sell In Qty tidak butuh file OSA: kerangka outlet dibuat dari data pairing
     if(!SMETA || !SELLIN_OUTLETS.length){
       progressEl.innerHTML = '<b style="color:var(--red);">Data Sell In belum ada</b> — upload data Sell In (menu #6, OSA) dulu sebelum mengisi Sell In SP (Qty).';
       resolve(); return;
@@ -9116,6 +9127,7 @@ async function heartbeat(){
   const u = localStorage.getItem('wj_user'), t = localStorage.getItem('wj_sess');
   if(localStorage.getItem('wj_logged_in') !== '1' || !u) return;
   if(!t){ autoLogout('Sesi tidak valid — silakan login ulang.'); return; }
+  if(currentRole() === 'admin') return;   // admin: multi-login, tidak ada kunci sesi
   try{
     const key = 'sess_' + u;
     const r = await storageGetRaw(key);
@@ -9200,7 +9212,10 @@ async function doLogin(){
     }
   }
   if(match){
-    const ses = await acquireSession(match.username);
+    // admin boleh login di banyak perangkat sekaligus: tidak ada kunci sesi, cukup token lokal
+    let ses;
+    if(match.role === 'admin'){ try{ localStorage.setItem('wj_sess', 'adm-' + Date.now()); }catch(e){} ses = { ok:true }; }
+    else ses = await acquireSession(match.username);
     if(!ses.ok){
       errEl.textContent = 'User ini sedang login di perangkat lain. Tunggu sampai user tersebut logout / tidak aktif, atau minta admin untuk memaksa logout.';
       return;
