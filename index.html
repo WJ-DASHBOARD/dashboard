@@ -190,7 +190,7 @@
   table.summary td:last-child{border-right:none;}
   table.summary td:first-child{text-align:left;font-family:'IBM Plex Sans',sans-serif;color:var(--ink-soft);}
   table.summary tbody tr:hover{background:#FBFAF8;}
-  #pairedTable.hide-rp .rp-col{display:none;}
+  #pairedTable .rp-col, #siSummaryTable .rp-col{display:none !important;}
   #petaStatTable th, #petaStatTable td{font-size:9px;padding:3px 5px;}
   #petaStatTable td{line-height:1.3;}
   /* Total Outlet row, Hybrid column: Hybrid outlet count with the IM3 / 3ID outlets it contains */
@@ -681,15 +681,15 @@
             <th style="text-align:left;" rowspan="2">Area</th>
             <th rowspan="2">Outlet</th>
             <th rowspan="2">Total GA</th>
-            <th colspan="9" style="text-align:center;">#OUTLET with Sell in</th>
-            <th rowspan="2">Secondary (Bn)</th>
-            <th rowspan="2">Tertiary (Bn)</th>
+            <th colspan="3" style="text-align:center;">#OUTLET with Sell in</th>
+            <th rowspan="2" class="rp-col">Secondary (Bn)</th>
+            <th rowspan="2" class="rp-col">Tertiary (Bn)</th>
             <th colspan="6" style="text-align:center;">Slab Outlet GA</th>
           </tr>
           <tr>
             <th style="font-weight:500;">SP</th><th style="font-weight:500;">%</th><th style="font-weight:500;">Amount (Bn)</th>
-            <th style="font-weight:500;">Voucher</th><th style="font-weight:500;">%</th><th style="font-weight:500;">Amount (Bn)</th>
-            <th style="font-weight:500;">Saldo</th><th style="font-weight:500;">%</th><th style="font-weight:500;">Amount (Bn)</th>
+            <th class="rp-col">Voucher</th><th class="rp-col">%</th><th class="rp-col">Amount (Bn)</th>
+            <th class="rp-col">Saldo</th><th class="rp-col">%</th><th class="rp-col">Amount (Bn)</th>
             <th style="font-weight:500;white-space:nowrap;">No GA</th>
             <th style="font-weight:500;">&lt;25</th>
             <th style="font-weight:500;">25-50</th>
@@ -1457,7 +1457,7 @@ function spMode(){
 }
 function spUsePcs(brandIdx){ const m = spMode()[brandIdx]; return !!m && !m.sp && m.pcs; }     // "Sell In SP" = Qty for this brand
 function allUsePcs(brandIdx){ const m = spMode()[brandIdx]; return !!m && !m.any && m.pcs; }   // "Sell In (any)" = Qty for this brand
-function sellInPcsPrimary(){ const v = Object.values(spMode()); return v.length > 0 && !v.some(m=>m.any) && v.some(m=>m.pcs); }
+function sellInPcsPrimary(){ return true; }   // Sell In SP selalu ditampilkan dalam Qty (permintaan user); tidak bergantung pada data OSA/Rp
 
 let META = null;
 let OUTLETS = [];
@@ -1768,7 +1768,12 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbwufdPVWe4ah-0L6nu0kCEh
 // Wraps fetch with a hard timeout — if the Apps Script backend hangs (it has done
 // this before under load), we abort and move on instead of the whole page getting
 // stuck forever waiting for a promise that never resolves or rejects.
+let NET_INFLIGHT = 0;   // jumlah permintaan ke server yang sedang berjalan (dipakai penanda "Done upload all")
 function fetchWithTimeout(url, opts, timeoutMs){
+  NET_INFLIGHT++;
+  return fetchWithTimeoutInner(url, opts, timeoutMs).finally(()=>{ NET_INFLIGHT--; });
+}
+function fetchWithTimeoutInner(url, opts, timeoutMs){
   // Note: deliberately NOT using AbortController/signal here. Some sandboxed
   // preview environments (e.g. Claude's own artifact preview, which proxies
   // cross-origin fetch() calls through postMessage to a parent frame) cannot
@@ -4836,7 +4841,7 @@ function renderSellinSummaryTable(){
   const rowCells = (r, p) => `
       <td>${fmtN(r.outlet)}</td><td>${fmtN(r.ga)}${dk(r,p,'ga',true)}</td>
       <td>${fmtN(r.wSp)}</td><td>${pct(r.wSp,r.outlet)}</td><td>${PCS ? fmtN(r.spPcs) : fmtBn(r.sp)+dk(r,p,'sp',true,fmtBn)}</td>
-      ${PCS ? `<td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td>` : `<td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td><td>${fmtBn(r.vou)}${dk(r,p,'vou',true,fmtBn)}</td>
+      ${PCS ? `<td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td>` : `<td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td><td>${fmtBn(r.vou)}${dk(r,p,'vou',true,fmtBn)}</td>
       <td>${fmtN(r.wSaldo)}</td><td>${pct(r.wSaldo,r.outlet)}</td><td>${fmtBn(r.saldo)}${dk(r,p,'saldo',true,fmtBn)}</td>
       <td>${fmtBn(r.secondary)}${dk(r,p,'secondary',true,fmtBn)}</td><td>${fmtBn(r.tertiary)}${dk(r,p,'tertiary',true,fmtBn)}</td>`}
       <td>${fmtN(r.s0)}${dk(r,p,'s0',false)}</td><td>${fmtN(r.s1)}</td><td>${fmtN(r.s2)}</td><td>${fmtN(r.s3)}</td><td>${fmtN(r.s4)}</td>
@@ -4882,7 +4887,7 @@ function renderSellinSummaryTable(){
     <tr style="font-weight:700;background:#FAF9F7;">
       <td>Total</td><td>${fmtN(grand.outlet)}</td><td>${fmtN(grand.ga)}${dk(grand,prevGrand,'ga',true)}</td>
       <td>${fmtN(grand.wSp)}</td><td>${pct(grand.wSp,grand.outlet)}</td><td>${PCS ? fmtN(grand.spPcs) : fmtBn(grand.sp)+dk(grand,prevGrand,'sp',true,fmtBn)}</td>
-      ${PCS ? `<td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td><td>${NA}</td>` : `<td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td><td>${fmtBn(grand.vou)}${dk(grand,prevGrand,'vou',true,fmtBn)}</td>
+      ${PCS ? `<td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td>` : `<td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td><td>${fmtBn(grand.vou)}${dk(grand,prevGrand,'vou',true,fmtBn)}</td>
       <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td><td>${fmtBn(grand.saldo)}${dk(grand,prevGrand,'saldo',true,fmtBn)}</td>
       <td>${fmtBn(grand.secondary)}${dk(grand,prevGrand,'secondary',true,fmtBn)}</td><td>${fmtBn(grand.tertiary)}${dk(grand,prevGrand,'tertiary',true,fmtBn)}</td>`}
       <td>${fmtN(grand.s0)}${dk(grand,prevGrand,'s0',false)}</td><td>${fmtN(grand.s1)}</td><td>${fmtN(grand.s2)}</td><td>${fmtN(grand.s3)}</td><td>${fmtN(grand.s4)}</td>
@@ -5122,7 +5127,7 @@ function renderPairedDetailTable(){
   const pageRows = pairedRows.slice(start, start+PAGE_SIZE);
 
   document.getElementById('pairedTableCount').textContent = `${fmtN(pairedRows.length)} outlet (gabungan IM3+3ID) cocok dengan filter`;
-  document.getElementById('pairedTable').classList.toggle('hide-rp', sellInPcsPrimary());
+  document.getElementById('pairedTable').classList.add('hide-rp');
   document.getElementById('pairedTbody').innerHTML = pageRows.length ? pageRows.map(row=>`
     <tr>
       <td>${escHtml(row.micro)}</td>
@@ -5150,13 +5155,13 @@ function renderPairedDetailTable(){
 function exportPairedCsv(){
   const rows = buildFilteredPairedRows();
   const headers = ['micro_cluster','nama_outlet','outlet_id_im3','outlet_id_3id','dse_code_im3','kategori','status_pairing',
-    'ga_im3','ga_3id','ga_ioh','sellin_sp_rp_im3','sellin_sp_rp_3id','sellin_sp_rp_ioh','sellin_sp_pcs_im3','sellin_sp_pcs_3id','sellin_sp_pcs_ioh'];
+    'ga_im3','ga_3id','ga_ioh','sellin_sp_pcs_im3','sellin_sp_pcs_3id','sellin_sp_pcs_ioh'];
   const lines = [headers.join(',')];
   rows.forEach(row=>{
     lines.push([
       JSON.stringify(row.micro||''), JSON.stringify(row.name||''), row.idIm3||'', row.idTid||'', row.dseIm3||'',
       catDisplayLabel(row.cat), row.remark,
-      row.gaIm3, row.gaTid, row.gaIoh, row.spIm3, row.spTid, row.spIoh, row.pcsIm3, row.pcsTid, row.pcsIoh
+      row.gaIm3, row.gaTid, row.gaIoh, row.pcsIm3, row.pcsTid, row.pcsIoh
     ].join(','));
   });
   const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
@@ -8889,13 +8894,27 @@ function renderLoginLog(){
 let pendingLoginUser = null; // set while the force-change-password gate is open
 
 async function loadUsers(){
-  try{
-    const stored = await storageGet('users');
-    if(stored && Array.isArray(stored) && stored.length) USERS = stored;
-    else setTimeout(()=>showToast('Data user online kosong/tidak terbaca — memakai akun admin default sementara.'), 800);
-  }catch(e){
-    setTimeout(()=>showToast('Gagal memuat data user online (koneksi tidak stabil) — memakai akun admin default sementara. Refresh halaman untuk coba lagi.'), 800);
-    throw e;
+  // PENTING: usersLoaded hanya menjadi true kalau daftar user BENAR-BENAR terbaca dari server.
+  // Dulu, kalau pembacaan gagal / kosong, dipakai akun admin default sementara dan halaman tetap
+  // menganggap "sudah dimuat" -> semua user lain dibilang "Username atau password salah", dan
+  // simpan berikutnya bisa menimpa daftar user asli dengan akun default.
+  for(let attempt=0; attempt<4; attempt++){
+    if(attempt>0) await new Promise(r=>setTimeout(r, 1500*attempt));
+    const r = await storageGetRaw('users');
+    if(r && !r.error && r.found && Array.isArray(r.value) && r.value.length){
+      USERS = r.value; usersLoaded = true; return;
+    }
+  }
+  setTimeout(()=>showToast('Data akun belum berhasil dimuat dari server (koneksi/server sibuk) — mencoba lagi otomatis. Login belum bisa dipakai sampai selesai.'), 800);
+  if(!window.__usersRetry){
+    window.__usersRetry = setInterval(async ()=>{
+      if(usersLoaded){ clearInterval(window.__usersRetry); return; }
+      const r = await storageGetRaw('users');
+      if(r && !r.error && r.found && Array.isArray(r.value) && r.value.length){
+        USERS = r.value; usersLoaded = true; clearInterval(window.__usersRetry);
+        showToast('Data akun berhasil dimuat — silakan login.');
+      }
+    }, 10000);
   }
 }
 async function saveUsers(){
@@ -9363,6 +9382,32 @@ async function addUser(){
   renderUserList();
 }
 
+
+// Penanda akhir upload: kalau status upload sudah berbunyi "Selesai…" dan tidak ada perubahan teks
+// maupun permintaan ke server yang sedang berjalan selama beberapa detik, tampilkan "Done upload all".
+function initUploadDoneMarkers(){
+  ['stockProgress','masterProgress','supplyProgress','secondaryProgress','gaProgress','osaProgress','tertiaryProgress'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el || el.__doneWatch) return;
+    el.__doneWatch = true;
+    let timer = null;
+    const DONE = ' ✅ Done upload all';
+    const check = ()=>{
+      timer = null;
+      const t = el.textContent || '';
+      if(t.endsWith(DONE)) return;
+      if(!/Selesai/.test(t) || /…\s*$/.test(t)) return;       // belum selesai / masih menyimpan
+      if(NET_INFLIGHT > 0){ timer = setTimeout(check, 2000); return; }   // masih ada proses simpan di server
+      el.textContent = t + DONE;
+    };
+    new MutationObserver(()=>{
+      if((el.textContent||'').endsWith(DONE)) return;
+      if(timer) clearTimeout(timer);
+      timer = setTimeout(check, 5000);
+    }).observe(el, {childList:true, characterData:true, subtree:true});
+  });
+}
+
 async function handleUserNameFile(file){
   const msg = document.getElementById('userNameMsg');
   msg.textContent = 'Membaca file...';
@@ -9486,6 +9531,11 @@ async function doForgotPassword(){
   msg.textContent = 'Memproses…';
   if(usersReadyPromise && !usersLoaded){
     await Promise.race([usersReadyPromise, new Promise(r=>setTimeout(r, 15000))]);
+  }
+  if(!usersLoaded){
+    btn.disabled = false;
+    msg.textContent = 'Data akun belum selesai dimuat dari server — tunggu sebentar lalu coba lagi.';
+    return;
   }
   const u = USERS.find(x=>x.username.toLowerCase()===name.toLowerCase());
   if(!u){
@@ -9627,6 +9677,7 @@ function bindEvents(){
   document.getElementById('usersOverlay').addEventListener('click', (e)=>{ if(e.target.id==='usersOverlay') e.currentTarget.classList.remove('show'); });
   document.getElementById('btnAddUser').addEventListener('click', addUser);
   document.getElementById('btnResetAllPass').addEventListener('click', resetAllPasswords);
+  initUploadDoneMarkers();
   document.getElementById('userNameFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleUserNameFile(e.target.files[0]); e.target.value=''; });
   document.getElementById('bulkUserFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleBulkUserFile(e.target.files[0]); });
   document.getElementById('newUserInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') addUser(); });
@@ -9746,7 +9797,7 @@ async function loadStep(name, fn){
 // Now the button is wired up straight away and USERS loads independently, so login
 // stops being blocked behind data that has nothing to do with it.
 let usersLoaded = false;
-let usersReadyPromise = loadStep('users', loadUsers).then(()=>{ usersLoaded = true; });
+let usersReadyPromise = loadStep('users', loadUsers);
 bindLoginEvents();
 
 async function init(){
