@@ -1809,7 +1809,8 @@ async function storageGetRaw(key){
   try{
     const res = await fetchWithTimeout(`${GAS_URL}?action=get&key=${encodeURIComponent(key)}`, null, 25000);
     const data = await res.json();
-    if(!data.ok || !data.found) return { found:false };
+    if(!data.ok) return { error: new Error(data.error || 'server error') };   // error dari server BUKAN 'data tidak ada'
+    if(!data.found) return { found:false };
     return { found:true, value: JSON.parse(data.value) };
   }catch(e){ return { error:e }; }
 }
@@ -1823,6 +1824,7 @@ async function storageGet(key){
     }
     return r.found ? r.value : null;
   }
+  READ_FAILS++;
   return null;
 }
 async function storageSet(key, val){
@@ -1957,6 +1959,9 @@ async function saveChunked(prefix, rows, previousNumChunks, onProgress, maxChars
 // Returns null (not {}) specifically when the BACKEND doesn't recognize this action —
 // e.g. index.html was updated on GitHub before Kode.gs was redeployed with it — so the
 // caller can fall back to the one-by-one method instead of quietly returning no data.
+// Jumlah kegagalan BACA dari server. Loader memakainya untuk menolak menimpa data online dengan seed kosong
+// ketika yang terjadi hanya server gagal/lambat (bukan data memang belum ada).
+let READ_FAILS = 0;
 let gaBatchSupported = true;   // flips to false the first time the backend reports it doesn't know getMulti
 async function storageGetMultiOnce(keys){
   try{
@@ -2024,6 +2029,7 @@ async function loadChunked(prefix, numChunks){
     }
     let rows2 = [];
     parts.forEach(c=>{ if(c) rows2 = rows2.concat(c); });
+    if(parts.some(c=>c===null)) READ_FAILS++;
     return rows2;
   }
   let parts = keys.map(k=> got[k] !== undefined ? got[k] : null);
@@ -2041,6 +2047,7 @@ async function loadChunked(prefix, numChunks){
   }
   let rows = [];
   parts.forEach(c=>{ if(c) rows = rows.concat(c); });
+  if(parts.some(c=>c===null)) READ_FAILS++;
   if(parts.some(c=>c===null)) setTimeout(()=>{ try{ showToast('⚠ Sebagian data gagal dimuat dari server (koneksi/server sibuk). Refresh halaman (Ctrl+F5) sebelum memakai angka di dashboard.'); }catch(e){} }, 500);
   return rows;
 }
@@ -2165,6 +2172,7 @@ function dedupeOutletRows(rows, brandNames){
 }
 
 async function loadFromStorageOrSeed(){
+  const _rf0 = READ_FAILS;
   const meta = await metaLoad('meta');
   const hasEmbedded = !!window.__SEED__;
   const embeddedFields = hasEmbedded ? JSON.stringify(window.__SEED__.meta.fields_outlet) : null;
@@ -2204,13 +2212,19 @@ async function loadFromStorageOrSeed(){
     }
   }
 
+  const _readFailed = !loadedOk && READ_FAILS !== _rf0;
   if(!loadedOk){
     if(meta && meta.lastUpdated && contentOk){
       setTimeout(()=>showToast('Sebagian data online tidak lengkap — dashboard dipulihkan ke data terakhir yang valid.'), 800);
     } else if(meta && !contentOk && hasEmbedded){
       setTimeout(()=>showToast('Ada perbaikan data terbaru dari sistem — dashboard disinkronkan ulang.'), 800);
     }
-    if(hasEmbedded){
+    if(_readFailed){
+      // server gagal dibaca: JANGAN menyimpan seed kosong ke server; tampilkan kosong + banner merah
+      META = { brands:[], areas:[], branches:[], micros:[], cats:['KAM','KRO','PJP'], remarks:['N/A','Hybrid','IM3 only','3ID only'], ptypes:['N/A','MPX','SDP'], regions:['N/A'], dses:['N/A'], territories:['N/A'], branchByArea:{}, microByBranch:{}, areasByRegion:{}, brandCounts:{}, totalOutlets:0, fields_outlet: [] };
+      OUTLETS = []; MASTER = {};
+      setTimeout(()=>showToast('Server gagal dibaca (sibuk). Data online tidak diubah — tekan Refresh.'), 800);
+    } else if(hasEmbedded){
       PRE_SEED_BRANDS = (meta && meta.brands) ? meta.brands.slice() : null;
       META = JSON.parse(JSON.stringify(window.__SEED__.meta));
       META.numChunksOutlets = (meta && meta.numChunksOutlets) || 0; // so old stored chunks get cleaned up
@@ -2338,6 +2352,7 @@ async function persistAll(onProgress){
 }
 
 async function loadSellinFromStorageOrSeed(){
+  const _rf0 = READ_FAILS;
   const smeta = await metaLoad('sellin_meta');
   const hasEmbedded = !!window.__SEED_SELLIN__;
   const embeddedFields = hasEmbedded ? JSON.stringify(window.__SEED_SELLIN__.meta.fields_sellin) : null;
@@ -2367,6 +2382,7 @@ async function loadSellinFromStorageOrSeed(){
       setTimeout(()=>showToast('Data Sell In & GA online tidak lengkap (kemungkinan tersimpan sebagian saat koneksi terputus) — silakan upload ulang filenya lewat "Perbarui data".'), 800);
     }
   }
+  if(!loadedOk && READ_FAILS !== _rf0){ SMETA = { fields_sellin: [], totalOutlets: 0 }; SELLIN_OUTLETS = []; return; }   // gagal baca: jangan menimpa data online
   if(!loadedOk && hasEmbedded){
     SMETA = window.__SEED_SELLIN__.meta;
     SELLIN_OUTLETS = window.__SEED_SELLIN__.outlets;
@@ -2394,6 +2410,7 @@ async function persistSellin(onProgress){
 }
 
 async function loadSupplyFromStorageOrSeed(){
+  const _rf0 = READ_FAILS;
   const supmeta = await metaLoad('supply_meta');
   const hasEmbedded = !!window.__SEED_SUPPLY__;
   const embeddedFields = hasEmbedded ? JSON.stringify(window.__SEED_SUPPLY__.meta.fields_supply) : null;
@@ -2430,6 +2447,7 @@ async function loadSupplyFromStorageOrSeed(){
   if(loadedOk){
     SUPPLY_PRODUCT_ROWS = await loadChunked('supply_prod_c', supmeta.numChunksSupplyProd || 0);
   }
+  if(!loadedOk && READ_FAILS !== _rf0){ SUPMETA = { fields_supply: FIELDS_SUP, totalOutlets: 0, imDate: null, tidDate: null }; SUPPLY_OUTLETS = []; SUPPLY_PRODUCT_ROWS = []; return; }   // gagal baca: jangan menimpa data online
   if(!loadedOk && hasEmbedded){
     SUPMETA = window.__SEED_SUPPLY__.meta;
     SUPPLY_OUTLETS = window.__SEED_SUPPLY__.outlets;
@@ -9728,6 +9746,7 @@ function bindEvents(){
 }
 
 async function loadGeoFromStorageOrSeed(){
+  const _rf0 = READ_FAILS;
   GIDX = Object.fromEntries(GEO_FIELDS.map((k,i)=>[k,i]));
   try{
     // geo_meta.dataVersion lets a newer embedded seed replace stale stored points even
@@ -9756,6 +9775,7 @@ async function loadGeoFromStorageOrSeed(){
       if(legacy && Array.isArray(legacy) && legacy.length) loadedPoints = legacy;
     }
 
+    if(!loadedPoints && READ_FAILS !== _rf0) throw new Error('read failed: tidak menimpa data online');
     if(loadedPoints){
       GEO_META = storedGeoMeta;
       GEO_POINTS = remapGeoToMeta(loadedPoints, storedGeoMeta && storedGeoMeta.dict);
@@ -9826,14 +9846,14 @@ async function retryEmptyDatasets(){
     ['Stok / Supply', ()=>SUPPLY_OUTLETS.length>0, loadSupplyFromStorageOrSeed],
     ['Titik peta', ()=>GEO_POINTS.length>0, loadGeoFromStorageOrSeed],
   ];
-  if(!OUTLETS.length) return;
-  for(let a=0;a<3;a++){
+  const outletsBad = !OUTLETS.length;
+  for(let a=0;a<3 && !outletsBad;a++){
     const todo = steps.filter(st=>!st[1]());
     if(!todo.length) break;
     await new Promise(r=>setTimeout(r, 1500*(a+1)));
     for(const st of todo) await loadStep(st[0], st[2]);
   }
-  const bad = steps.filter(st=>!st[1]()).map(st=>st[0]);
+  const bad = outletsBad ? ['Outlet / Pairing', ...steps.map(st=>st[0])] : steps.filter(st=>!st[1]()).map(st=>st[0]);
   const old = document.getElementById('dataLoadBanner'); if(old) old.remove();
   if(bad.length){
     const d = document.createElement('div');
@@ -9856,6 +9876,11 @@ async function init(){
   // no real reason, so the page waited through 4 separate network round-trips in a
   // row. Running them together cuts that down to whichever one is slowest.
   await loadStep('outlets', loadFromStorageOrSeed);
+  // data outlet kosong padahal tidak ada seed bawaan = server gagal membaca (bukan data hilang): baca ulang, tanpa menulis apa pun
+  for(let a=0; a<3 && !OUTLETS.length; a++){
+    await new Promise(r=>setTimeout(r, 2000*(a+1)));
+    await loadStep('outlets', loadFromStorageOrSeed);
+  }
   await Promise.all([
     loadStep('sellin', loadSellinFromStorageOrSeed),
     loadStep('updateLog', loadUpdateLog),
