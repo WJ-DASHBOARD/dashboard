@@ -284,6 +284,7 @@
     </div>
     <div style="display:flex;gap:10px;">
       <button class="btn" id="btnRefresh"><span class="refresh-dot"></span>Cek update</button>
+      <button class="btn" id="btnReloadPage" title="Muat ulang halaman &amp; baca ulang semua data dari server">⟳ Refresh</button>
       <button class="btn" id="btnDownloadAll" style="display:none;">Unduh detail (terfilter)</button>
       <button class="btn" id="btnDownloadCombined" style="display:none;">Unduh Laporan Gabungan (CSV)</button>
       <button class="btn btn-primary hidden" id="btnOpenUpdate">Perbarui data</button>
@@ -9661,6 +9662,7 @@ function bindEvents(){
   document.getElementById('supBtnDownloadTable').addEventListener('click', exportSupplyCsv);
   document.getElementById('supBtnDownloadSummary').addEventListener('click', exportSupplySummaryCsv);
   document.getElementById('btnRefresh').addEventListener('click', ()=>checkForRemoteUpdate(false));
+  document.getElementById('btnReloadPage').addEventListener('click', ()=>location.reload());
 
   document.getElementById('btnOpenUpdate').addEventListener('click', ()=>{ renderUpdateLog(); renderLoginLog(); document.getElementById('updateOverlay').classList.add('show'); });
   document.getElementById('closeUpdate').addEventListener('click', ()=>document.getElementById('updateOverlay').classList.remove('show'));
@@ -9800,6 +9802,38 @@ let usersLoaded = false;
 let usersReadyPromise = loadStep('users', loadUsers);
 bindLoginEvents();
 
+// Server sometimes answers too slowly right after login (cold cache / many parallel reads) and a dataset
+// then silently comes back empty -> GA/Stok = 0 and no map points. Re-read just the empty ones, one at a
+// time, a few times; if still empty show a clear red banner instead of letting 0 look like real data.
+async function retryEmptyDatasets(){
+  const steps = [
+    ['Sell In & GA', ()=>SELLIN_OUTLETS.length>0, loadSellinFromStorageOrSeed],
+    ['Stok / Supply', ()=>SUPPLY_OUTLETS.length>0, loadSupplyFromStorageOrSeed],
+    ['Titik peta', ()=>GEO_POINTS.length>0, loadGeoFromStorageOrSeed],
+  ];
+  if(!OUTLETS.length) return;
+  for(let a=0;a<3;a++){
+    const todo = steps.filter(st=>!st[1]());
+    if(!todo.length) break;
+    await new Promise(r=>setTimeout(r, 1500*(a+1)));
+    for(const st of todo) await loadStep(st[0], st[2]);
+  }
+  const bad = steps.filter(st=>!st[1]()).map(st=>st[0]);
+  const old = document.getElementById('dataLoadBanner'); if(old) old.remove();
+  if(bad.length){
+    const d = document.createElement('div');
+    d.id = 'dataLoadBanner';
+    d.style.cssText = 'position:sticky;top:0;z-index:99999;background:#B42318;color:#fff;padding:10px 14px;font-size:13px;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;';
+    d.innerHTML = '<span>\u26A0 Data <b>'+bad.join(', ')+'</b> belum terbaca dari server (server sibuk) \u2014 angka 0 / titik peta kosong di bawah BUKAN data sebenarnya.</span>';
+    const b = document.createElement('button');
+    b.textContent = 'Muat ulang';
+    b.style.cssText = 'background:#fff;color:#B42318;border:0;border-radius:6px;padding:5px 12px;font-weight:700;cursor:pointer;';
+    b.onclick = ()=>location.reload();
+    d.appendChild(b);
+    document.body.insertBefore(d, document.body.firstChild);
+  }
+}
+
 async function init(){
   // Outlets has to load first (it sets META, which the Sell In / Supply loaders read
   // for de-duping). Everything else — Sell In, Supply, the update log, and the map's
@@ -9814,6 +9848,7 @@ async function init(){
     loadStep('supply', loadSupplyFromStorageOrSeed),
     loadStep('geo', loadGeoFromStorageOrSeed),
   ]);
+  await retryEmptyDatasets();
   if(outletsReseeded){
     // The outlet universe just changed shape (embedded seed above) — SELLIN_OUTLETS
     // just loaded from storage is now stale (see reconcileSellinToMaster). Fix it up
