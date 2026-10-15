@@ -9859,7 +9859,7 @@ async function retryEmptyDatasets(){
     const d = document.createElement('div');
     d.id = 'dataLoadBanner';
     d.style.cssText = 'position:sticky;top:0;z-index:99999;background:#B42318;color:#fff;padding:10px 14px;font-size:13px;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;';
-    d.innerHTML = '<span>\u26A0 Data <b>'+bad.join(', ')+'</b> belum terbaca dari server (server sibuk) \u2014 angka 0 / titik peta kosong di bawah BUKAN data sebenarnya.</span>';
+    d.innerHTML = '<span>\u26A0 Data <b>'+bad.join(', ')+'</b> kosong / belum terbaca dari server. Coba Muat ulang; kalau tetap kosong, data perlu di-upload ulang oleh admin (Perbarui data). Angka 0 di bawah BUKAN data sebenarnya.</span>';
     const b = document.createElement('button');
     b.textContent = 'Muat ulang';
     b.style.cssText = 'background:#fff;color:#B42318;border:0;border-radius:6px;padding:5px 12px;font-weight:700;cursor:pointer;';
@@ -9924,6 +9924,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.0 · 15 Okt 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.1 · 15 Okt 2026</div>
 </body>
 </html>
