@@ -631,24 +631,29 @@
       <div class="slab-bar"><div id="gaSlab0Bar" style="width:0%;background:#9B98A8;"></div></div>
     </div>
     <div class="slab-card low">
-      <div class="slab-top"><span class="kpi-label">GA &lt; 25</span></div>
+      <div class="slab-top"><span class="kpi-label">GA 1-&lt;5</span></div>
       <div class="slab-top"><span class="slab-num" id="gaSlab1">–</span><span class="slab-pct" id="gaSlab1Pct">–</span></div>
       <div class="slab-bar"><div id="gaSlab1Bar" style="width:0%;background:var(--amber);"></div></div>
     </div>
     <div class="slab-card" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;flex:1;">
-      <div class="slab-top"><span class="kpi-label">GA 25-50</span></div>
+      <div class="slab-top"><span class="kpi-label">GA 5-&lt;25</span></div>
       <div class="slab-top"><span class="slab-num" id="gaSlab2">–</span><span class="slab-pct" id="gaSlab2Pct">–</span></div>
-      <div class="slab-bar"><div id="gaSlab2Bar" style="width:0%;background:#6E8FD9;"></div></div>
+      <div class="slab-bar"><div id="gaSlab2Bar" style="width:0%;background:#E3B23C;"></div></div>
     </div>
     <div class="slab-card" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;flex:1;">
-      <div class="slab-top"><span class="kpi-label">GA 50-100</span></div>
+      <div class="slab-top"><span class="kpi-label">GA 25-&lt;50</span></div>
       <div class="slab-top"><span class="slab-num" id="gaSlab3">–</span><span class="slab-pct" id="gaSlab3Pct">–</span></div>
-      <div class="slab-bar"><div id="gaSlab3Bar" style="width:0%;background:#4E9E72;"></div></div>
+      <div class="slab-bar"><div id="gaSlab3Bar" style="width:0%;background:#6E8FD9;"></div></div>
+    </div>
+    <div class="slab-card" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;flex:1;">
+      <div class="slab-top"><span class="kpi-label">GA 50-&lt;100</span></div>
+      <div class="slab-top"><span class="slab-num" id="gaSlab4">–</span><span class="slab-pct" id="gaSlab4Pct">–</span></div>
+      <div class="slab-bar"><div id="gaSlab4Bar" style="width:0%;background:#4E9E72;"></div></div>
     </div>
     <div class="slab-card ok">
-      <div class="slab-top"><span class="kpi-label">GA &gt; 100</span></div>
-      <div class="slab-top"><span class="slab-num" id="gaSlab4">–</span><span class="slab-pct" id="gaSlab4Pct">–</span></div>
-      <div class="slab-bar"><div id="gaSlab4Bar" style="width:0%;background:var(--green);"></div></div>
+      <div class="slab-top"><span class="kpi-label">GA &ge; 100</span></div>
+      <div class="slab-top"><span class="slab-num" id="gaSlab5">–</span><span class="slab-pct" id="gaSlab5Pct">–</span></div>
+      <div class="slab-bar"><div id="gaSlab5Bar" style="width:0%;background:var(--green);"></div></div>
     </div>
   </div>
 
@@ -658,7 +663,8 @@
       <div id="gaSlabBreakdownChart" style="max-height:330px;overflow-y:auto;padding-right:6px;"></div>
       <div class="legend">
         <span><i class="dot" style="background:#9B98A8"></i>No GA</span>
-        <span><i class="dot" style="background:var(--amber)"></i>&lt;25</span>
+        <span><i class="dot" style="background:var(--amber)"></i>1-&lt;5</span>
+        <span><i class="dot" style="background:#E3B23C"></i>5-&lt;25</span>
         <span><i class="dot" style="background:#6E8FD9"></i>25-50</span>
         <span><i class="dot" style="background:#4E9E72"></i>50-100</span>
         <span><i class="dot" style="background:var(--green)"></i>&gt;100</span>
@@ -685,14 +691,15 @@
             <th colspan="3" style="text-align:center;">#OUTLET with Sell in</th>
             <th rowspan="2" class="rp-col">Secondary (Bn)</th>
             <th rowspan="2" class="rp-col">Tertiary (Bn)</th>
-            <th colspan="6" style="text-align:center;">Slab Outlet GA</th>
+            <th colspan="7" style="text-align:center;">Slab Outlet GA</th>
           </tr>
           <tr>
             <th style="font-weight:500;">SP</th><th style="font-weight:500;">%</th><th style="font-weight:500;">Amount (Bn)</th>
             <th class="rp-col">Voucher</th><th class="rp-col">%</th><th class="rp-col">Amount (Bn)</th>
             <th class="rp-col">Saldo</th><th class="rp-col">%</th><th class="rp-col">Amount (Bn)</th>
             <th style="font-weight:500;white-space:nowrap;">No GA</th>
-            <th style="font-weight:500;">&lt;25</th>
+            <th style="font-weight:500;">1-&lt;5</th>
+            <th style="font-weight:500;">5-&lt;25</th>
             <th style="font-weight:500;">25-50</th>
             <th style="font-weight:500;">50-100</th>
             <th style="font-weight:500;">&gt;100</th>
@@ -1732,7 +1739,8 @@ function pairKeyOf(row, idxObj){
 }
 function gaSlabLabel(gaVal){
   if(gaVal<=0) return 'No GA';
-  if(gaVal<25) return '<25';
+  if(gaVal<5) return '1-<5';
+  if(gaVal<25) return '5-<25';
   if(gaVal<50) return '25-50';
   if(gaVal<100) return '50-100';
   return '>100';
@@ -1919,13 +1927,58 @@ async function runPool(count, concurrency, worker, onEach){
 // the new count, left over from a previous save that had more rows (otherwise a shrink
 // would leave stale extra chunks that a reader might still pick up). onProgress(done,
 // total) is optional — done counts chunks completed so far, not necessarily in order.
+// Simpan banyak key sekaligus (action setMulti di Kode.gs). Mengembalikan:
+//   { unsupported:true }  -> backend lama (belum di-deploy ulang): pakai cara satu-satu
+//   { savedKeys:[...] }   -> key yang berhasil; sisanya (gagal/ditolak) dicoba lagi satu-satu oleh pemanggil
+let setBatchSupported = true;
+async function storageSetMulti(items){
+  if(!setBatchSupported) return { unsupported:true };
+  try{
+    const res = await fetchWithTimeout(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'setMulti', items: items.map(it=>({ key: it.key, value: JSON.stringify(it.value) })) })
+    }, 60000);
+    const data = await res.json();
+    if(data && !data.ok && /unknown action/i.test(data.error || '')){ setBatchSupported = false; return { unsupported:true }; }
+    if(!data || !data.ok) return { savedKeys: [] };
+    return { savedKeys: data.saved || [] };
+  }catch(e){ return { savedKeys: [] }; }
+}
+
 async function saveChunked(prefix, rows, previousNumChunks, onProgress, maxChars){
   const chunks = maxChars ? chunkRowsBySize(rows, maxChars) : chunkRows(rows);
   const failed = [];
-  await runPool(chunks.length, CHUNK_CONCURRENCY, async (i)=>{
+  // Cara cepat: kelompokkan chunk (maks 10 chunk / ~350 KB per panggilan) dan kirim lewat setMulti.
+  const todo = new Set(chunks.map((_,i)=>i));
+  if(setBatchSupported && chunks.length > 1){
+    const batches = [];
+    let cur = [], curSize = 0;
+    chunks.forEach((c,i)=>{
+      const sz = JSON.stringify(c).length;
+      if(cur.length && (cur.length >= 10 || curSize + sz > 350000)){ batches.push(cur); cur = []; curSize = 0; }
+      cur.push(i); curSize += sz;
+    });
+    if(cur.length) batches.push(cur);
+    let doneChunks = 0;
+    await runPool(batches.length, 3, async (b)=>{
+      if(!setBatchSupported) return;
+      const idxs = batches[b];
+      const r = await storageSetMulti(idxs.map(i=>({ key: prefix+i, value: chunks[i] })));
+      if(r.unsupported) return;
+      const ok = new Set(r.savedKeys);
+      idxs.forEach(i=>{ if(ok.has(prefix+i)) todo.delete(i); });
+      doneChunks += idxs.length;
+      if(onProgress) onProgress(Math.min(doneChunks, chunks.length), chunks.length);
+    });
+  }
+  // Sisa (backend lama / batch gagal / ditolak): cara lama satu per satu dengan retry
+  const rest = Array.from(todo);
+  await runPool(rest.length, CHUNK_CONCURRENCY, async (k)=>{
+    const i = rest[k];
     const ok = await storageSetWithRetry(prefix+i, chunks[i]);
     if(!ok) failed.push(i);
-  }, (done)=>{ if(onProgress) onProgress(done, chunks.length); });
+  }, (done)=>{ if(onProgress) onProgress(Math.min(chunks.length - rest.length + done, chunks.length), chunks.length); });
   // storageSetWithRetry already retries each chunk up to 5 times with backoff — if a chunk
   // is STILL failing after that, the connection had a genuinely rough patch right then, not
   // just a one-off blip. Rather than immediately reporting the whole save as failed (forcing
@@ -2882,7 +2935,7 @@ function prevAvail(kind){ return compareOn && !!PREV[kind]; }
 function sellinMetricOk(key){
   const a = PREV.sellin && PREV.sellin.avail;
   if(!a) return true;
-  const grp = ({ ga:'ga', wGa:'ga', s0:'ga', s1:'ga', s2:'ga', s3:'ga', s4:'ga',
+  const grp = ({ ga:'ga', wGa:'ga', s0:'ga', s1:'ga', s2:'ga', s3:'ga', s4:'ga', s5:'ga',
     sp:'dse', vou:'dse', saldo:'dse', wSp:'dse', wVou:'dse', wSaldo:'dse',
     secondary:'secondary', tertiary:'tertiary',   // 'tertiary' part is populated once menu #7's Tertiary file has been uploaded
     sellinSpPcs:'spPcs' })[key];   // Sell In SP (Qty) has no LMTD source yet — always hidden under Compare LMTD
@@ -4178,14 +4231,15 @@ function renderSellinAll(){
 
 function renderGaSlab(){
   const n = filteredSellin.length;
-  const counts = [0,0,0,0,0]; // No GA, <25, 25-50, 50-100, >100
+  const counts = [0,0,0,0,0,0]; // No GA, 1-<5, 5-<25, 25-50, 50-100, >=100
   filteredSellin.forEach(r=>{
     const ga = r[IDX_S.rguGa];
     if(ga<=0) counts[0]++;
-    else if(ga<25) counts[1]++;
-    else if(ga<50) counts[2]++;
-    else if(ga<100) counts[3]++;
-    else counts[4]++;
+    else if(ga<5) counts[1]++;
+    else if(ga<25) counts[2]++;
+    else if(ga<50) counts[3]++;
+    else if(ga<100) counts[4]++;
+    else counts[5]++;
   });
   counts.forEach((c,i)=>{
     document.getElementById('gaSlab'+i).textContent = fmtN(c);
@@ -4202,18 +4256,18 @@ function renderGaSlabBreakdown(){
   const agg = {};
   mergeSellinPairs(filteredSellin).forEach(r=>{   // 1 outlet fisik = 1 hitungan
     const g = r[ctx.key===IDX.branchIdx ? IDX_S.branchIdx : IDX_S.microIdx];
-    if(!agg[g]) agg[g] = {s0:0,s1:0,s2:0,s3:0,s4:0,total:0};
+    if(!agg[g]) agg[g] = {s0:0,s1:0,s2:0,s3:0,s4:0,s5:0,total:0};
     const ga = r[IDX_S.rguGa];
-    const slab = ga<=0?'s0' : ga<25?'s1' : ga<50?'s2' : ga<100?'s3' : 's4';
+    const slab = ga<=0?'s0' : ga<5?'s1' : ga<25?'s2' : ga<50?'s3' : ga<100?'s4' : 's5';
     agg[g][slab]++; agg[g].total++;
   });
   const rows = Object.keys(agg).map(g=>({name: ctx.names[g], ...agg[g]})).sort((a,b)=>b.total-a.total);   // semua area/MC ditampilkan; jendela grafik bisa di-scroll
   const segs = [
-    {key:'s0',color:'#9B98A8'}, {key:'s1',color:'var(--amber)'}, {key:'s2',color:'#6E8FD9'},
-    {key:'s3',color:'#4E9E72'}, {key:'s4',color:'var(--green)'}
+    {key:'s0',color:'#9B98A8'}, {key:'s1',color:'var(--amber)'}, {key:'s2',color:'#E3B23C'}, {key:'s3',color:'#6E8FD9'},
+    {key:'s4',color:'#4E9E72'}, {key:'s5',color:'var(--green)'}
   ];
   const html = rows.map(r=>{
-    const tooltip = `No GA: ${r.s0} · <25: ${r.s1} · 25-50: ${r.s2} · 50-100: ${r.s3} · >100: ${r.s4}`;
+    const tooltip = `No GA: ${r.s0} · 1-<5: ${r.s1} · 5-<25: ${r.s2} · 25-<50: ${r.s3} · 50-<100: ${r.s4} · >=100: ${r.s5}`;
     return `<div class="bar-row" style="margin-bottom:8px;">
       <div class="bar-label" title="${r.name}">${r.name}</div>
       ${stackedBarSvg(r, segs, tooltip, 18)}
@@ -4822,7 +4876,7 @@ function renderSellinSummaryTable(){
   const gKey = ctx.key===IDX.branchIdx ? IDX_S.branchIdx : IDX_S.microIdx;
 
   const PCS = sellInPcsPrimary();
-  const initSI = () => ({spPcs:0, outlet:0, ga:0, sp:0, vou:0, saldo:0, tertiary:0, secondary:0, wSp:0, wVou:0, wSaldo:0, wGa:0, s0:0,s1:0,s2:0,s3:0,s4:0});
+  const initSI = () => ({spPcs:0, outlet:0, ga:0, sp:0, vou:0, saldo:0, tertiary:0, secondary:0, wSp:0, wVou:0, wSaldo:0, wGa:0, s0:0,s1:0,s2:0,s3:0,s4:0,s5:0});
   const accumSI = (a,r) => {
     a.outlet++; a.ga+=r[IDX_S.rguGa]; a.sp+=r[IDX_S.sellinSp]; a.vou+=r[IDX_S.sellinVou];
     a.saldo+=r[IDX_S.sellinSaldo]; a.tertiary+=r[IDX_S.tertiary]; a.secondary+=r[IDX_S.secondary];
@@ -4832,7 +4886,7 @@ function renderSellinSummaryTable(){
     if(r[IDX_S.sellinSaldo]>0) a.wSaldo++;
     if(r[IDX_S.rguGa]>0) a.wGa++;
     const gaVal = r[IDX_S.rguGa];
-    const slab = gaVal<=0?'s0' : gaVal<25?'s1' : gaVal<50?'s2' : gaVal<100?'s3' : 's4';
+    const slab = gaVal<=0?'s0' : gaVal<5?'s1' : gaVal<25?'s2' : gaVal<50?'s3' : gaVal<100?'s4' : 's5';
     a[slab]++;
   };
   // 1 outlet fisik = 1 baris: sisi IM3 + 3ID dari outlet yang sama (pairKey) digabung (nilai dijumlah), supaya Outlet tidak dihitung dobel.
@@ -4872,7 +4926,7 @@ function renderSellinSummaryTable(){
       ${PCS ? `<td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td>` : `<td>${fmtN(r.wVou)}</td><td>${pct(r.wVou,r.outlet)}</td><td>${fmtBn(r.vou)}${dk(r,p,'vou',true,fmtBn)}</td>
       <td>${fmtN(r.wSaldo)}</td><td>${pct(r.wSaldo,r.outlet)}</td><td>${fmtBn(r.saldo)}${dk(r,p,'saldo',true,fmtBn)}</td>
       <td>${fmtBn(r.secondary)}${dk(r,p,'secondary',true,fmtBn)}</td><td>${fmtBn(r.tertiary)}${dk(r,p,'tertiary',true,fmtBn)}</td>`}
-      <td>${fmtN(r.s0)}${dk(r,p,'s0',false)}</td><td>${fmtN(r.s1)}</td><td>${fmtN(r.s2)}</td><td>${fmtN(r.s3)}</td><td>${fmtN(r.s4)}</td>
+      <td>${fmtN(r.s0)}${dk(r,p,'s0',false)}</td><td>${fmtN(r.s1)}</td><td>${fmtN(r.s2)}</td><td>${fmtN(r.s3)}</td><td>${fmtN(r.s4)}</td><td>${fmtN(r.s5)}</td>
       <td>${fmtN(r.wGa)}${dk(r,p,'wGa',true)}</td>`;
 
   const agg = aggregateBy(filteredSellin, gKey);
@@ -4907,9 +4961,9 @@ function renderSellinSummaryTable(){
     acc.outlet+=r.outlet; acc.spPcs+=r.spPcs; acc.ga+=r.ga; acc.sp+=r.sp; acc.vou+=r.vou; acc.saldo+=r.saldo;
     acc.tertiary+=r.tertiary; acc.secondary+=r.secondary;
     acc.wSp+=r.wSp; acc.wVou+=r.wVou; acc.wSaldo+=r.wSaldo; acc.wGa+=r.wGa;
-    acc.s0+=r.s0; acc.s1+=r.s1; acc.s2+=r.s2; acc.s3+=r.s3; acc.s4+=r.s4;
+    acc.s0+=r.s0; acc.s1+=r.s1; acc.s2+=r.s2; acc.s3+=r.s3; acc.s4+=r.s4; acc.s5+=r.s5;
     return acc;
-  }, {spPcs:0,outlet:0,ga:0,sp:0,vou:0,saldo:0,tertiary:0,secondary:0,wSp:0,wVou:0,wSaldo:0,wGa:0,s0:0,s1:0,s2:0,s3:0,s4:0});
+  }, {spPcs:0,outlet:0,ga:0,sp:0,vou:0,saldo:0,tertiary:0,secondary:0,wSp:0,wVou:0,wSaldo:0,wGa:0,s0:0,s1:0,s2:0,s3:0,s4:0,s5:0});
   const prevGrand = prevAgg ? Object.values(prevAgg).reduce((acc,x)=>{ Object.keys(acc).forEach(k=>acc[k]+=x[k]); return acc; }, initSI()) : null;
   document.getElementById('siSummaryTfoot').innerHTML = rows.length ? `
     <tr style="font-weight:700;background:#FAF9F7;">
@@ -4918,7 +4972,7 @@ function renderSellinSummaryTable(){
       ${PCS ? `<td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td><td class="rp-col">${NA}</td>` : `<td>${fmtN(grand.wVou)}</td><td>${pct(grand.wVou,grand.outlet)}</td><td>${fmtBn(grand.vou)}${dk(grand,prevGrand,'vou',true,fmtBn)}</td>
       <td>${fmtN(grand.wSaldo)}</td><td>${pct(grand.wSaldo,grand.outlet)}</td><td>${fmtBn(grand.saldo)}${dk(grand,prevGrand,'saldo',true,fmtBn)}</td>
       <td>${fmtBn(grand.secondary)}${dk(grand,prevGrand,'secondary',true,fmtBn)}</td><td>${fmtBn(grand.tertiary)}${dk(grand,prevGrand,'tertiary',true,fmtBn)}</td>`}
-      <td>${fmtN(grand.s0)}${dk(grand,prevGrand,'s0',false)}</td><td>${fmtN(grand.s1)}</td><td>${fmtN(grand.s2)}</td><td>${fmtN(grand.s3)}</td><td>${fmtN(grand.s4)}</td>
+      <td>${fmtN(grand.s0)}${dk(grand,prevGrand,'s0',false)}</td><td>${fmtN(grand.s1)}</td><td>${fmtN(grand.s2)}</td><td>${fmtN(grand.s3)}</td><td>${fmtN(grand.s4)}</td><td>${fmtN(grand.s5)}</td>
       <td>${fmtN(grand.wGa)}${dk(grand,prevGrand,'wGa',true)}</td>
     </tr>` : '';
 }
@@ -7148,6 +7202,30 @@ async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl,
   const snapOldAsOf = prevGaBy[brand] || (SMETA && ((SMETA.asOfByBrand && SMETA.asOfByBrand[brand]) || SMETA.asOf)) || null;
   const snapRows = brandRows.map(r=>r.slice(0,8));   // dimensions + outlet id/name/category + rguGa
   const snapMeta = META;
+
+  // PENGAMAN: bandingkan dulu dengan GA yang sedang tersimpan (sebelum baris diubah).
+  // Tanggal data SAMA tetapi GA / jumlah outlet ber-GA TURUN, atau tanggal file lebih LAMA dari data tersimpan
+  // -> hampir pasti salah file / beda sumber. Minta konfirmasi sebelum menimpa.
+  {
+    const oldGaAsOf = prevGaBy[brand] || null;
+    let oldTot = 0, oldWith = 0, newTot = 0, newWith = 0;
+    brandRows.forEach(r=>{
+      const og = r[IDX_S.rguGa] || 0; oldTot += og; if(og > 0) oldWith++;
+      const arr0 = byKey.get(brand + '|' + r[IDX_S.outletId]);
+      let sm = 0; if(arr0){ for(let d=0; d<lastDay; d++) sm += arr0[d]; }
+      newTot += sm; if(sm > 0) newWith++;
+    });
+    const sameDay = oldGaAsOf && sameAsOf(asOf, oldGaAsOf);
+    const olderDay = oldGaAsOf && String(asOf) < String(oldGaAsOf);
+    if(oldTot > 0 && (sameDay || olderDay)){
+      // DITOLAK (bukan sekadar konfirmasi): tanggal data sama / lebih lama dari GA yang sudah tersimpan
+      const why = olderDay
+        ? `tanggal data file (${asOf}) LEBIH LAMA dari GA ${brand} yang tersimpan (${oldGaAsOf})`
+        : `tanggal data file (${asOf}) SAMA dengan GA ${brand} yang tersimpan`;
+      progressEl.textContent += (progressEl.textContent ? ' ' : '') + `⛔ DITOLAK GA ${brand}: ${why}. Tersimpan ${fmtN(oldWith)} outlet ber-GA / ${fmtN(Math.round(oldTot))} GA; file ini ${fmtN(newWith)} outlet / ${fmtN(Math.round(newTot))} GA. Upload file dengan tanggal lebih baru.`;
+      return;
+    }
+  }
 
   let updated = 0, totalGa = 0, withGa = 0;
   brandRows.forEach(r=>{
@@ -9924,6 +10002,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.1 · 15 Okt 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.5 · 17 Okt 2026</div>
 </body>
 </html>
