@@ -6688,7 +6688,7 @@ async function finishSellinProcessing(brand, byKey, progressEl, maxAsOfDt){
     gaAsOfByBrand: newGaBy, gaMonth: gaMonthNow,
     mth: SMETA.mth, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString(),
     // the OSA upload must not drop what the GA / Sell In SP (Qty) uploads recorded
-    gaRecon: SMETA.gaRecon, spPcsRecon: SMETA.spPcsRecon, spPcsAsOfByBrand: SMETA.spPcsAsOfByBrand };
+    gaRecon: SMETA.gaRecon, spPcsRecon: SMETA.spPcsRecon, spPcsAsOfByBrand: SMETA.spPcsAsOfByBrand, gaSrcByBrand: SMETA.gaSrcByBrand };
 
   progressEl.textContent = `Menyimpan data Sell In & GA online (${SELLIN_OUTLETS.length.toLocaleString('id-ID')} outlet)…`;
   const saveOk = await persistSellin((done,total)=>{ progressEl.textContent = `Menyimpan data Sell In & GA online — bagian ${done}/${total}…`; });
@@ -6912,6 +6912,7 @@ function parseGaBody(file, brand, progressEl){
 // per-day sums (a 31-slot array per outlet) so the same finishGaProcessing() applies them.
 function parseGaTxBody(file, delim, fmt, progressEl){
   return new Promise((resolve) => {
+    window.__gaFmtId = fmt.id;   // dicatat supaya finishGaProcessing tahu sumber GA (jaya / lainnya)
     const B = {};   // brand -> { maxDate, seen:Set(msisdn), rowsByMonth:{ym:n}, tagged:{ym:n}, byMonth:{ym: Map(key->Float64Array(31))} }
     // The BigQuery export (fmt.id==='retTag') has BOTH kpi=RET_TAG (GA) and kpi=SELLIN rows in the
     // SAME file — so a live (non-LMTD) upload of it also derives Sell In SP (Qty) from the very same
@@ -7218,7 +7219,9 @@ async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl,
       let sm = 0; if(arr0){ for(let d=0; d<lastDay; d++) sm += arr0[d]; }
       newTot += sm; if(sm > 0) newWith++;
     });
-    const sameDay = oldGaAsOf && sameAsOf(asOf, oldGaAsOf);
+    // tanggal sama hanya ditolak kalau GA tersimpan JUGA berasal dari GA_Outlet_jaya (data lama / dari sumber lain boleh diganti sekali)
+    const prevSrc = ((SMETA && SMETA.gaSrcByBrand) || {})[brand] || null;
+    const sameDay = oldGaAsOf && sameAsOf(asOf, oldGaAsOf) && prevSrc === 'jaya';
     const olderDay = oldGaAsOf && String(asOf) < String(oldGaAsOf);
     if(oldTot > 0 && (sameDay || olderDay)){
       // DITOLAK (bukan sekadar konfirmasi): tanggal data sama / lebih lama dari GA yang sudah tersimpan
@@ -7244,7 +7247,7 @@ async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl,
   const gaBy = Object.assign({}, prevGaBy, {[brand]: asOf});
   const monthWarn = (SMETA.asOf && monthOfDate(SMETA.asOf) && monthOfDate(SMETA.asOf) !== ym)
     ? ` ⚠ bulan file GA (${ym}) berbeda dari bulan data Sell In (${monthOfDate(SMETA.asOf)}).` : '';
-  SMETA = { ...SMETA, gaAsOfByBrand: gaBy, gaMonth: ym, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString() };
+  SMETA = { ...SMETA, gaSrcByBrand: Object.assign({}, (SMETA && SMETA.gaSrcByBrand) || {}, {[brand]: window.__gaFmtId === 'gaTag' ? 'jaya' : (window.__gaFmtId || 'lain')}), gaAsOfByBrand: gaBy, gaMonth: ym, totalOutlets: SELLIN_OUTLETS.length, lastUpdated: new Date().toISOString() };
   if(pendingGaRecon && pendingGaRecon[brand]) SMETA.gaRecon = Object.assign({}, SMETA.gaRecon || {}, {[brand]: pendingGaRecon[brand]});
 
   progressEl.textContent = `Menyimpan data GA ${brand} online (${updated.toLocaleString('id-ID')} outlet)…`;
@@ -10006,6 +10009,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.7 · 18 Okt 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.8 · 18 Okt 2026</div>
 </body>
 </html>
