@@ -6918,6 +6918,8 @@ function parseGaTxBody(file, delim, fmt, progressEl){
     // pass, with no separate upload needed. (LMTD mode skips this — gaSink is set — since that field
     // has no LMTD baseline yet.)
     const wantSpPcs = fmt.id === 'retTag' && !gaSink;
+    // GA HANYA dari file GA_Outlet_jaya: dari export BigQuery (GA & SELLIN SP) baris RET_TAG (GA) diabaikan, hanya baris SELLIN (Qty) yang dipakai.
+    const sellinOnly = wantSpPcs;
     const SP = {};  // brand -> { seen:Set(msisdn), byKey:{key:count} }
     const R = {}, SPR = {};   // reconciliation counters per brand: {read, bad, byMonth:{ym:{n,dup,blank,outside,matched}}} (GA rows / SELLIN rows)
     const monthCnt = (T, brand, ym) => { const t = T[brand] || (T[brand] = {read:0, bad:0, byMonth:{}}); return t.byMonth[ym] || (t.byMonth[ym] = {n:0, dup:0, blank:0, outside:0, matched:0}); };
@@ -6930,7 +6932,7 @@ function parseGaTxBody(file, delim, fmt, progressEl){
           const row = rows[i]; rowCount++;
           const brand = row.brand;
           if(brand !== 'IM3' && brand !== '3ID') continue;
-          if(fmt.keep && !fmt.keep(row)){
+          if(sellinOnly || (fmt.keep && !fmt.keep(row))){
             if(wantSpPcs && normKpiValue(row.kpi) === 'SELLIN'){
               let sb = SP[brand]; if(!sb) sb = SP[brand] = { seen:new Set(), byKey:{}, maxDate:'', byMonth:{} };
               const rcs = SPR[brand] || (SPR[brand] = {read:0, bad:0, byMonth:{}}); rcs.read++;
@@ -6989,12 +6991,13 @@ function parseGaTxBody(file, delim, fmt, progressEl){
       complete: async function(){
        try{
         const brands = Object.keys(B).filter(x=>B[x].maxDate);
-        if(!brands.length){
+        if(!brands.length && !(wantSpPcs && Object.keys(SP).length)){
           progressEl.textContent = `Tidak ada baris valid di file ini (butuh kolom brand = IM3/3ID dan ga_dt berformat YYYY-MM-DD).`;
           resolve(); return;
         }
         const msgs = [];
         deferGapNote = true;
+        if(sellinOnly) msgs.push('ℹ File GA & SELLIN SP: baris GA (RET_TAG) TIDAK dipakai — GA hanya dari file GA_Outlet_jaya. Yang diambil dari file ini hanya Sell In SP (Qty).');
         for(const brand of brands){
           const b = B[brand];
           const lastDate = b.maxDate, ym = lastDate.slice(0,7), lastDay = +lastDate.slice(8,10);
@@ -8213,7 +8216,8 @@ function refreshHeaderMeta(){
   if(SMETA){
     const pcsDates = Object.values(SMETA.spPcsAsOfByBrand || {}).filter(Boolean).sort().reverse();
     // no OSA file yet: the Sell In date is that of the Sell In SP (Qty) data from the BigQuery export
-    const sellinDate = SMETA.asOf || (pcsDates.length ? pcsDates[0] + ' (SP Qty)' : '–');
+    // Sell In di dashboard selalu Qty (file BigQuery) -> tanggalnya = tanggal data Qty terbaru; tanggal OSA lama hanya cadangan
+    const sellinDate = pcsDates.length ? pcsDates[0] : (SMETA.asOf || '–');
     document.getElementById('metaSellinDate').textContent = sellinDate;
     // GA can now come from its own RGUGA file with its own as-of date; otherwise it
     // shares the Sell In file's date like before
@@ -10002,6 +10006,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.5 · 17 Okt 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.7 · 18 Okt 2026</div>
 </body>
 </html>
