@@ -7222,7 +7222,8 @@ async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl,
     // tanggal sama hanya ditolak kalau GA tersimpan JUGA berasal dari GA_Outlet_jaya (data lama / dari sumber lain boleh diganti sekali)
     const prevSrc = ((SMETA && SMETA.gaSrcByBrand) || {})[brand] || null;
     const sameDay = oldGaAsOf && sameAsOf(asOf, oldGaAsOf) && prevSrc === 'jaya';
-    const olderDay = oldGaAsOf && String(asOf) < String(oldGaAsOf);
+    // sama / lebih lama hanya ditolak kalau GA tersimpan JUGA dari GA_Outlet_jaya; GA dari sumber lain (mis. RET_TAG lama) boleh diganti jaya, tanggal berapa pun
+    const olderDay = oldGaAsOf && String(asOf) < String(oldGaAsOf) && prevSrc === 'jaya';
     if(oldTot > 0 && (sameDay || olderDay)){
       // DITOLAK (bukan sekadar konfirmasi): tanggal data sama / lebih lama dari GA yang sudah tersimpan
       const why = olderDay
@@ -9807,7 +9808,7 @@ function bindEvents(){
   document.getElementById('masterFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleMasterFile(e.target.files[0]); });
   document.getElementById('supplyFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleSupplyFiles(e.target.files); });
   document.getElementById('secondaryFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleSecondaryFile(e.target.files[0]); });
-  document.getElementById('gaFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleGaFiles(e.target.files); });
+  document.getElementById('gaFile').addEventListener('change', (e)=>{ if(e.target.files.length){ const fl = Array.from(e.target.files); e.target.value = ''; handleGaFiles(fl); } });   // value dikosongkan supaya memilih file yang SAMA lagi tetap diproses (dan ditolak jika tanggalnya sama)
   document.getElementById('osaFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleOsaFiles(e.target.files); });
   document.getElementById('tertiaryFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleTertiaryFile(e.target.files[0]); });
 
@@ -10009,6 +10010,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.8 · 18 Okt 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.9 · 18 Okt 2026</div>
 </body>
 </html>
