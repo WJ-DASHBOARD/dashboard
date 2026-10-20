@@ -1081,10 +1081,12 @@
     <div class="upload-block">
       <label style="font-size:12.5px;display:block;margin-bottom:4px;">Aktivitas user (login &amp; ganti password)</label>
       <button class="btn btn-ghost btn-sm" onclick="downloadAllUsersCsv()">Unduh Semua User (CSV)</button>
+      <div style="margin-top:8px;font-size:12px;">List IS (nama, MC, area, region; kolom NIK = username): <input type="file" id="isListFile" accept=".xlsx,.xls,.csv" onchange="handleIsListFile(this.files[0]); this.value='';"></div>
+      <div class="progress-line" id="isListMsg"></div>
       <div class="progress-line" id="userActMsg"></div>
       <div style="max-height:220px;overflow:auto;margin-top:8px;">
         <table class="summary" style="width:100%;font-size:11.5px;">
-          <thead><tr><th style="text-align:left;">Username</th><th style="text-align:left;">Nama</th><th style="text-align:left;">Area</th><th style="text-align:left;">Role</th><th style="text-align:left;">Login terakhir</th><th>Jml login</th><th style="text-align:left;">Ganti password</th><th style="text-align:left;">Status</th></tr></thead>
+          <thead><tr><th style="text-align:left;">Username</th><th style="text-align:left;">Nama</th><th style="text-align:left;">MC</th><th style="text-align:left;">Area</th><th style="text-align:left;">Region</th><th style="text-align:left;">Role</th><th style="text-align:left;">Login terakhir</th><th>Jml login</th><th style="text-align:left;">Ganti password</th><th style="text-align:left;">Status</th></tr></thead>
           <tbody id="userActBody"></tbody>
         </table>
       </div>
@@ -1247,10 +1249,10 @@
 
     <div class="upload-block">
       <h4>Riwayat Login</h4>
-      <p class="hint">Catatan siapa saja yang login ke dashboard (waktu, username, role).</p>
+      <p class="hint">Catatan siapa saja yang login ke dashboard (waktu, username, nama, area, region, role). <button class="btn btn-ghost btn-sm" onclick="downloadLoginLogCsv()" style="margin-left:6px;">Unduh Riwayat (CSV)</button></p>
       <div style="max-height:200px;overflow:auto;">
         <table class="summary" style="width:100%;">
-          <thead><tr><th style="text-align:left;">Waktu</th><th style="text-align:left;">Username</th><th style="text-align:left;">Role</th></tr></thead>
+          <thead><tr><th style="text-align:left;">Waktu</th><th style="text-align:left;">Username</th><th style="text-align:left;">Nama</th><th style="text-align:left;">Area</th><th style="text-align:left;">Region</th><th style="text-align:left;">Role</th></tr></thead>
           <tbody id="loginLogBody"></tbody>
         </table>
       </div>
@@ -8209,7 +8211,19 @@ async function finishSupplyProcessing(brand, outletAgg, productAgg, maxDate, pro
 }
 
 // ---------- misc UI ----------
+// Banner merah "data kosong" hanya benar saat dibuat; setelah data terbaca ulang / di-upload ia harus hilang sendiri (atau hanya menyebut yang masih kosong).
+function updateLoadBanner(){
+  const bn = document.getElementById('dataLoadBanner'); if(!bn) return;
+  const bad = [];
+  if(!OUTLETS.length) bad.push('Outlet / Pairing');
+  if(!SELLIN_OUTLETS.length) bad.push('Sell In & GA');
+  if(!SUPPLY_OUTLETS.length) bad.push('Stok / Supply');
+  if(!GEO_POINTS.length) bad.push('Titik peta');
+  if(!bad.length){ bn.remove(); return; }
+  const bEl = bn.querySelector('span b'); if(bEl) bEl.textContent = bad.join(', ');
+}
 function refreshHeaderMeta(){
+  try{ updateLoadBanner(); }catch(e){}
   document.getElementById('metaAsOf').textContent = META.asOf || '–';
   document.getElementById('metaMasterDate').textContent = META.masterUpdated ? new Date(META.masterUpdated).toISOString().slice(0,10) : '–';
   // (last-updated timestamp intentionally not shown in the header anymore — it was
@@ -8228,7 +8242,10 @@ function refreshHeaderMeta(){
     const gaDates = Object.values(SMETA.gaAsOfByBrand || {}).filter(Boolean).sort().reverse();
     // data saved before GA got its own date has no gaAsOfByBrand at all — GA then still came
     // with the Sell In file, so the Sell In date is the right one to show
-    document.getElementById('metaGaDate').textContent = gaDates.length ? gaDates[0] : (SMETA.gaAsOfByBrand === undefined ? sellinDate : '–');
+    { const gb = SMETA.gaAsOfByBrand || {}, uniq = new Set(Object.values(gb).filter(Boolean));
+      // IM3 dan 3ID beda tanggal -> tampilkan keduanya supaya kelihatan salah satunya ketinggalan / beda sumber
+      document.getElementById('metaGaDate').textContent = uniq.size > 1 ? Object.keys(gb).filter(k=>gb[k]).map(k=>k+' '+gb[k]).join(' · ')
+        : (gaDates.length ? gaDates[0] : (SMETA.gaAsOfByBrand === undefined ? sellinDate : '–')); }
   }
   if(SUPMETA){
     // IM3 and 3ID supply files can be uploaded on different dates — show the later
@@ -8997,15 +9014,76 @@ async function logLogin(username, role){
   renderLoginLog();
 }
 
+// ---- List IS (NIK -> nama / MC / area / region) ----
+// Disimpan di server (key 'is_list'), BUKAN di kode halaman: berisi nama + NIK, dan kode halaman ini terbaca publik.
+let IS_MAP = {};            // NIK (huruf besar) -> {name, mc, area, region, role}
+let isListLoaded = false;
+const isKey = x => String(x==null?'':x).trim().toUpperCase().replace(/\.0+$/,'');
+function isInfo(username){ return IS_MAP[isKey(username)] || null; }
+async function ensureIsList(force){
+  if(isListLoaded && !force) return;
+  try{
+    const v = await storageGet('is_list');
+    if(v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length){ IS_MAP = v; isListLoaded = true; }
+  }catch(e){}
+}
+async function handleIsListFile(file){
+  const msg = document.getElementById('isListMsg');
+  if(!file) return;
+  try{
+    msg.textContent = 'Membaca ' + file.name + '…';
+    const wb = XLSX.read(await file.arrayBuffer(), {type:'array'});
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:'', raw:true});
+    const pick = (r, name) => { const k = Object.keys(r).find(x=>String(x).trim().toUpperCase()===name); return k==null ? '' : String(r[k]).trim(); };
+    const map = {}; let n = 0, skipped = 0;
+    rows.forEach(r=>{
+      const nik = isKey(pick(r,'NIK'));
+      if(!nik){ skipped++; return; }
+      map[nik] = { name: pick(r,'NAME') || pick(r,'NAMA'), mc: pick(r,'MC'), area: pick(r,'AREA'), region: pick(r,'REGION'), role: pick(r,'ROLE') };
+      n++;
+    });
+    if(!n){ msg.textContent = 'Tidak ada baris valid: file harus punya kolom NIK (dan NAME, AREA, REGION, MC, ROLE).'; return; }
+    msg.textContent = 'Menyimpan ' + n + ' orang…';
+    const ok = await storageSetWithRetry('is_list', map);
+    if(!ok){ msg.textContent = 'Gagal menyimpan ke server — coba lagi.'; return; }
+    IS_MAP = map; isListLoaded = true;
+    msg.textContent = '✅ List IS tersimpan: ' + n + ' orang' + (skipped ? ' (' + skipped + ' baris tanpa NIK dilewati)' : '') + '.';
+    renderLoginLog(); renderUserActivity();
+  }catch(e){ msg.textContent = 'Gagal membaca file: ' + (e && e.message || e); }
+}
+window.handleIsListFile = handleIsListFile;
+async function downloadLoginLogCsv(){
+  await ensureIsList();
+  const q = v => '"' + String(v==null?'':v).replace(/"/g,'""') + '"';
+  const lines = [['Waktu','Username','Nama','MC','Area','Region','Role'].map(q).join(',')];
+  LOGIN_LOG.slice().sort((a,b)=>String(b.time).localeCompare(String(a.time))).forEach(e=>{
+    const i = isInfo(e.username) || {};
+    lines.push([new Date(e.time).toLocaleString('id-ID'), e.username, i.name||'', i.mc||'', i.area||'', i.region||'', e.role].map(q).join(','));
+  });
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob), el = document.createElement('a');
+  el.href = url; el.download = 'riwayat_login_dashboard.csv';
+  document.body.appendChild(el); el.click(); document.body.removeChild(el);
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+window.downloadLoginLogCsv = downloadLoginLogCsv;
+
 function renderLoginLog(){
   const body = document.getElementById('loginLogBody');
   if(!body) return;
-  body.innerHTML = LOGIN_LOG.map(e=>`
+  body.innerHTML = LOGIN_LOG.slice().sort((a,b)=>String(b.time).localeCompare(String(a.time))).map(e=>{
+    const i = isInfo(e.username) || {};
+    return `
     <tr>
       <td>${new Date(e.time).toLocaleString('id-ID')}</td>
-      <td>${e.username}</td>
+      <td>${escHtml(e.username)}</td>
+      <td>${escHtml(i.name||'-')}</td>
+      <td>${escHtml(i.area||'-')}</td>
+      <td>${escHtml(i.region||'-')}</td>
       <td>${e.role}</td>
-    </tr>`).join('') || '<tr><td colspan="3" style="color:var(--muted);">Belum ada riwayat login.</td></tr>';
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="color:var(--muted);">Belum ada riwayat login.</td></tr>';
+  if(!isListLoaded) ensureIsList().then(()=>{ if(isListLoaded) renderLoginLog(); });
 }
 let pendingLoginUser = null; // set while the force-change-password gate is open
 
@@ -9144,29 +9222,37 @@ async function setUserName(username, val){
   renderUserActivity();
 }
 window.setUserName = setUserName;
+// urut: login terakhir paling baru di atas; yang belum pernah login di paling bawah
+function usersByLastLogin(){
+  return USERS.slice().sort((x,y)=>String((USER_ACT[y.username]||{}).lastLogin||'').localeCompare(String((USER_ACT[x.username]||{}).lastLogin||'')));
+}
 function fmtActTime(iso){ return iso ? new Date(iso).toLocaleString('id-ID') : '-'; }
 async function renderUserActivity(){
   const body = document.getElementById('userActBody');
   if(!body) return;
-  body.innerHTML = '<tr><td colspan="8" style="color:var(--muted);">Memuat…</td></tr>';
+  body.innerHTML = '<tr><td colspan="10" style="color:var(--muted);">Memuat…</td></tr>';
   await loadUserActivity();
+  await ensureIsList();
   const areaOf = buildUserAreaLookup();
-  body.innerHTML = USERS.map(u=>{
+  body.innerHTML = usersByLastLogin().map(u=>{
     const a = USER_ACT[u.username] || {};
     const st = u.mustChangePassword !== false ? '<span style="color:var(--red);">Belum ganti password</span>' : 'Sudah ganti';
-    return `<tr><td>${u.username}</td><td>${escHtml(u.name||'-')}</td><td>${escHtml(areaOf(u.username))}</td><td>${u.role==='admin'?'admin':'viewer'}</td><td>${fmtActTime(a.lastLogin)}</td><td style="text-align:right;">${a.loginCount||0}</td><td>${fmtActTime(a.lastPassChange)}</td><td>${st}</td></tr>`;
-  }).join('') || '<tr><td colspan="8" style="color:var(--muted);">Belum ada user.</td></tr>';
+    const i = isInfo(u.username) || {};
+    return `<tr><td>${u.username}</td><td>${escHtml(u.name||i.name||'-')}</td><td>${escHtml(i.mc||'-')}</td><td>${escHtml(i.area||areaOf(u.username))}</td><td>${escHtml(i.region||'-')}</td><td>${u.role==='admin'?'admin':'viewer'}</td><td>${fmtActTime(a.lastLogin)}</td><td style="text-align:right;">${a.loginCount||0}</td><td>${fmtActTime(a.lastPassChange)}</td><td>${st}</td></tr>`;
+  }).join('') || '<tr><td colspan="10" style="color:var(--muted);">Belum ada user.</td></tr>';
 }
 async function downloadAllUsersCsv(){
   const msg = document.getElementById('userActMsg');
   if(msg) msg.textContent = 'Menyiapkan data…';
   await loadUserActivity();
+  await ensureIsList();
   const q = v => '"' + String(v==null?'':v).replace(/"/g,'""') + '"';
   const areaOf = buildUserAreaLookup();
-  const lines = [['Username','Nama','Area','Role','Status Password','Login Pertama','Login Terakhir','Jumlah Login','Terakhir Ganti Password','Jumlah Ganti Password','Terakhir Direset Admin'].map(q).join(',')];
-  USERS.forEach(u=>{
+  const lines = [['Username','Nama','MC','Area','Region','Role','Status Password','Login Pertama','Login Terakhir','Jumlah Login','Terakhir Ganti Password','Jumlah Ganti Password','Terakhir Direset Admin'].map(q).join(',')];
+  usersByLastLogin().forEach(u=>{
     const a = USER_ACT[u.username] || {};
-    lines.push([u.username, u.name||'', areaOf(u.username), u.role==='admin'?'admin':'viewer', u.mustChangePassword!==false?'Belum ganti (default)':'Sudah ganti',
+    const i = isInfo(u.username) || {};
+    lines.push([u.username, u.name||i.name||'', i.mc||'', i.area||areaOf(u.username), i.region||'', u.role==='admin'?'admin':'viewer', u.mustChangePassword!==false?'Belum ganti (default)':'Sudah ganti',
       fmtActTime(a.firstLogin), fmtActTime(a.lastLogin), a.loginCount||0, fmtActTime(a.lastPassChange), a.passChangeCount||0, fmtActTime(a.lastReset)].map(q).join(','));
   });
   const blob = new Blob(['\uFEFF' + lines.join('\n')], {type:'text/csv;charset=utf-8;'});
@@ -10010,6 +10096,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.9 · 18 Okt 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.14 · 20 Okt 2026</div>
 </body>
 </html>
