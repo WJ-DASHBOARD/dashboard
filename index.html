@@ -6965,7 +6965,8 @@ function parseGaTxBody(file, delim, fmt, progressEl){
           const brand = row.brand;
           if(brand !== 'IM3' && brand !== '3ID') continue;
           if(sellinOnly || (fmt.keep && !fmt.keep(row))){
-            if(wantSpPcs && normKpiValue(row.kpi) === 'SELLIN'){
+            // Sell In SP = kpi SELLIN  +  baris RET_TAG yang cat_product-nya 'sp-sellin' (SP yang di-sell-in ke outlet)
+            if(wantSpPcs && (normKpiValue(row.kpi) === 'SELLIN' || (normKpiValue(row.kpi) === 'RET_TAG' && String(row.cat_product == null ? '' : row.cat_product).trim().toLowerCase() === 'sp-sellin'))){
               let sb = SP[brand]; if(!sb) sb = SP[brand] = { seen:new Set(), byKey:{}, maxDate:'', byMonth:{} };
               const rcs = SPR[brand] || (SPR[brand] = {read:0, bad:0, byMonth:{}}); rcs.read++;
               const spM0 = /^(\d{4})-(\d{2})/.exec(String(row[fmt.date] || '').trim());
@@ -10127,6 +10128,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.15 · 26 Okt 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.16 · 26 Okt 2026</div>
 </body>
 </html>
