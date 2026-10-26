@@ -1508,6 +1508,35 @@ function ensureSellinBase(){
   SMETA.totalOutlets = SELLIN_OUTLETS.length;
 }
 
+// Melengkapi kerangka Sell In & GA: outlet di pairing yang BELUM punya baris (mis. kerangka tersimpan lebih lama dari pairing)
+// ditambahkan dengan nilai 0, tanpa menyentuh baris yang sudah ada. Tanpa ini GA outlet tsb "tidak terbaca" saat upload.
+function addMissingSellinRows(brand){
+  if(!SMETA || !MASTER || !META || !META.brands) return 0;
+  const bI = Object.fromEntries(META.brands.map((v,i)=>[v,i]));
+  const aI = Object.fromEntries(META.areas.map((v,i)=>[v,i]));
+  const brI = Object.fromEntries(META.branches.map((v,i)=>[v,i]));
+  const mI = Object.fromEntries(META.micros.map((v,i)=>[v,i]));
+  const rI = Object.fromEntries((META.remarks||['N/A']).map((v,i)=>[v,i]));
+  const pI = Object.fromEntries((META.ptypes||['N/A']).map((v,i)=>[v,i]));
+  const have = new Set();
+  SELLIN_OUTLETS.forEach(r=>{ have.add(META.brands[r[IDX_S.brandIdx]] + '|' + r[IDX_S.outletId]); });
+  let added = 0;
+  Object.keys(MASTER).forEach(key=>{
+    const b = key.slice(0, key.indexOf('|'));
+    if(brand && b !== brand) return;
+    if(have.has(key)) return;
+    const oid = key.slice(key.indexOf('|')+1), mm = MASTER[key];
+    SELLIN_OUTLETS.push([
+      bI[b], aI[mm.area], brI[mm.branch], mI[mm.micro], oid, mm.name||'', META.cats.indexOf(mm.cat),
+      0, 0, 0, 0, 0, 0, 0, 0,
+      rI[mm.remark || 'N/A'], pI[mm.ptype || 'N/A']
+    ]);
+    added++;
+  });
+  if(added){ SMETA = {...SMETA, totalOutlets: SELLIN_OUTLETS.length}; console.warn('addMissingSellinRows', brand, added); }
+  return added;
+}
+
 function reconcileSellinToMaster(){
   if(!SMETA) return;
   const masterKeys = Object.keys(MASTER);
@@ -7198,6 +7227,7 @@ function sellinGapNote(kind){
 async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl, extraNote, allByMonth){
   const brandI = META.brands.indexOf(brand);
   const asOf = `${ym}-${String(lastDay).padStart(2,'0')}`;
+  const healedRows = addMissingSellinRows(brand);   // outlet pairing yang belum punya baris -> ditambah (GA-nya jadi bisa terbaca)
   const brandRows = SELLIN_OUTLETS.filter(r=>r[IDX_S.brandIdx]===brandI);
   if(!brandRows.length){
     progressEl.textContent = `Data GA ${brand} dilewati — belum ada data Sell In untuk brand ini (upload data Sell In ${brand} dulu, menu #6).`;
@@ -7223,7 +7253,7 @@ async function finishGaProcessing(brand, byKey, lastDay, ym, wjRows, progressEl,
     });
     // tanggal sama hanya ditolak kalau GA tersimpan JUGA berasal dari GA_Outlet_jaya (data lama / dari sumber lain boleh diganti sekali)
     const prevSrc = ((SMETA && SMETA.gaSrcByBrand) || {})[brand] || null;
-    const sameDay = oldGaAsOf && sameAsOf(asOf, oldGaAsOf) && prevSrc === 'jaya';
+    const sameDay = oldGaAsOf && sameAsOf(asOf, oldGaAsOf) && prevSrc === 'jaya' && !healedRows;   // kalau ada outlet yang baru ditambahkan, data memang berubah -> jangan ditolak
     // sama / lebih lama hanya ditolak kalau GA tersimpan JUGA dari GA_Outlet_jaya; GA dari sumber lain (mis. RET_TAG lama) boleh diganti jaya, tanggal berapa pun
     const olderDay = oldGaAsOf && String(asOf) < String(oldGaAsOf) && prevSrc === 'jaya';
     if(oldTot > 0 && (sameDay || olderDay)){
@@ -7677,6 +7707,7 @@ function parseSellinPcsBody(file, progressEl){
 
 async function finishSellinPcsProcessing(byKey, brandsSeen, progressEl, skippedOther){
   let totalUpdated = 0;
+  brandsSeen.forEach(b=>{ try{ addMissingSellinRows(b); }catch(e){ console.warn('addMissingSellinRows', e); } });   // outlet pairing tanpa baris -> ditambah dulu supaya Sell In Qty-nya ikut terbaca
   const brandSummaries = [];
   brandsSeen.forEach(brand=>{
     const brandI = META.brands.indexOf(brand);
@@ -10096,6 +10127,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.14 · 20 Okt 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.15 · 26 Okt 2026</div>
 </body>
 </html>
