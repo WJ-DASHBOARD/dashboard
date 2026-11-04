@@ -1168,6 +1168,7 @@
       <table class="summary" style="width:100%;font-size:12px;">
         <thead><tr><th style="text-align:left;">Yang mau diisi</th><th style="text-align:left;">File yang dipakai</th><th style="text-align:left;">Menu</th></tr></thead>
         <tbody>
+          <tr><td><b>Stock Saldo</b> (ending balance, H-1)</td><td>Stock Balance Daily Report .xls / .xlsx (boleh beberapa file sekaligus); hanya saldo yang berubah, SP/Voucher tetap</td><td>#1b</td></tr>
           <tr><td>Outlet &amp; titik peta</td><td>File pairing .xlsx (1 file per region; region lain tidak terhapus)</td><td>#2</td></tr>
           <tr><td><b>GA (MTD)</b> IM3 &amp; 3ID</td><td><code>IM3_OUTLET_RGUGA_YYYYMM.csv</code> <b>dan</b> <code>3ID_OUTLET_RGUGA_YYYYMM.csv</code> (dua file, boleh dipilih sekaligus), <i>atau</i> 1 file GA per MSISDN (<code>GA_Outlet…csv</code>), <i>atau</i> 1 export BigQuery <code>bq-results…</code> yang berisi kpi RET_TAG</td><td>#5</td></tr>
           <tr><td><b>Sell In SP / Voucher / Saldo (Rp)</b></td><td><code>OSA_IM3.CSV</code> <b>dan</b> <code>OSA_3ID.CSV</code> — hanya file OSA. File GA/RGUGA tidak berisi Sell In (Rp)</td><td>#6</td></tr>
@@ -1181,6 +1182,13 @@
       <p class="hint">Update rutin. Kolom yang dipakai: brand, as_of_date, outlet_id, flag_position, flag, qty, amt.</p>
       <input type="file" id="stockFile" accept=".csv">
       <div class="progress-line" id="stockProgress"></div>
+    </div>
+
+    <div class="upload-block">
+      <h4>1b. Stock Saldo saja (Stock Balance Daily Report .xls / .xlsx)</h4>
+      <p class="hint">Hanya mengganti <b>Stock Saldo</b> (Current Balance semua baris dijumlahkan per Outlet ID); stok SP dan Voucher tidak berubah. Boleh pilih beberapa file sekaligus (export besar terbagi jadi beberapa file). Outlet yang tidak ada di file dianggap saldo 0. Upload stok biasa (#1) dulu kalau outlet belum termuat.</p>
+      <input type="file" id="saldoFile" accept=".xls,.xlsx" multiple>
+      <div class="progress-line" id="saldoProgress"></div>
     </div>
 
     <div class="upload-block">
@@ -5828,6 +5836,74 @@ function normId(x){
   return /^[0-9]+$/.test(x) ? String(parseInt(x,10)) : x.toUpperCase();
 }
 
+// ---------- update: Stock Saldo saja (Stock Balance Daily Report) ----------
+async function handleSaldoFiles(fileList){
+  const files = Array.from(fileList);
+  const progressEl = document.getElementById('saldoProgress');
+  if(!OUTLETS || !OUTLETS.length || !META || !META.brands){
+    progressEl.innerHTML = '<b style="color:var(--red);">Data outlet belum termuat</b> — refresh halaman (Ctrl+Shift+R), tunggu selesai loading, atau upload pairing + stok biasa dulu.';
+    return;
+  }
+  uploadInProgress = true;
+  lastUploadName = files.map(f=>f.name).join(', ');
+  const sums = new Map(); const dates = new Set(); const fileRegions = new Set(); let rowsRead = 0, rowsUsed = 0;
+  try{
+    for(let fi=0; fi<files.length; fi++){
+      progressEl.textContent = `Membaca file ${fi+1}/${files.length}: ${files[fi].name} …`;
+      await new Promise(r=>setTimeout(r, 30));
+      const buf = await files[fi].arrayBuffer();
+      const wb = XLSX.read(new Uint8Array(buf), {type:'array', dense:true, cellStyles:false, cellHTML:false});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:''});
+      let hIdx = -1, iId = -1, iBal = -1, iDate = -1, iReg = -1;
+      for(let i=0; i<Math.min(rows.length, 60); i++){
+        const r = rows[i].map(c=>String(c).trim().toLowerCase());
+        if(r.indexOf('organization id')>=0 && r.indexOf('current balance')>=0){ hIdx=i; iId=r.indexOf('organization id'); iBal=r.indexOf('current balance'); iDate=r.indexOf('date'); iReg=r.indexOf('region'); break; }
+      }
+      if(hIdx<0){ progressEl.innerHTML = `<b style="color:var(--red);">Format tidak dikenali</b> — file ${escHtml(files[fi].name)}: kolom "Organization ID" dan "Current Balance" tidak ditemukan.`; uploadInProgress=false; return; }
+      for(let i=hIdx+1; i<rows.length; i++){
+        const r = rows[i]; rowsRead++;
+        const d = iDate>=0 ? String(r[iDate]).trim() : '';
+        if(!/^\d{4}-\d{2}-\d{2}/.test(d)) continue;      // baris judul / footer
+        const id = normId(r[iId]); if(!id) continue;
+        const bal = parseFloat(r[iBal]); if(!isFinite(bal)) continue;
+        dates.add(d.slice(0,10)); rowsUsed++;
+        if(iReg>=0){ const rg = String(r[iReg]).trim().toUpperCase(); if(rg) fileRegions.add(rg); }
+        sums.set(id, (sums.get(id)||0) + bal);
+      }
+      await new Promise(r=>setTimeout(r, 30));
+    }
+    if(!sums.size){ progressEl.innerHTML = '<b style="color:var(--red);">Tidak ada baris saldo yang terbaca.</b>'; uploadInProgress=false; return; }
+    const dateList = Array.from(dates).sort(); const asOf = dateList[dateList.length-1];
+    progressEl.textContent = `Menggabungkan ${rowsUsed.toLocaleString('id-ID')} baris ke ${OUTLETS.length.toLocaleString('id-ID')} outlet…`;
+    await new Promise(r=>setTimeout(r, 30));
+    // Outlet yang tidak ada di file: saldo jadi 0 HANYA kalau region-nya termasuk di file ini.
+    // Region yang tidak ada di file (mis. file hanya WEST JAVA) dibiarkan — saldo lamanya tidak dihapus.
+    let matched = 0, absent = 0, untouched = 0; const seen = new Set();
+    OUTLETS.forEach(r=>{
+      const oid = String(r[IDX.outletId]);
+      const reg = String((META.regions||[])[r[IDX.regionIdx]] || '').trim().toUpperCase();
+      if(sums.has(oid)){ r[IDX.salAmt] = Math.round(sums.get(oid)); seen.add(oid); matched++; }
+      else if(!fileRegions.size || fileRegions.has(reg)){ r[IDX.salAmt] = 0; absent++; }
+      else untouched++;
+    });
+    let notInDash = 0; sums.forEach((v,k)=>{ if(!seen.has(k)) notInDash++; });
+    META = { ...META, lastUpdated: new Date().toISOString(), saldoAsOf: asOf };
+    progressEl.textContent = `Menyimpan data online (${OUTLETS.length.toLocaleString('id-ID')} outlet)…`;
+    const ok = await persistAll((done,total)=>{ progressEl.textContent = `Menyimpan data online — bagian ${done}/${total}…`; });
+    if(ok){
+      progressEl.textContent = `Selesai. Stock Saldo per ${asOf}: ${matched.toLocaleString('id-ID')} outlet terisi dari file, ${absent.toLocaleString('id-ID')} outlet tidak ada di file (saldo 0), ${untouched.toLocaleString('id-ID')} outlet dari region lain tidak ada di file (saldo lama dipertahankan), ${notInDash.toLocaleString('id-ID')} ID di file tidak ada di dashboard. Region di file: ${Array.from(fileRegions).join(', ')||'-'}.`;
+      await logUpdate('Stock Saldo', asOf, matched, lastUploadName);
+    } else {
+      progressEl.innerHTML = '<b style="color:var(--red);">Gagal tersimpan sepenuhnya</b> — koneksi tidak stabil. Data di layar sudah berubah tapi BELUM tentu tersimpan untuk orang lain. Coba upload ulang.';
+    }
+    refreshHeaderMeta(); populateAreaBranch(); applyFilters();
+  }catch(err){
+    progressEl.innerHTML = '<b style="color:var(--red);">Gagal membaca file:</b> ' + escHtml(String(err && err.message || err));
+  }
+  uploadInProgress = false;
+}
+
 function handleStockFile(file){
   lastUploadName = file.name;
   const progressEl = document.getElementById('stockProgress');
@@ -9923,6 +9999,7 @@ function bindEvents(){
   document.getElementById('updateOverlay').addEventListener('click', (e)=>{ if(e.target.id==='updateOverlay') e.currentTarget.classList.remove('show'); });
 
   document.getElementById('stockFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleStockFile(e.target.files[0]); });
+  document.getElementById('saldoFile').addEventListener('change', (e)=>{ const fl=Array.from(e.target.files); e.target.value=''; if(fl.length) handleSaldoFiles(fl); });
   document.getElementById('masterFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleMasterFile(e.target.files[0]); });
   document.getElementById('supplyFile').addEventListener('change', (e)=>{ if(e.target.files.length) handleSupplyFiles(e.target.files); });
   document.getElementById('secondaryFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleSecondaryFile(e.target.files[0]); });
@@ -10128,6 +10205,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.16 · 26 Okt 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.17 · 4 Nov 2026</div>
 </body>
 </html>
