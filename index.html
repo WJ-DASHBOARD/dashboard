@@ -4269,9 +4269,11 @@ function renderSellinAll(){
 }
 
 function renderGaSlab(){
-  const n = filteredSellin.length;
+  // 1 outlet fisik = 1 hitungan (hybrid IM3+3ID digabung) — sama dengan grafik "Slab GA per Area" dan kartu KPI lain
+  const slabRows = mergeSellinPairs(filteredSellin);
+  const n = slabRows.length;
   const counts = [0,0,0,0,0,0]; // No GA, 1-<5, 5-<25, 25-50, 50-100, >=100
-  filteredSellin.forEach(r=>{
+  slabRows.forEach(r=>{
     const ga = r[IDX_S.rguGa];
     if(ga<=0) counts[0]++;
     else if(ga<5) counts[1]++;
@@ -10205,6 +10207,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.17 · 4 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.18 · 6 Nov 2026</div>
 </body>
 </html>
