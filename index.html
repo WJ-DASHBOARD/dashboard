@@ -4328,12 +4328,13 @@ function renderSupplyAll(){
 }
 
 function renderSupplyKpis(){
-  const n = filteredSupply.length;
+  const supM = mergeSupplyPairs(filteredSupply);
+  const n = supM.length;
   const _pc = computePairingStatusCounts(); const _n = _pc.Hybrid + _pc['IM3 only'] + _pc['3ID only'];
   document.getElementById('supKpiTotal').textContent = fmtN(_n);
   document.getElementById('supKpiTotalBreakdown').textContent = pairingBreakdownText(computePairingStatusCounts());
   let spHit=0, spRev=0, rebuyHit=0, rebuyRev=0, vouHit=0, vouRev=0, vouOriHit=0, vouOriRev=0, noSupply=0;
-  filteredSupply.forEach(r=>{
+  supM.forEach(r=>{
     spHit += r[IDX_SUP.sp_injectHit];
     spRev += r[IDX_SUP.sp_injectRev];
     rebuyHit += r[IDX_SUP.rebuy_cvmHit]+r[IDX_SUP.rebuy_atlHit]+r[IDX_SUP.rebuy_pulsaHit];
@@ -4371,7 +4372,7 @@ function renderSupplyKpis(){
   // Last Week comparison chips
   if(prevAvail('supply')){
     let pSp=0, pRebuy=0, pVou=0, pVouOri=0, pNo=0;
-    PREV_FILTERED.supply.forEach(r=>{
+    mergeSupplyPairs(PREV_FILTERED.supply).forEach(r=>{
       pSp += r[IDX_SUP.sp_injectRev];
       pRebuy += r[IDX_SUP.rebuy_cvmRev]+r[IDX_SUP.rebuy_atlRev]+r[IDX_SUP.rebuy_pulsaRev];
       pVou += r[IDX_SUP.vou_injectRev];
@@ -4390,10 +4391,11 @@ function renderSupplyKpis(){
 }
 
 function renderSupplyCoverageCards(){
-  const n = filteredSupply.length;
+  const supM = mergeSupplyPairs(filteredSupply);
+  const n = supM.length;
   function coverage(fields, label){
     let withIt=0, zero=0;
-    filteredSupply.forEach(r=>{
+    supM.forEach(r=>{
       const total = fields.reduce((s,f)=>s+r[IDX_SUP[f]],0);
       if(total>0) withIt++; else zero++;
     });
@@ -4525,9 +4527,9 @@ function renderSupplySummaryTable(){
       <td>${fmtN(r.vouOutlet)}</td><td>${fmtN(r.vouHit)}${dk(r,p,'vouHit',true)}</td><td>${fmtBn(r.vouRev)}${dk(r,p,'vouRev',true,fmtBn)}</td>
       <td>${fmtN(r.vouOriOutlet)}</td><td>${fmtN(r.vouOriHit)}${dk(r,p,'vouOriHit',true)}</td><td>${fmtBn(r.vouOriRev)}${dk(r,p,'vouOriRev',true,fmtBn)}</td>`;
 
-  const agg = aggregateBy(filteredSupply, gKey);
+  const agg = aggregateBy(mergeSupplyPairs(filteredSupply), gKey);
   const rows = Object.keys(agg).map(g=>({key:g, name: ctx.names[g], ...agg[g]})).sort((a,b)=>(b.spRev+b.rebuyRev+b.vouRev+b.vouOriRev)-(a.spRev+a.rebuyRev+a.vouRev+a.vouOriRev));
-  const prevAgg = cmpOn ? aggregateBy(PREV_FILTERED.supply, gKey) : null;
+  const prevAgg = cmpOn ? aggregateBy(mergeSupplyPairs(PREV_FILTERED.supply), gKey) : null;
   const prevOf = k => prevAgg ? (prevAgg[k] || initSup()) : null;
 
   let bodyHtml = '';
@@ -4538,7 +4540,7 @@ function renderSupplySummaryTable(){
         <td><span class="expand-toggle" data-scope="sup" data-key="${r.key}" style="cursor:pointer;user-select:none;display:inline-block;width:14px;color:var(--muted);">${isOpen?'⊟':'⊞'}</span>${r.name}</td>${rowCells(r, prevOf(r.key))}
       </tr>`;
       if(isOpen){
-        const subAgg = aggregateBy(filteredSupply.filter(rr=>String(rr[IDX_SUP.branchIdx])===String(r.key)), IDX_SUP.microIdx);
+        const subAgg = aggregateBy(mergeSupplyPairs(filteredSupply.filter(rr=>String(rr[IDX_SUP.branchIdx])===String(r.key))), IDX_SUP.microIdx);
         const subRows = Object.keys(subAgg).map(mg=>({key:mg, name: META.micros[mg], ...subAgg[mg]})).sort((a,b)=>(b.spRev+b.rebuyRev+b.vouRev+b.vouOriRev)-(a.spRev+a.rebuyRev+a.vouRev+a.vouOriRev));
         const subPrev = cmpOn ? aggregateBy(PREV_FILTERED.supply.filter(rr=>String(rr[IDX_SUP.branchIdx])===String(r.key)), IDX_SUP.microIdx) : null;
         subRows.forEach(mr=>{
@@ -4606,7 +4608,7 @@ function renderSupplyTable(){
 
 function exportSupplySummaryCsv(){
   const agg = {};
-  filteredSupply.forEach(r=>{
+  mergeSupplyPairs(filteredSupply).forEach(r=>{
     const g = r[IDX_SUP.branchIdx];
     if(!agg[g]) agg[g] = { outlet:0, spOutlet:0, spHit:0, spRev:0, rebuyOutlet:0, rebuyHit:0, rebuyRev:0, vouOutlet:0, vouHit:0, vouRev:0, vouOriOutlet:0, vouOriHit:0, vouOriRev:0 };
     const a = agg[g];
@@ -4791,6 +4793,20 @@ function mergeSellinPairs(arr){
     const ex = byKey.get(pk);
     if(!ex){ const c = r.slice(); byKey.set(pk, c); out.push(c); }
     else NUMI.forEach(i=>{ ex[i] = (ex[i]||0) + (r[i]||0); });
+  });
+  return out;
+}
+// Supply: 1 outlet fisik = 1 hitungan — IM3 + 3ID dari pasangan yang sama (pairKey) digabung, hit & revenue dijumlahkan
+function mergeSupplyPairs(arr){
+  const byKey = new Map(), out = [];
+  const first = IDX_SUP.catIdx + 1;
+  arr.forEach(r=>{
+    const m = MASTER[META.brands[r[IDX_SUP.brandIdx]]+'|'+r[IDX_SUP.outletId]];
+    const pk = m && m.pairKey && m.pairKey!=='N/A' ? m.pairKey : null;
+    if(!pk){ out.push(r); return; }
+    const ex = byKey.get(pk);
+    if(!ex){ const c = r.slice(); byKey.set(pk, c); out.push(c); }
+    else for(let i=first;i<r.length;i++) ex[i] = (ex[i]||0) + (r[i]||0);
   });
   return out;
 }
@@ -10207,6 +10223,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.18 · 6 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.19 · 6 Nov 2026</div>
 </body>
 </html>
