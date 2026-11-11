@@ -1008,7 +1008,7 @@
       <b>Arsip Summary West Java</b>
       <select id="archSel" class="btn" style="background:#fff;color:#222;border:1px solid #bbb;padding:6px 12px;border-radius:8px;cursor:pointer;min-width:200px;"></select>
       <button class="btn" id="archXlsx" style="background:#fff;color:#222;border:1px solid #bbb;padding:6px 12px;border-radius:8px;cursor:pointer;">Unduh Excel</button>
-      <button class="btn" id="archPptx" style="background:#fff;color:#222;border:1px solid #bbb;padding:6px 12px;border-radius:8px;cursor:pointer;">Unduh PPT</button>
+      <button class="btn hidden" id="archPptx" style="background:#fff;color:#222;border:1px solid #bbb;padding:6px 12px;border-radius:8px;cursor:pointer;">Unduh PPT</button>
       <span id="archInfo" style="color:var(--ink-soft);font-size:12px;"></span>
     </div>
     <div id="archAdmin" class="hidden" style="display:none;gap:8px;align-items:center;margin-bottom:12px;padding:10px;border:1px dashed #bbb;border-radius:8px;">
@@ -1016,6 +1016,10 @@
       <input id="archLabel" type="text" placeholder="mis. Final Oktober 2026" style="padding:6px 8px;min-width:200px;">
       <button class="btn btn-primary" id="archSave">Simpan sebagai arsip</button>
       <button class="btn" id="archDel" style="background:#fff;color:#222;border:1px solid #bbb;padding:6px 12px;border-radius:8px;cursor:pointer;">Hapus arsip terpilih</button>
+    </div>
+    <div id="archViews" style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="btn" id="archVSum" style="background:#d6001c;color:#fff;border:1px solid #d6001c;padding:6px 14px;border-radius:8px;cursor:pointer;">Summary</button>
+      <button class="btn" id="archVDet" style="background:#fff;color:#222;border:1px solid #bbb;padding:6px 14px;border-radius:8px;cursor:pointer;">Detail Outlet</button>
     </div>
     <div id="archBody" style="overflow:auto;"></div>
   </div>
@@ -9567,6 +9571,31 @@ function wjBuild(){
   Object.keys(br).sort().forEach(k=>rows.push({kind:'branch', label:k, m:br[k]}));
   return rows;
 }
+// Detail per outlet fisik (IM3 + 3ID berpasangan digabung) untuk arsip.
+// Baris: [area, mc, tipe, idIM3, id3ID, namaIM3, nama3ID, dse, gaIM3, ga3ID, sellinSpQty, sellinSpRp, sellinVou, sellinSaldo, stok]
+function wjDetail(){
+  const sIdx = new Map();
+  (SELLIN_OUTLETS||[]).forEach(r=>sIdx.set(r[IDX_S.brandIdx]+'|'+r[IDX_S.outletId], r));
+  const phys = new Map();
+  (OUTLETS||[]).forEach(r=>{
+    if(String((META.regions||[])[r[IDX.regionIdx]]||'').trim().toUpperCase() !== WJ_REGION) return;
+    const bn = META.brands[r[IDX.brandIdx]], id = r[IDX.outletId];
+    const ms = MASTER[bn+'|'+id]; const pk = (ms && ms.pairKey) ? ms.pairKey : (bn+'|'+id);
+    let p = phys.get(pk); if(!p){ p = {a:META.branches[r[IDX.branchIdx]] || '(tanpa branch)', mc:META.micros[r[IDX.microIdx]]||'', id:{}, nm:{}, ga:{'IM3':0,'3ID':0}, dse:'', pcs:0, sp:0, vou:0, sal:0, stock:0}; phys.set(pk,p); }
+    p.id[bn] = id; p.nm[bn] = cleanName(r[IDX.outletName]) || '';
+    if(!p.dse){ try{ p.dse = dseOf(r, IDX) || ''; }catch(e){} }
+    p.stock += stockAmt(r);
+    const s = sIdx.get(r[IDX.brandIdx]+'|'+id);
+    if(s){ p.pcs += spPcsOf(s)||0; p.sp += s[IDX_S.sellinSp]||0; p.vou += s[IDX_S.sellinVou]||0; p.sal += s[IDX_S.sellinSaldo]||0; p.ga[bn] += s[IDX_S.rguGa]||0; }
+  });
+  const out = [];
+  phys.forEach(p=>{
+    const tipe = (p.id['IM3'] && p.id['3ID']) ? 'PAIR' : (p.id['IM3'] ? 'IM3 ONLY' : '3ID ONLY');
+    out.push([p.a, p.mc, tipe, String(p.id['IM3']||''), String(p.id['3ID']||''), p.nm['IM3']||'', p.nm['3ID']||'', String(p.dse||''), p.ga['IM3'], p.ga['3ID'], Math.round(p.pcs), Math.round(p.sp), Math.round(p.vou), Math.round(p.sal), Math.round(p.stock)]);
+  });
+  out.sort((x,y)=> (x[0]<y[0]?-1:x[0]>y[0]?1:0) || (x[1]<y[1]?-1:x[1]>y[1]?1:0) || (String(x[3]||x[4]) < String(y[3]||y[4]) ? -1 : 1));
+  return out;
+}
 function wjPeriod(){
   if(SNAP_ACTIVE) return SNAP_ACTIVE.period;
   const t = ((document.getElementById('metaSellinDate')||{}).textContent||'').trim();
@@ -9893,7 +9922,7 @@ async function archLoadIndex(force){
 async function archLoad(id){
   if(ARCH_CACHE[id]) return ARCH_CACHE[id];
   const s = await metaLoad('snap_'+id); if(!s) return null;
-  s.ava = {};
+  s.ava = {}; s.id = id;
   for(const b of (s.avaBrands||[])){ const a = await metaLoad('snap_'+id+'_a'+b); if(a) s.ava[b] = a; }
   ARCH_CACHE[id] = s; return s;
 }
@@ -9905,13 +9934,18 @@ async function archSave(label){
   const avas = {};
   ['3ID','IM3'].forEach(b=>{ const d = progBuildAva(WJ_REGION, b); if(d){ avas[b] = d; snap.avaBrands.push(b); } });
   if(kabRows()){ snap.kab = kabRows(); snap.kabTotal = wjKabTotal(); const ka = kabAreaRows(), km = kabMcRows(); if(ka) snap.kabArea = ka; if(km) snap.kabMc = km; }
+  const det = wjDetail();
+  const old = (await archLoadIndex(true)).find(i=>i.id===id);
+  const rd = await saveChunked('snap_'+id+'_d', det, old && old.detChunks || 0, null, 40000);
+  if(!rd || !rd.allOk){ showToast('Gagal menyimpan detail outlet arsip (cek koneksi).'); return; }
+  snap.detChunks = rd.numChunks; snap.detN = det.length;
   let ok = await metaSave('snap_'+id, snap);
   for(const b of snap.avaBrands) ok = (await metaSave('snap_'+id+'_a'+b, avas[b])) && ok;
   if(!ok){ showToast('Gagal menyimpan arsip (cek koneksi).'); return; }
   const idx = (await archLoadIndex(true)).filter(i=>i.id!==id);
-  idx.push({id, label, period: snap.period, savedAt: snap.savedAt});
+  idx.push({id, label, period: snap.period, savedAt: snap.savedAt, detChunks: snap.detChunks});
   if(!(await metaSave('snap_index', {items: idx}))){ showToast('Arsip tersimpan tapi daftar gagal diperbarui.'); return; }
-  ARCH_INDEX = idx; delete ARCH_CACHE[id];
+  ARCH_INDEX = idx; delete ARCH_CACHE[id]; delete ARCH_DET[id];
   showToast('Arsip "'+label+'" tersimpan.');
   await archiveOpen(id);
 }
@@ -9954,7 +9988,7 @@ function archRender(s){
     return h;
   } finally { SNAP_ACTIVE = null; }
 }
-let ARCH_CUR = null;
+let ARCH_CUR = null, ARCH_VIEW = 'sum', ARCH_DET = {}, ARCH_DPAGE = 0, ARCH_DFIL = null;
 async function archiveOpen(selId){
   const sel = document.getElementById('archSel'), body = document.getElementById('archBody'), info = document.getElementById('archInfo');
   body.innerHTML = '<div style="padding:12px;color:#888">Memuat arsip…</div>';
@@ -9970,9 +10004,83 @@ async function archShow(id){
   const s = await archLoad(id);
   if(!s){ body.innerHTML = '<div style="padding:12px;color:#c00">Arsip tidak dapat dimuat.</div>'; return; }
   ARCH_CUR = s; info.textContent = 'Disimpan '+new Date(s.savedAt).toLocaleString('id-ID');
-  body.innerHTML = archRender(s);
+  await archPaint();
+}
+const DET_HEAD = ['AREA','MC','TIPE OUTLET','ID OUTLET IM3','ID OUTLET 3ID','NAMA OUTLET IM3','NAMA OUTLET 3ID','DSE','GA IM3','GA 3ID','GA TOTAL','SLAB GA','SELL IN SP (Qty)','SLAB SP','SELL IN SP (Rp)','SELL IN VOUCHER','SELL IN SALDO','OSA (Rp)','SLAB OSA','STOK (Rp)','STOK'];
+function detCells(r){
+  const ga = (r[8]||0)+(r[9]||0), osa = (r[11]||0)+(r[12]||0)+(r[13]||0), st = r[14]||0;
+  return [r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[8],r[9],ga,SUM_SLAB_L[sumSlabOf(ga)],r[10],SUM_SLAB_L[sumSlabOf(r[10]||0)],r[11],r[12],r[13],osa,OSA_SLAB_L[osaSlabOf(osa)],st,st<=0?'0':st<100000?'<100K':'>=100K'];
+}
+async function archDetLoad(s){
+  const id = s.id || snapSlug(s.label);
+  if(ARCH_DET[id]) return ARCH_DET[id];
+  const rows = s.detChunks ? await loadChunked('snap_'+id+'_d', s.detChunks) : null;
+  ARCH_DET[id] = rows || [];
+  return ARCH_DET[id];
+}
+async function archPaint(){
+  const body = document.getElementById('archBody'), s = ARCH_CUR; if(!s) return;
+  const on = 'background:#d6001c;color:#fff;border:1px solid #d6001c;', off = 'background:#fff;color:#222;border:1px solid #bbb;';
+  const base = 'padding:6px 14px;border-radius:8px;cursor:pointer;';
+  document.getElementById('archVSum').style.cssText = (ARCH_VIEW==='sum'?on:off)+base;
+  document.getElementById('archVDet').style.cssText = (ARCH_VIEW==='det'?on:off)+base;
+  const isAdm = currentRole()==='admin';
+  document.getElementById('archXlsx').classList.toggle('hidden', ARCH_VIEW!=='sum');
+  document.getElementById('archPptx').classList.toggle('hidden', !isAdm || ARCH_VIEW!=='sum');
+  if(ARCH_VIEW==='sum'){ body.innerHTML = archRender(s); return; }
+  body.innerHTML = '<div style="padding:12px;color:#888">Memuat detail outlet…</div>';
+  const rows = await archDetLoad(s);
+  if(!rows.length){ body.innerHTML = '<div style="padding:12px;color:#888">Arsip ini belum memiliki detail outlet. Admin dapat menyimpan ulang arsip (nama sama) untuk menambahkannya.</div>'; return; }
+  const areas = Array.from(new Set(rows.map(r=>r[0]))).sort();
+  const f = ARCH_DFIL || (ARCH_DFIL = {area:'', tipe:'', ga:'', q:''});
+  body.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;">'
+    + '<select id="adArea" style="padding:6px;"><option value="">Semua Area</option>'+areas.map(a=>'<option'+(f.area===a?' selected':'')+'>'+escHtml(a)+'</option>').join('')+'</select>'
+    + '<select id="adTipe" style="padding:6px;"><option value="">Semua Tipe</option>'+['PAIR','IM3 ONLY','3ID ONLY'].map(a=>'<option'+(f.tipe===a?' selected':'')+'>'+a+'</option>').join('')+'</select>'
+    + '<select id="adGa" style="padding:6px;"><option value="">Semua (GA)</option><option value="no"'+(f.ga==='no'?' selected':'')+'>Tanpa GA</option><option value="yes"'+(f.ga==='yes'?' selected':'')+'>Ada GA</option></select>'
+    + '<input id="adQ" type="text" placeholder="Cari ID / nama / MC" value="'+escHtml(f.q)+'" style="padding:6px 8px;min-width:200px;">'
+    + '<span id="adCount" style="font-size:12px;color:#777"></span>'
+    + '<button id="adXls" style="background:#fff;color:#222;border:1px solid #bbb;padding:6px 12px;border-radius:8px;cursor:pointer;">Unduh Excel (sesuai filter)</button>'
+    + '</div><div id="adTable"></div><div id="adPager" style="margin:8px 0;"></div>';
+  const PER = 200;
+  const filt = ()=>{ const q = f.q.trim().toLowerCase(); return rows.filter(r=> (!f.area||r[0]===f.area) && (!f.tipe||r[2]===f.tipe) && (!f.ga || (f.ga==='no' ? ((r[8]||0)+(r[9]||0))===0 : ((r[8]||0)+(r[9]||0))>0)) && (!q || (r[1]+' '+r[3]+' '+r[4]+' '+r[5]+' '+r[6]+' '+r[7]).toLowerCase().indexOf(q)>=0)); };
+  const draw = ()=>{
+    const fr = filt(), pages = Math.max(1, Math.ceil(fr.length/PER)); if(ARCH_DPAGE>=pages) ARCH_DPAGE = 0;
+    document.getElementById('adCount').textContent = fr.length.toLocaleString('id-ID')+' outlet';
+    const pg = fr.slice(ARCH_DPAGE*PER, (ARCH_DPAGE+1)*PER);
+    let h = '<table class="arch-t"><thead><tr>'+DET_HEAD.map(x=>'<th>'+escHtml(x)+'</th>').join('')+'</tr></thead><tbody>';
+    pg.forEach(r=>{ h += '<tr>'+detCells(r).map((v,i)=>'<td'+(i<8||i===11||i===13||i===18||i===20?' style="text-align:left"':'')+'>'+(typeof v==='number' ? (v===0?'-':v.toLocaleString('id-ID')) : escHtml(String(v==null?'':v)))+'</td>').join('')+'</tr>'; });
+    document.getElementById('adTable').innerHTML = h+'</tbody></table>';
+    document.getElementById('adPager').innerHTML = pages>1 ? '<button id="adPrev" style="padding:4px 10px;">‹</button> Halaman '+(ARCH_DPAGE+1)+' / '+pages+' <button id="adNext" style="padding:4px 10px;">›</button>' : '';
+    const pv = document.getElementById('adPrev'), nx = document.getElementById('adNext');
+    if(pv) pv.onclick = ()=>{ if(ARCH_DPAGE>0){ ARCH_DPAGE--; draw(); } };
+    if(nx) nx.onclick = ()=>{ if(ARCH_DPAGE<pages-1){ ARCH_DPAGE++; draw(); } };
+  };
+  const bind = (id,key,ev)=>{ document.getElementById(id).addEventListener(ev, e=>{ f[key] = e.target.value; ARCH_DPAGE = 0; draw(); }); };
+  bind('adArea','area','change'); bind('adTipe','tipe','change'); bind('adGa','ga','change'); bind('adQ','q','input');
+  document.getElementById('adXls').addEventListener('click', async ()=>{
+    try{
+      if(typeof ExcelJS === 'undefined'){ showToast('Library Excel belum termuat. Refresh halaman lalu coba lagi.'); return; }
+      const fr = filt();
+      const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Detail Outlet', {views:[{state:'frozen', ySplit:1}]});
+      ws.addRow(DET_HEAD);
+      const hr = ws.getRow(1); hr.height = 30;
+      hr.eachCell(c=>{ c.font = {bold:true, color:{argb:'FFFFFFFF'}}; c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFD6001C'}}; c.alignment = {horizontal:'center', vertical:'middle', wrapText:true}; });
+      fr.forEach(r=>ws.addRow(detCells(r)));
+      [24,34,12,14,14,28,28,14,9,9,10,10,12,10,14,14,14,14,12,14,10].forEach((w,i)=>{ ws.getColumn(i+1).width = w; });
+      [4,5].forEach(i=>{ ws.getColumn(i).numFmt = '@'; });
+      [9,10,11,13,15,16,17,18,20].forEach(i=>{ ws.getColumn(i).numFmt = '#,##0'; });
+      ws.autoFilter = {from:{row:1,column:1}, to:{row:1,column:DET_HEAD.length}};
+      const buf = await wb.xlsx.writeBuffer();
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+      a.download = 'Detail_Outlet_'+snapSlug(s.label)+(f.area?'_'+snapSlug(f.area):'')+'.xlsx';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+    }catch(e){ showToast('Gagal membuat Excel: '+(e&&e.message||e)); }
+  });
+  draw();
 }
 function archBind(){
+  document.getElementById('archVSum').addEventListener('click', ()=>{ ARCH_VIEW='sum'; archPaint(); });
+  document.getElementById('archVDet').addEventListener('click', ()=>{ ARCH_VIEW='det'; ARCH_DPAGE=0; archPaint(); });
   document.getElementById('archSel').addEventListener('change', e=>archShow(e.target.value));
   document.getElementById('archXlsx').addEventListener('click', async ()=>{ if(!ARCH_CUR){ showToast('Pilih arsip dulu.'); return; } try{ await summaryExcel(ARCH_CUR); }catch(e){ showToast('Gagal membuat Excel: '+(e&&e.message||e)); } });
   document.getElementById('archPptx').addEventListener('click', async ()=>{ if(!ARCH_CUR){ showToast('Pilih arsip dulu.'); return; } try{ await summaryPpt(ARCH_CUR); }catch(e){ showToast('Gagal membuat PPT: '+(e&&e.message||e)); } });
@@ -9987,6 +10095,7 @@ function applyLoginState(){
   document.getElementById('btnManageUsers').classList.toggle('hidden', !isAdmin);
   document.getElementById('btnSummaryXlsx').classList.toggle('hidden', !isAdmin);
   document.getElementById('btnSummaryPptx').classList.toggle('hidden', !isAdmin);
+  { const p = document.getElementById('archPptx'); if(p) p.classList.toggle('hidden', !isAdmin); }
   { const a = document.getElementById('archAdmin'); if(a){ a.classList.toggle('hidden', !isAdmin); a.style.display = isAdmin ? 'flex' : 'none'; } }
   document.getElementById('btnChangePass').classList.toggle('hidden', !loggedIn);
   document.getElementById('btnLogout').classList.toggle('hidden', !loggedIn);
@@ -10957,6 +11066,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.28 · 6 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.30 · 11 Nov 2026</div>
 </body>
 </html>
