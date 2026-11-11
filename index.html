@@ -9596,8 +9596,8 @@ function wjDetail(){
     if(String((META.regions||[])[r[IDX.regionIdx]]||'').trim().toUpperCase() !== WJ_REGION) return;
     const bn = META.brands[r[IDX.brandIdx]], id = r[IDX.outletId];
     const ms = MASTER[bn+'|'+id]; const pk = (ms && ms.pairKey) ? ms.pairKey : (bn+'|'+id);
-    let p = phys.get(pk); if(!p){ p = {a:META.branches[r[IDX.branchIdx]] || '(tanpa branch)', mc:META.micros[r[IDX.microIdx]]||'', id:{}, nm:{}, ga:{'IM3':0,'3ID':0}, dse:'', pcs:0, sp:0, vou:0, sal:0, stock:0}; phys.set(pk,p); }
-    p.id[bn] = id; p.nm[bn] = cleanName(r[IDX.outletName]) || '';
+    let p = phys.get(pk); if(!p){ p = {a:META.branches[r[IDX.branchIdx]] || '(tanpa branch)', mc:META.micros[r[IDX.microIdx]]||'', id:{}, nm:{}, ga:{'IM3':0,'3ID':0}, dse:'', pcs:0, sp:0, vou:0, sal:0, stock:0, cat:{}}; phys.set(pk,p); }
+    p.id[bn] = id; p.nm[bn] = cleanName(r[IDX.outletName]) || ''; p.cat[bn] = META.cats[r[IDX.catIdx]] || '';
     if(!p.dse){ try{ p.dse = dseOf(r, IDX) || ''; }catch(e){} }
     p.stock += stockAmt(r); p.pk = pk;
     const s = sIdx.get(r[IDX.brandIdx]+'|'+id);
@@ -9620,7 +9620,7 @@ function wjDetail(){
   phys.forEach(p=>{
     const sp = (supBy.get(p.pk)||[0,0,0,0,0,0,0,0]).map(v=>Math.round(v));
     const tipe = (p.id['IM3'] && p.id['3ID']) ? 'PAIR' : (p.id['IM3'] ? 'IM3 ONLY' : '3ID ONLY');
-    out.push([p.a, p.mc, tipe, String(p.id['IM3']||''), String(p.id['3ID']||''), p.nm['IM3']||'', p.nm['3ID']||'', String(p.dse||''), p.ga['IM3'], p.ga['3ID'], Math.round(p.pcs), Math.round(p.sp), Math.round(p.vou), Math.round(p.sal), Math.round(p.stock), ...sp]);
+    out.push([p.a, p.mc, tipe, String(p.id['IM3']||''), String(p.id['3ID']||''), p.nm['IM3']||'', p.nm['3ID']||'', String(p.dse||''), p.ga['IM3'], p.ga['3ID'], Math.round(p.pcs), Math.round(p.sp), Math.round(p.vou), Math.round(p.sal), Math.round(p.stock), ...sp, (p.cat['IM3'] && p.cat['3ID'] && p.cat['IM3']!==p.cat['3ID']) ? (p.cat['IM3']+' / '+p.cat['3ID']) : (p.cat['IM3']||p.cat['3ID']||'')]);
   });
   out.sort((x,y)=> (x[0]<y[0]?-1:x[0]>y[0]?1:0) || (x[1]<y[1]?-1:x[1]>y[1]?1:0) || (String(x[3]||x[4]) < String(y[3]||y[4]) ? -1 : 1));
   return out;
@@ -9839,6 +9839,18 @@ async function _summaryExcel(){
       put('TOTAL WEST JAVA', sp.total, 2, false);
       ws.getColumn(1).width = 36; for(let i=2;i<=14;i++) ws.getColumn(i).width = 11;
     } }
+  if(!SNAP_ACTIVE){
+    const ws = wb.addWorksheet('Detail Outlet', {views:[{state:'frozen', ySplit:1}]});
+    const head = DET_HEAD.slice(); head.splice(3,0,'KATEGORI (PJP/KAM/KRO)');
+    ws.addRow(head);
+    const hr = ws.getRow(1); hr.height = 30;
+    hr.eachCell(c=>{ c.font = {bold:true, color:{argb:'FFFFFFFF'}}; c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFD6001C'}}; c.alignment = {horizontal:'center', vertical:'middle', wrapText:true}; });
+    wjDetail().forEach(r=>{ const c = detCells(r); c.splice(3,0,r[23]||''); ws.addRow(c); });
+    [24,34,12,14,14,14,28,28,14,9,9,10,10,12,10,14,14,14,14,12,14,10,12,14,10,14,12,14,12,14].forEach((w,i)=>{ ws.getColumn(i+1).width = w; });
+    [5,6].forEach(i=>{ ws.getColumn(i).numFmt = '@'; });
+    [10,11,12,14,16,17,18,19,21,23,24,25,26,27,28,29,30].forEach(i=>{ ws.getColumn(i).numFmt = '#,##0'; });
+    ws.autoFilter = {from:{row:1,column:1}, to:{row:1,column:head.length}};
+  }
   if(kabRows()){ exKab(wb); if(kabAreaRows()){ exKab(wb, 'area'); exKab(wb, 'mc'); } }
   const buf = await wb.xlsx.writeBuffer();
   const url = URL.createObjectURL(new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
@@ -11165,6 +11177,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.33 · 11 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.34 · 11 Nov 2026</div>
 </body>
 </html>
