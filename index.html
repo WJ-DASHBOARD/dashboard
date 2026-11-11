@@ -282,7 +282,7 @@
       <h1 class="h1">Outlet Performance
         <small>Monitoring GA, Sell In &amp; Stock per Outlet</small>
       </h1>
-      <div class="meta-line">Data outlet (pairing) per: <b id="metaMasterDate">–</b> &nbsp;·&nbsp; Periode data stok: <b id="metaAsOf">–</b> &nbsp;·&nbsp; Sell In per: <b id="metaSellinDate">–</b> &nbsp;·&nbsp; GA per: <b id="metaGaDate">–</b> &nbsp;·&nbsp; Data Supply per: <b id="metaSupplyDate">–</b></div>
+      <div class="meta-line">Data outlet (pairing) per: <b id="metaMasterDate">–</b> &nbsp;·&nbsp; Periode data stok: <b id="metaAsOf">–</b> &nbsp;·&nbsp; Sell In per: <b id="metaSellinDate">–</b> &nbsp;·&nbsp; GA per: <b id="metaGaDate">–</b> &nbsp;·&nbsp; OSA per: <b id="metaOsaDate">–</b> &nbsp;·&nbsp; Data Supply per: <b id="metaSupplyDate">–</b></div>
     </div>
     <div style="display:flex;gap:10px;">
       <button class="btn" id="btnRefresh"><span class="refresh-dot"></span>Cek update</button>
@@ -319,6 +319,7 @@
     </div>
     <div class="search-wrap">
       <input type="text" id="fSearch" placeholder="Cari Outlet ID / Nama / Area (mis. &quot;cell abc kuningan&quot;)…" style="min-width:260px;">
+      <button type="button" class="chip" id="fReset" title="Kembalikan semua filter ke awal" style="margin-left:8px;">↺ Reset filter</button>
     </div>
   </div>
 </div>
@@ -3372,7 +3373,7 @@ function lmtdParseSecondary(file, delim, progressEl){
         if(!isDashRegion(row.region) || row.parameter !== 'SECONDARY') return;
         const brand = row.brand;
         if(brand !== 'IM3' && brand !== '3ID') return;
-        const d = String(row.dt_id || '').slice(0,10);
+        const d = isoDt(row.dt_id).slice(0,10);
         if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
         if(d.slice(0,7) !== cutYm || d > cutoff){ skippedOther++; return; }
         const key = brand + '|' + normId(row.outlet_id);
@@ -3416,7 +3417,7 @@ function lmtdParseSupply(file, delim, progressEl){
         const row = res.data;
         if(!brand && (row.brand === 'IM3' || row.brand === '3ID')) brand = row.brand;
         if(row.brand !== brand) return;
-        const d = String(row.dt_id || '').slice(0,10);
+        const d = isoDt(row.dt_id).slice(0,10);
         if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
         const cutoff = lmtdCutoff('supply', brand);
         if(d.slice(0,7) !== cutoff.slice(0,7) || d > cutoff){ skipped++; return; }
@@ -3473,7 +3474,7 @@ function lmtdParseOsa(file, idCol, progressEl){
           if(brand !== 'IM3' && brand !== '3ID') continue;
           const field = OSA_PARAM_MAP[row.parameter];
           if(!field) continue;
-          const dt = String(row.dt_id || '').trim();
+          const dt = isoDt(row.dt_id);
           if(!/^\d{4}-\d{2}-\d{2}/.test(dt) || dt.slice(0,7) !== cutoff.slice(0,7) || dt > cutoff) continue;
           let b = B[brand]; if(!b) b = B[brand] = { maxDate:'', byKey:new Map() };
           if(dt > b.maxDate) b.maxDate = dt;
@@ -3529,7 +3530,7 @@ function lmtdParseTertiary(file, progressEl){
         if(!isDashRegion(row.region_outlet)) return;
         const brand = row.brand;
         if(brand !== 'IM3' && brand !== '3ID') return;
-        const d = String(row.dt_id || '').slice(0,10);
+        const d = isoDt(row.dt_id).slice(0,10);
         if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
         if(d.slice(0,7) !== cutYm || d > cutoff){ skippedOther++; return; }
         const key = brand + '|' + normId(row.outlet_id);
@@ -7534,7 +7535,7 @@ function parseOsaBody(file, idCol, progressEl){
           if(brand !== 'IM3' && brand !== '3ID') continue;
           const field = OSA_PARAM_MAP[row.parameter];
           if(!field) continue;   // skips the plain "osa" parameter on purpose
-          const dt = String(row.dt_id || '').trim();
+          const dt = isoDt(row.dt_id);
           if(!/^\d{4}-\d{2}-\d{2}/.test(dt)) continue;
           let b = B[brand]; if(!b) b = B[brand] = { maxDate:'', byKey:new Map() };
           if(dt > b.maxDate) b.maxDate = dt;
@@ -7640,7 +7641,7 @@ function handleTertiaryFile(file){
         const rev = parseFloat(row.net_rev) || 0;
         byKey[key] = (byKey[key] || 0) + rev;
         matched++;
-        const d = String(row.dt_id || '').slice(0,10);
+        const d = isoDt(row.dt_id).slice(0,10);
         if(/^\d{4}-\d{2}-\d{2}$/.test(d)){
           if(d > maxDate) maxDate = d;
           let dm = byDayKey[key]; if(!dm) dm = byDayKey[key] = {};
@@ -7918,7 +7919,7 @@ function handleSecondaryFile(file){
         const rev = parseFloat(row.rev) || 0;
         byKey[key] = (byKey[key] || 0) + rev;
         matched++;
-        const d = String(row.dt_id || '').slice(0,10);
+        const d = isoDt(row.dt_id).slice(0,10);
         if(/^\d{4}-\d{2}-\d{2}$/.test(d)){
           if(d > maxDate) maxDate = d;
           let dm = byDayKey[key]; if(!dm) dm = byDayKey[key] = {};
@@ -8120,6 +8121,17 @@ async function handleSupplyFiles(fileList){
   uploadInProgress = false;
 }
 
+// Tanggal dt_id bisa berformat ISO (2026-10-31) atau M/D/YYYY (10/31/2026, export BigQuery/Excel). Selalu dinormalkan ke YYYY-MM-DD
+// supaya perbandingan tanggal (terbaru/bulan) benar — "10/9/2026" > "10/31/2026" kalau dibandingkan sebagai teks.
+function isoDt(v){
+  const s = String(v == null ? '' : v).trim();
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?!\d)/.exec(s);
+  if(!m) return s;
+  let mo = +m[1], d = +m[2];
+  if(mo > 12 && d <= 12){ const x = mo; mo = d; d = x; }   // D/M/YYYY
+  if(mo < 1 || mo > 12 || d < 1 || d > 31) return s;
+  return m[3] + '-' + String(mo).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+}
 function parseSupplyBody(file, progressEl){
   return new Promise((resolve) => {
     if(!MASTER || Object.keys(MASTER).length === 0){
@@ -8140,7 +8152,7 @@ function parseSupplyBody(file, progressEl){
         rowCount++;
         const row = res.data;
         if(!brand) brand = row.brand;
-        if(row.dt_id && (!maxDate || row.dt_id > maxDate)) maxDate = row.dt_id;
+        { const dI = isoDt(row.dt_id).slice(0,10); if(dI && (!maxDate || dI > maxDate)) maxDate = dI; }
         const oid = normId(row.ret_qr_cd || row.outlet_id);
         const key = row.brand+'|'+oid;
         const mm = MASTER[key];
@@ -8153,7 +8165,7 @@ function parseSupplyBody(file, progressEl){
           if(!outletAgg[key][field]) outletAgg[key][field] = [0,0];
           outletAgg[key][field][0] += hit;
           outletAgg[key][field][1] += rev;
-          const d = String(row.dt_id || '').slice(0,10);
+          const d = isoDt(row.dt_id).slice(0,10);
           if(/^\d{4}-\d{2}-\d{2}$/.test(d)){
             if(!outletAggByDate[key]) outletAggByDate[key] = {};
             if(!outletAggByDate[key][d]) outletAggByDate[key][d] = {};
@@ -8398,6 +8410,8 @@ function refreshHeaderMeta(){
     // Sell In di dashboard selalu Qty (file BigQuery) -> tanggalnya = tanggal data Qty terbaru; tanggal OSA lama hanya cadangan
     const sellinDate = pcsDates.length ? pcsDates[0] : (SMETA.asOf || '–');
     document.getElementById('metaSellinDate').textContent = sellinDate;
+    { const ob = SMETA.asOfByBrand || {}; const od = Object.values(ob).filter(Boolean).sort().reverse()[0] || SMETA.asOf || '–';
+      const el = document.getElementById('metaOsaDate'); if(el) el.textContent = od; }
     // GA can now come from its own RGUGA file with its own as-of date; otherwise it
     // shares the Sell In file's date like before
     const gaDates = Object.values(SMETA.gaAsOfByBrand || {}).filter(Boolean).sort().reverse();
@@ -10855,10 +10869,18 @@ function bindEvents(){
   document.getElementById('fTerritory').addEventListener('change', applyFilters);
   document.getElementById('fDse').addEventListener('change', applyFilters);
   document.getElementById('fSearch').addEventListener('input', debounce(applyFilters, 200));
+  document.getElementById('fReset').addEventListener('click', ()=>{
+    ['fBrand','fRegion','fArea','fBranch','fMicro','fPtype','fTerritory','fDse'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+    document.getElementById('fSearch').value='';
+    document.querySelectorAll('#catChips .chip').forEach(c=>c.classList.toggle('active', c.dataset.cat===''));
+    activeCat = '';
+    refreshAreaOptions(); refreshBranchOptions(); refreshMicroOptions(); refreshTerritoryDseOptions();
+    applyFilters(); fitMapToSelection();
+  });
 
-  document.querySelectorAll('.chip').forEach(chip=>{
+  document.querySelectorAll('#catChips .chip').forEach(chip=>{
     chip.addEventListener('click', ()=>{
-      document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+      document.querySelectorAll('#catChips .chip').forEach(c=>c.classList.remove('active'));
       chip.classList.add('active');
       activeCat = chip.dataset.cat;
       applyFilters();
@@ -11143,6 +11165,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.31 · 11 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.33 · 11 Nov 2026</div>
 </body>
 </html>
