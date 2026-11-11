@@ -9809,9 +9809,26 @@ async function summaryExcel(snap){
   SNAP_ACTIVE = snap||null;
   try{ await _summaryExcel(); } finally{ SNAP_ACTIVE = null; }
 }
+// Library CDN kadang gagal termuat saat halaman dibuka: coba muat ulang saat dibutuhkan (cdnjs lalu jsdelivr/unpkg)
+const LIB_URLS = {
+  ExcelJS: ['https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js','https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js','https://unpkg.com/exceljs@4.4.0/dist/exceljs.min.js'],
+  PptxGenJS: ['https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js','https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js','https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js']
+};
+async function ensureLib(name){
+  const has = ()=>{ try{ return typeof (name==='ExcelJS' ? ExcelJS : PptxGenJS) !== 'undefined'; }catch(e){ return false; } };
+  if(has()) return true;
+  showToast('Memuat library '+(name==='ExcelJS'?'Excel':'PPT')+'…');
+  for(const u of LIB_URLS[name]){
+    try{
+      await new Promise((ok,no)=>{ const sc = document.createElement('script'); sc.src = u; sc.onload = ok; sc.onerror = ()=>{ sc.remove(); no(new Error('gagal')); }; document.head.appendChild(sc); });
+      if(has()) return true;
+    }catch(e){}
+  }
+  return false;
+}
 async function _summaryExcel(){
   if(!SNAP_ACTIVE && (!OUTLETS || !OUTLETS.length)){ showToast('Data outlet belum termuat.'); return; }
-  if(typeof ExcelJS === 'undefined'){ showToast('Library Excel belum termuat (cek koneksi lalu refresh).'); return; }
+  if(!(await ensureLib('ExcelJS'))){ showToast('Library Excel gagal dimuat (cek koneksi internet / blokir jaringan kantor lalu refresh).'); return; }
   await ensureProgram();
   const rows = wjBuild(), period = wjPeriod();
   const wb = new ExcelJS.Workbook();
@@ -9863,7 +9880,7 @@ async function summaryPpt(snap){
 }
 async function _summaryPpt(){
   if(!SNAP_ACTIVE && (!OUTLETS || !OUTLETS.length)){ showToast('Data outlet belum termuat.'); return; }
-  if(typeof PptxGenJS === 'undefined'){ showToast('Library PPT belum termuat (cek koneksi lalu refresh).'); return; }
+  if(!(await ensureLib('PptxGenJS'))){ showToast('Library PPT gagal dimuat (cek koneksi internet / blokir jaringan kantor lalu refresh).'); return; }
   await ensureProgram();
   const rows = wjBuild(), period = wjPeriod();
   // gaya mengikuti template Indosat Ooredoo Hutchison (DSE_Hybrid.ppt)
@@ -10162,7 +10179,7 @@ async function archPaint(){
   bind('adArea','area','change'); bind('adTipe','tipe','change'); bind('adGa','ga','change'); bind('adQ','q','input');
   document.getElementById('adXls').addEventListener('click', async ()=>{
     try{
-      if(typeof ExcelJS === 'undefined'){ showToast('Library Excel belum termuat. Refresh halaman lalu coba lagi.'); return; }
+      if(!(await ensureLib('ExcelJS'))){ showToast('Library Excel gagal dimuat (cek koneksi internet lalu refresh).'); return; }
       const fr = filt();
       const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Detail Outlet', {views:[{state:'frozen', ySplit:1}]});
       ws.addRow(DET_HEAD);
@@ -11177,6 +11194,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.34 · 11 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.35 · 11 Nov 2026</div>
 </body>
 </html>
