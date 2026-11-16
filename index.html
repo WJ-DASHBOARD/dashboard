@@ -1197,7 +1197,7 @@
       <table class="summary" style="width:100%;font-size:12px;">
         <thead><tr><th style="text-align:left;">Yang mau diisi</th><th style="text-align:left;">File yang dipakai</th><th style="text-align:left;">Menu</th></tr></thead>
         <tbody>
-          <tr><td><b>Stock Saldo</b> (ending balance, H-1)</td><td>Stock Balance Daily Report .xls / .xlsx (boleh beberapa file sekaligus); hanya saldo yang berubah, SP/Voucher tetap</td><td>#1b</td></tr>
+          <tr><td><b>Stock Saldo</b> (ending balance, H-1)</td><td>Stock Balance Daily Report .xls / .xlsx (boleh beberapa file sekaligus); hanya saldo yang berubah, SP/Voucher tetap; <b>hanya untuk West Java</b> (region lain saldo dari file stok #1)</td><td>#1b</td></tr>
           <tr><td>Outlet &amp; titik peta</td><td>File pairing .xlsx (1 file per region; region lain tidak terhapus)</td><td>#2</td></tr>
           <tr><td><b>GA (MTD)</b> IM3 &amp; 3ID</td><td><code>IM3_OUTLET_RGUGA_YYYYMM.csv</code> <b>dan</b> <code>3ID_OUTLET_RGUGA_YYYYMM.csv</code> (dua file, boleh dipilih sekaligus), <i>atau</i> 1 file GA per MSISDN (<code>GA_Outlet…csv</code>), <i>atau</i> 1 export BigQuery <code>bq-results…</code> yang berisi kpi RET_TAG</td><td>#5</td></tr>
           <tr><td><b>Sell In SP / Voucher / Saldo (Rp)</b></td><td><code>OSA_IM3.CSV</code> <b>dan</b> <code>OSA_3ID.CSV</code> — hanya file OSA. File GA/RGUGA tidak berisi Sell In (Rp)</td><td>#6</td></tr>
@@ -1215,7 +1215,7 @@
 
     <div class="upload-block">
       <h4>1b. Stock Saldo saja (Stock Balance Daily Report .xls / .xlsx)</h4>
-      <p class="hint">Hanya mengganti <b>Stock Saldo</b> (Current Balance semua baris dijumlahkan per Outlet ID); stok SP dan Voucher tidak berubah. Boleh pilih beberapa file sekaligus (export besar terbagi jadi beberapa file). Outlet yang tidak ada di file dianggap saldo 0. Upload stok biasa (#1) dulu kalau outlet belum termuat.</p>
+      <p class="hint">Hanya mengganti <b>Stock Saldo</b> untuk outlet <b>WEST JAVA</b> (region lain tetap memakai saldo dari file stok #1) (Current Balance semua baris dijumlahkan per Outlet ID); stok SP dan Voucher tidak berubah. Boleh pilih beberapa file sekaligus (export besar terbagi jadi beberapa file). Outlet yang tidak ada di file dianggap saldo 0. Upload stok biasa (#1) dulu kalau outlet belum termuat.</p>
       <input type="file" id="saldoFile" accept=".xls,.xlsx" multiple>
       <div class="progress-line" id="saldoProgress"></div>
     </div>
@@ -5948,6 +5948,8 @@ async function handleSaldoFiles(fileList){
     OUTLETS.forEach(r=>{
       const oid = String(r[IDX.outletId]);
       const reg = String((META.regions||[])[r[IDX.regionIdx]] || '').trim().toUpperCase();
+      // Stock Saldo dari file Balance HANYA berlaku untuk WEST JAVA. Region lain tetap memakai saldo dari file stok (#1).
+      if(reg !== 'WEST JAVA'){ untouched++; return; }
       if(sums.has(oid)){ r[IDX.salAmt] = Math.round(sums.get(oid)); seen.add(oid); matched++; }
       else if(!fileRegions.size || fileRegions.has(reg)){ r[IDX.salAmt] = 0; absent++; }
       else untouched++;
@@ -11213,6 +11215,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.39 · 11 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.40 · 11 Nov 2026</div>
 </body>
 </html>
