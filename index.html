@@ -817,6 +817,7 @@
         <th rowspan="2">DSE Code</th>
         <th rowspan="2">Kategori</th>
         <th colspan="3" style="text-align:center;">GA (MTD)</th>
+        <th colspan="3" style="text-align:center;">Status GA</th>
         <th colspan="3" class="rp-col" style="text-align:center;" title="Nilai Sell In SP (Rp) dari file OSA — menu #6 Perbarui data">Sell In SP (Rp, file OSA)</th>
         <th colspan="3" style="text-align:center;" title="Jumlah SIM (pcs) dari baris kpi=SELLIN di export BigQuery — file yang sama dengan GA, menu #5">Sell In SP</th>
       </tr>
@@ -824,6 +825,9 @@
         <th style="font-weight:500;">IM3</th>
         <th style="font-weight:500;">3ID</th>
         <th style="font-weight:500;">IOH</th>
+        <th style="font-weight:500;">No GA IM3</th>
+        <th style="font-weight:500;">No GA 3ID</th>
+        <th style="font-weight:500;">No GA IOH</th>
         <th class="rp-col" style="font-weight:500;">IM3</th>
         <th class="rp-col" style="font-weight:500;">3ID</th>
         <th class="rp-col" style="font-weight:500;">IOH</th>
@@ -5297,6 +5301,10 @@ function buildFilteredPairedRows(){
       cat: rep.cat,
       remark: (p.im3 && p.tid) ? 'Hybrid' : (p.im3 ? 'IM3 only' : '3ID only'),
       gaIm3, gaTid, gaIoh: gaIm3+gaTid,
+      // status GA: HANYA 'No GA' yang ditulis (kosong = ada GA). Sisi brand yang tidak ada (mis. outlet 3ID only di kolom IM3) juga dihitung No GA.
+      stGaIm3: (p.im3 && gaIm3>0) ? '' : 'No GA',
+      stGaTid: (p.tid && gaTid>0) ? '' : 'No GA',
+      stGaIoh: (gaIm3+gaTid)>0 ? '' : 'No GA',
       spIm3, spTid, spIoh: spIm3+spTid,
       pcsIm3, pcsTid, pcsIoh: pcsIm3+pcsTid
     };
@@ -5325,13 +5333,14 @@ function renderPairedDetailTable(){
       <td>${row.idIm3 ? fmtN(row.gaIm3) : '–'}</td>
       <td>${row.hasTid ? fmtN(row.gaTid) : '–'}</td>
       <td>${fmtN(row.gaIoh)}</td>
+      ${[row.stGaIm3,row.stGaTid,row.stGaIoh].map(v=>`<td>${v==='No GA'?'<span class="badge zero">No GA</span>':''}</td>`).join('')}
       <td class="rp-col">${row.idIm3 ? fmtN(row.spIm3) : '–'}</td>
       <td class="rp-col">${row.hasTid ? fmtN(row.spTid) : '–'}</td>
       <td class="rp-col">${fmtN(row.spIoh)}</td>
       <td>${row.idIm3 ? fmtN(row.pcsIm3) : '–'}</td>
       <td>${row.hasTid ? fmtN(row.pcsTid) : '–'}</td>
       <td>${fmtN(row.pcsIoh)}</td>
-    </tr>`).join('') : `<tr><td colspan="15" style="color:var(--muted);">Tidak ada data.</td></tr>`;
+    </tr>`).join('') : `<tr><td colspan="18" style="color:var(--muted);">Tidak ada data.</td></tr>`;
 
   document.getElementById('pairedPageInfo').textContent = `Halaman ${pairedPage} / ${totalPages}`;
   document.getElementById('pairedPrevPage').disabled = pairedPage<=1;
@@ -5341,13 +5350,13 @@ function renderPairedDetailTable(){
 function exportPairedCsv(){
   const rows = buildFilteredPairedRows();
   const headers = ['micro_cluster','nama_outlet','outlet_id_im3','outlet_id_3id','dse_code_im3','kategori','status_pairing',
-    'ga_im3','ga_3id','ga_ioh','sellin_sp_pcs_im3','sellin_sp_pcs_3id','sellin_sp_pcs_ioh'];
+    'ga_im3','ga_3id','ga_ioh','status_no_ga_im3','status_no_ga_3id','status_no_ga_ioh','sellin_sp_pcs_im3','sellin_sp_pcs_3id','sellin_sp_pcs_ioh'];
   const lines = [headers.join(',')];
   rows.forEach(row=>{
     lines.push([
       JSON.stringify(row.micro||''), JSON.stringify(row.name||''), row.idIm3||'', row.idTid||'', row.dseIm3||'',
       catDisplayLabel(row.cat), row.remark,
-      row.gaIm3, row.gaTid, row.gaIoh, row.pcsIm3, row.pcsTid, row.pcsIoh
+      row.gaIm3, row.gaTid, row.gaIoh, row.stGaIm3, row.stGaTid, row.stGaIoh, row.pcsIm3, row.pcsTid, row.pcsIoh
     ].join(','));
   });
   const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
@@ -5795,11 +5804,16 @@ function exportCombinedCsv(){
   filteredSellin.forEach(r=>sellinIdx.set(META.brands[r[IDX_S.brandIdx]]+'|'+r[IDX_S.outletId], r));
 
   const headers = [
-    'brand','area','branch','micro_cluster','outlet_id','outlet_name','kategori','remark_pairing',
+    'brand','area','branch','micro_cluster','outlet_id','outlet_name','dse_code','outlet_id_pair','outlet_name_pair','kategori','remark_pairing',
     'stock_amount_saldo','stock_amount_all','status_stock_saldo','status_stock_all','dos_saldo','dos_all_product',
     'ga_mtd','status_ga','sellin_all','status_sellin'
   ];
   const lines = [headers.join(',')];
+  // pasangan (hybrid): outlet IM3 <-> 3ID dari data mapping; ID & nama pasangan ditaruh di baris yang sama
+  const pairOf = new Map();
+  buildPairsFromMaster().forEach(pr=>{
+    if(pr.im3 && pr.tid){ pairOf.set('IM3|'+pr.im3.outletId, pr.tid); pairOf.set('3ID|'+pr.tid.outletId, pr.im3); }
+  });
 
   filtered.forEach(r=>{
     const stock = stockAmt(r);
@@ -5812,10 +5826,12 @@ function exportCombinedCsv(){
     const statusSellin = s ? sellinStatusFlags(s).join('; ') : '-';
     const gaVal = s ? s[IDX_S.rguGa] : 0;
     const totalSellin = s ? (s[IDX_S.sellinSp]+s[IDX_S.sellinVou]+s[IDX_S.sellinSaldo]) : '';
+    const pairInfo = pairOf.get(key) || null;
 
     const row = [
       META.brands[r[IDX.brandIdx]], META.areas[r[IDX.areaIdx]], META.branches[r[IDX.branchIdx]], META.micros[r[IDX.microIdx]],
-      r[IDX.outletId], JSON.stringify(cleanName(r[IDX.outletName])), catDisplayLabel(catName(r[IDX.catIdx])), remarkOf(r, IDX),
+      r[IDX.outletId], JSON.stringify(cleanName(r[IDX.outletName])), dseOf(r, IDX), pairInfo ? pairInfo.outletId : '', pairInfo ? JSON.stringify(cleanName(pairInfo.name)) : '',
+      catDisplayLabel(catName(r[IDX.catIdx])), remarkOf(r, IDX),
       r[IDX.salAmt], Math.round(stock), statusSaldo, statusStockAll,
       dosSal!==null?dosSal.toFixed(2):'', dosAll!==null?dosAll.toFixed(2):'',
       s ? s[IDX_S.rguGa] : '', gaSlabLabel(gaVal), totalSellin, JSON.stringify(statusSellin)
@@ -11215,6 +11231,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.40 · 11 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.43 · 11 Nov 2026</div>
 </body>
 </html>
