@@ -1151,8 +1151,8 @@
         <label style="font-size:12.5px;display:block;margin-bottom:4px;">Username yang mau direset</label>
         <input type="text" id="forgotPassUser" style="width:100%;margin-bottom:8px;" autocomplete="username">
         <div class="progress-line" id="forgotPassMsg"></div>
-        <button class="btn btn-sm" id="btnDoForgotPass" style="margin-top:6px;width:100%;background:var(--red);color:#fff;border:1px solid var(--red);padding:9px 12px;font-weight:600;">Reset Password ke Default</button>
-        <p class="hint" style="margin-top:6px;">Password akan direset ke default (<code>wj2026</code>) dan kamu akan diminta membuat password baru saat login berikutnya.</p>
+        <button class="btn btn-sm" id="btnDoForgotPass" style="margin-top:6px;width:100%;background:var(--red);color:#fff;border:1px solid var(--red);padding:9px 12px;font-weight:600;">Ajukan Reset Password</button>
+        <p class="hint" style="margin-top:6px;">Permintaan dikirim ke admin. Setelah admin menyetujui, kamu bisa login dengan password default (diinfokan admin) lalu diminta membuat password baru.</p>
       </div>
     </div>
   </div>
@@ -10260,8 +10260,18 @@ function applyLoginState(){
     const roleLabel = isAdmin ? 'admin' : 'viewer';
     document.getElementById('loginUserLabel').textContent = (localStorage.getItem('wj_user') || '') + ' · ' + roleLabel;
   }
+  updateResetBadge();
 }
 
+function updateResetBadge(){
+  try{
+    const b = document.getElementById('btnManageUsers'); if(!b) return;
+    const isAdmin = localStorage.getItem('wj_logged_in') === '1' && currentRole() === 'admin';
+    const pend = isAdmin ? (USERS||[]).filter(u=>u.resetRequestedAt).length : 0;
+    b.textContent = pend ? `Kelola User (${pend} minta reset)` : 'Kelola User';
+    if(pend && !window.__resetToastShown){ window.__resetToastShown = true; showToast(`Ada ${pend} permintaan reset password — buka Kelola User untuk menyetujui.`); }
+  }catch(e){}
+}
 function finishLogin(username, role){
   localStorage.setItem('wj_logged_in', '1');
   localStorage.setItem('wj_user', username);
@@ -10630,7 +10640,7 @@ function renderUserList(){
   document.getElementById('defaultPassLabel').textContent = DEFAULT_PASSWORD;
   document.getElementById('userListBody').innerHTML = USERS.map(u=>`
     <tr>
-      <td>${u.username}</td>
+      <td>${u.username}${u.resetRequestedAt ? `<div style="color:var(--red);font-size:10.5px;font-weight:600;">⚠ Minta reset password<br><span style="font-weight:400;color:var(--muted);">${escHtml(new Date(u.resetRequestedAt).toLocaleString('id-ID'))}</span></div>` : ''}</td>
       <td><input type="text" value="${escHtml(u.name||'')}" placeholder="isi nama" data-user="${u.username}" onchange="setUserName(this.dataset.user, this.value)" style="width:130px;font-size:11.5px;padding:3px 4px;"></td>
       <td class="mono">${u.mustChangePassword!==false ? '<i style="color:var(--muted);">(belum diganti)</i>' : '••••••••'}</td>
       <td>
@@ -10640,7 +10650,8 @@ function renderUserList(){
         </select>
       </td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-ghost btn-sm" data-user="${u.username}" onclick="resetUserPassword(this.dataset.user)">Reset Pass</button>
+        ${u.resetRequestedAt ? `<button class="btn btn-sm" data-user="${u.username}" onclick="resetUserPassword(this.dataset.user)" style="background:var(--red);color:#fff;">Setujui Reset</button>
+        <button class="btn btn-ghost btn-sm" data-user="${u.username}" onclick="denyResetRequest(this.dataset.user)">Tolak</button>` : `<button class="btn btn-ghost btn-sm" data-user="${u.username}" onclick="resetUserPassword(this.dataset.user)">Reset Pass</button>`}
         <button class="btn btn-ghost btn-sm" data-user="${u.username}" onclick="forceReleaseUser(this.dataset.user)">Paksa Logout</button>
         <button class="btn btn-ghost btn-sm" data-user="${u.username}" onclick="removeUserByName(this.dataset.user)">Hapus</button>
       </td>
@@ -10651,13 +10662,13 @@ async function resetUserPassword(name){
   const u = USERS.find(x=>x.username===name);
   if(!u) return;
   if(!confirm(`Reset password "${name}" ke default (${DEFAULT_PASSWORD})? User ini akan diminta membuat password baru saat login berikutnya.`)) return;
-  const oldSalt = u.salt, oldHash = u.passwordHash, oldMustChange = u.mustChangePassword;
+  const oldSalt = u.salt, oldHash = u.passwordHash, oldMustChange = u.mustChangePassword, oldReq = u.resetRequestedAt;
   u.salt = DEFAULT_CREDENTIAL.salt; u.passwordHash = DEFAULT_CREDENTIAL.passwordHash;
-  delete u.password;
+  delete u.password; delete u.resetRequestedAt;
   u.mustChangePassword = true;
   const saveOk = await saveUsers();
   if(!saveOk){
-    u.salt = oldSalt; u.passwordHash = oldHash; u.mustChangePassword = oldMustChange;
+    u.salt = oldSalt; u.passwordHash = oldHash; u.mustChangePassword = oldMustChange; if(oldReq) u.resetRequestedAt = oldReq;
     showToast(`Gagal reset password "${name}" — koneksi ke server tidak stabil, coba lagi.`);
     return;
   }
@@ -10666,13 +10677,22 @@ async function resetUserPassword(name){
   renderUserList();
 }
 window.resetUserPassword = resetUserPassword;
+async function denyResetRequest(name){
+  const u = USERS.find(x=>x.username===name);
+  if(!u || !u.resetRequestedAt) return;
+  const old = u.resetRequestedAt; delete u.resetRequestedAt;
+  if(!(await saveUsers())){ u.resetRequestedAt = old; showToast('Gagal menolak permintaan — koneksi ke server tidak stabil, coba lagi.'); return; }
+  showToast(`Permintaan reset "${name}" ditolak.`);
+  renderUserList();
+}
+window.denyResetRequest = denyResetRequest;
 
 async function resetAllPasswords(){
   const msg = document.getElementById('resetAllMsg');
   if(!confirm(`Reset password SEMUA ${USERS.length} user ke default (${DEFAULT_PASSWORD})? Semua user (termasuk kamu sendiri) akan diminta membuat password baru saat login berikutnya. Tindakan ini tidak bisa dibatalkan.`)) return;
   msg.textContent = 'Mereset semua password...';
   const backup = USERS.map(u=>({ salt: u.salt, passwordHash: u.passwordHash, mustChangePassword: u.mustChangePassword }));
-  USERS.forEach(u=>{ u.salt = DEFAULT_CREDENTIAL.salt; u.passwordHash = DEFAULT_CREDENTIAL.passwordHash; delete u.password; u.mustChangePassword = true; });
+  USERS.forEach(u=>{ u.salt = DEFAULT_CREDENTIAL.salt; u.passwordHash = DEFAULT_CREDENTIAL.passwordHash; delete u.password; delete u.resetRequestedAt; u.mustChangePassword = true; });
   const saveOk = await saveUsers();
   if(!saveOk){
     USERS.forEach((u,i)=>{ u.salt = backup[i].salt; u.passwordHash = backup[i].passwordHash; u.mustChangePassword = backup[i].mustChangePassword; });
@@ -10870,20 +10890,23 @@ async function doForgotPassword(){
     btn.disabled = false;
     return;
   }
-  const oldSalt = u.salt, oldHash = u.passwordHash, oldMustChange = u.mustChangePassword;
-  u.salt = DEFAULT_CREDENTIAL.salt; u.passwordHash = DEFAULT_CREDENTIAL.passwordHash;
-  delete u.password;
-  u.mustChangePassword = true;
+  if(u.resetRequestedAt){
+    btn.disabled = false;
+    msg.style.color = 'var(--green)';
+    msg.textContent = `Permintaan reset untuk "${u.username}" sudah dikirim dan menunggu persetujuan admin. Hubungi admin bila belum diproses.`;
+    return;
+  }
+  u.resetRequestedAt = new Date().toISOString();
   const saveOk = await saveUsers();
   btn.disabled = false;
   if(!saveOk){
-    u.salt = oldSalt; u.passwordHash = oldHash; u.mustChangePassword = oldMustChange;
+    delete u.resetRequestedAt;
     msg.style.color = 'var(--red)';
-    msg.textContent = 'Gagal reset — koneksi ke server tidak stabil, coba lagi.';
+    msg.textContent = 'Gagal mengirim permintaan — koneksi ke server tidak stabil, coba lagi.';
     return;
   }
   msg.style.color = 'var(--green)';
-  msg.textContent = `Password "${u.username}" direset ke default (${DEFAULT_PASSWORD}). Login dengan password itu, lalu buat password baru.`;
+  msg.textContent = `Permintaan reset password "${u.username}" terkirim. Tunggu admin menyetujui, lalu login dengan password default yang diinfokan admin dan buat password baru.`;
   document.getElementById('loginUser').value = u.username;
   document.getElementById('loginPass').value = '';
 }
@@ -11142,6 +11165,7 @@ async function loadStep(name, fn){
 // stops being blocked behind data that has nothing to do with it.
 let usersLoaded = false;
 let usersReadyPromise = loadStep('users', loadUsers);
+usersReadyPromise.then(()=>updateResetBadge()).catch(()=>{});
 bindLoginEvents();
 
 // Server sometimes answers too slowly right after login (cold cache / many parallel reads) and a dataset
@@ -11231,6 +11255,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.44 · 11 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.46 · 11 Nov 2026</div>
 </body>
 </html>
