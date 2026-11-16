@@ -1856,6 +1856,7 @@ function syncOverlayHide(){
 // ---------- storage helpers ----------
 // Google Apps Script Web App backend — replaces Claude's window.storage so the
 // dashboard works fully standalone (any browser, any device, no Claude needed).
+const CLIENT_VER = 137;   // versi klien untuk server: Kode.gs menolak TULIS dari versi lama (MIN_CLIENT_VER). Naikkan hanya bila Kode.gs juga dinaikkan.
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwufdPVWe4ah-0L6nu0kCEhz2XVd2TpVtZ7gncQsHRod5EbCWAuQPBPET6u-64P6hvu9w/exec';
 
 // Wraps fetch with a hard timeout — if the Apps Script backend hangs (it has done
@@ -1918,7 +1919,7 @@ async function storageSet(key, val){
     const res = await fetchWithTimeout(GAS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'set', key: key, value: JSON.stringify(val) })
+      body: JSON.stringify({ cv: CLIENT_VER, action: 'set', key: key, value: JSON.stringify(val) })
     }, 20000);
     const data = await res.json();
     return !!(data && data.ok);
@@ -2012,7 +2013,7 @@ async function storageSetMulti(items){
     const res = await fetchWithTimeout(GAS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'setMulti', items: items.map(it=>({ key: it.key, value: JSON.stringify(it.value) })) })
+      body: JSON.stringify({ cv: CLIENT_VER, action: 'setMulti', items: items.map(it=>({ key: it.key, value: JSON.stringify(it.value) })) })
     }, 60000);
     const data = await res.json();
     if(data && !data.ok && /unknown action/i.test(data.error || '')){ setBatchSupported = false; return { unsupported:true }; }
@@ -11204,6 +11205,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.36 · 11 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.37 · 11 Nov 2026</div>
 </body>
 </html>
