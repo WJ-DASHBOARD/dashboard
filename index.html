@@ -2193,7 +2193,7 @@ async function loadChunked(prefix, numChunks){
 const META_SPLIT_AT = 30000;
 const META_PART_MAX = 28000;
 const META_HEADER_MAX = 8000;
-function metaJsonLen(v){ return JSON.stringify(v).length; }
+function metaJsonLen(v){ const j = JSON.stringify(v); return (j === undefined ? 4 : j.length); }   // nilai undefined (mis. META.asOf belum ada) tidak boleh membuat penyimpanan error
 function metaSplit(body){
   const keys = Object.keys(body);
   const lens = {}; keys.forEach(k=>{ lens[k] = metaJsonLen(body[k]) + k.length + 4; });
@@ -2360,7 +2360,7 @@ async function loadFromStorageOrSeed(){
     } else if(hasEmbedded && meta && (!window.__SEED__.outlets || window.__SEED__.outlets.length === 0)){
       // PENGAMAN: seed bawaan index.html KOSONG, sedangkan di server sudah ada data. Dulu jalur ini menimpa data online
       // dengan seed kosong lalu menampilkan 'Menyinkronkan...' yang macet. Sekarang data online TIDAK disentuh.
-      META = { brands:[], areas:[], branches:[], micros:[], cats:['KAM','KRO','PJP'], remarks:['N/A','Hybrid','IM3 only','3ID only'], ptypes:['N/A','MPX','SDP'], regions:['N/A'], dses:['N/A'], territories:['N/A'], pairKeys:[], branchByArea:{}, microByBranch:{}, microsByArea:{}, areasByRegion:{}, brandCounts:{}, totalOutlets:0, fields_outlet: [] };
+      META = { brands:[], areas:[], branches:[], micros:[], cats:['KAM','KRO','PJP'], remarks:['N/A','Hybrid','IM3 only','3ID only'], ptypes:['N/A','MPX','SDP'], regions:['N/A'], dses:['N/A'], territories:['N/A'], pairKeys:[], branchByArea:{}, microByBranch:{}, microsByArea:{}, areasByRegion:{}, brandCounts:{}, totalOutlets:0, fields_outlet: [], asOf:null, lastUpdated:null, masterUpdated:null };
       OUTLETS = []; MASTER = {};
       setTimeout(()=>showToast('Data outlet di server belum terbaca lengkap — data online TIDAK diubah. Tekan Refresh; kalau berulang, jangan upload apa pun dan hubungi admin.'), 800);
     } else if(hasEmbedded){
@@ -11213,6 +11213,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.38 · 11 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.39 · 11 Nov 2026</div>
 </body>
 </html>
