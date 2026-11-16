@@ -2320,6 +2320,10 @@ async function loadFromStorageOrSeed(){
   if(meta && meta.branches && contentOk){
     META = meta;
     OUTLETS = await loadChunked('outlets_c', meta.numChunksOutlets || 0);
+    if(meta.totalOutlets && OUTLETS.length < meta.totalOutlets * 0.98){   // server kadang telat/gagal sekali: coba baca ulang sebelum menyerah
+      await new Promise(r=>setTimeout(r, 2500));
+      OUTLETS = await loadChunked('outlets_c', meta.numChunksOutlets || 0);
+    }
     // sanity check: stored chunk count should match what meta claims — otherwise a
     // previous save was interrupted/partial and we should not serve incomplete data
     loadedOk = (OUTLETS.length > 0 || meta.totalOutlets === 0) && (!meta.totalOutlets || OUTLETS.length >= meta.totalOutlets * 0.98);
@@ -2352,6 +2356,12 @@ async function loadFromStorageOrSeed(){
       META = { brands:[], areas:[], branches:[], micros:[], cats:['KAM','KRO','PJP'], remarks:['N/A','Hybrid','IM3 only','3ID only'], ptypes:['N/A','MPX','SDP'], regions:['N/A'], dses:['N/A'], territories:['N/A'], branchByArea:{}, microByBranch:{}, areasByRegion:{}, brandCounts:{}, totalOutlets:0, fields_outlet: [] };
       OUTLETS = []; MASTER = {};
       setTimeout(()=>showToast('Server gagal dibaca (sibuk). Data online tidak diubah — tekan Refresh.'), 800);
+    } else if(hasEmbedded && meta && (!window.__SEED__.outlets || window.__SEED__.outlets.length === 0)){
+      // PENGAMAN: seed bawaan index.html KOSONG, sedangkan di server sudah ada data. Dulu jalur ini menimpa data online
+      // dengan seed kosong lalu menampilkan 'Menyinkronkan...' yang macet. Sekarang data online TIDAK disentuh.
+      META = { brands:[], areas:[], branches:[], micros:[], cats:['KAM','KRO','PJP'], remarks:['N/A','Hybrid','IM3 only','3ID only'], ptypes:['N/A','MPX','SDP'], regions:['N/A'], dses:['N/A'], territories:['N/A'], pairKeys:[], branchByArea:{}, microByBranch:{}, microsByArea:{}, areasByRegion:{} };
+      OUTLETS = []; MASTER = {};
+      setTimeout(()=>showToast('Data outlet di server belum terbaca lengkap — data online TIDAK diubah. Tekan Refresh; kalau berulang, jangan upload apa pun dan hubungi admin.'), 800);
     } else if(hasEmbedded){
       PRE_SEED_BRANDS = (meta && meta.brands) ? meta.brands.slice() : null;
       META = JSON.parse(JSON.stringify(window.__SEED__.meta));
@@ -11194,6 +11204,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.35 · 11 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.36 · 11 Nov 2026</div>
 </body>
 </html>
