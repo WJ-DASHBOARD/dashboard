@@ -1138,6 +1138,7 @@
     <h2 style="margin-top:0;">Login untuk Akses Dashboard</h2>
     <p class="desc">Masukkan username &amp; password yang sudah didaftarkan untuk membuka dashboard ini.</p>
     <div class="upload-block">
+      <div id="loginFields">
       <label style="font-size:12.5px;display:block;margin-bottom:4px;">Username</label>
       <input type="text" id="loginUser" style="width:100%;margin-bottom:10px;" autocomplete="username">
       <label style="font-size:12.5px;display:block;margin-bottom:4px;">Password</label>
@@ -1147,11 +1148,14 @@
       <div style="text-align:center;margin-top:10px;">
         <a href="#" id="linkForgotPass" style="font-size:12px;color:var(--ink-soft);text-decoration:underline;">Lupa password?</a>
       </div>
-      <div id="forgotPassBox" class="hidden" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
+      </div>
+      <div id="forgotPassBox" class="hidden">
+        <div style="font-weight:600;font-size:13.5px;margin-bottom:8px;">Reset Password</div>
         <label style="font-size:12.5px;display:block;margin-bottom:4px;">Username yang mau direset</label>
         <input type="text" id="forgotPassUser" style="width:100%;margin-bottom:8px;" autocomplete="username">
         <div class="progress-line" id="forgotPassMsg"></div>
         <button class="btn btn-sm" id="btnDoForgotPass" style="margin-top:6px;width:100%;background:var(--red);color:#fff;border:1px solid var(--red);padding:9px 12px;font-weight:600;">Ajukan Reset Password</button>
+        <div style="text-align:center;margin-top:10px;"><a href="#" id="linkBackLogin" style="font-size:12px;color:var(--ink-soft);text-decoration:underline;">&larr; Kembali ke login</a></div>
         <p class="hint" style="margin-top:6px;">Permintaan dikirim ke admin. Setelah admin menyetujui, kamu bisa login dengan password default (diinfokan admin) lalu diminta membuat password baru.</p>
       </div>
     </div>
@@ -10909,9 +10913,27 @@ async function doForgotPassword(){
     return;
   }
   msg.style.color = 'var(--green)';
-  msg.textContent = `Permintaan reset password "${u.username}" terkirim. Tunggu admin menyetujui, lalu login dengan password default yang diinfokan admin dan buat password baru.`;
+  msg.textContent = `Permintaan reset password "${u.username}" terkirim. Tunggu admin menyetujui.`;
   document.getElementById('loginUser').value = u.username;
   document.getElementById('loginPass').value = '';
+  const okText = `Permintaan reset password "${u.username}" terkirim. Tunggu admin menyetujui, lalu login dengan password default yang diinfokan admin dan buat password baru.`;
+  setTimeout(()=>{
+    showForgotMode(false, true);
+    const le = document.getElementById('loginError');
+    le.style.color = 'var(--green)'; le.textContent = okText;
+  }, 1800);
+}
+// Mode reset: hanya form reset yang tampil (form login disembunyikan). Setelah permintaan terkirim, kembali ke halaman login.
+function showForgotMode(on, keepNote){
+  document.getElementById('loginFields').classList.toggle('hidden', !!on);
+  document.getElementById('forgotPassBox').classList.toggle('hidden', !on);
+  if(on){
+    document.getElementById('forgotPassMsg').textContent = '';
+    document.getElementById('forgotPassUser').value = document.getElementById('loginUser').value.trim();
+    document.getElementById('forgotPassUser').focus();
+  } else if(!keepNote){
+    document.getElementById('loginError').textContent = '';
+  }
 }
 
 function bindLoginEvents(){
@@ -10919,8 +10941,9 @@ function bindLoginEvents(){
   document.getElementById('loginPass').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
   document.getElementById('linkForgotPass').addEventListener('click', (e)=>{
     e.preventDefault();
-    document.getElementById('forgotPassBox').classList.toggle('hidden');
+    showForgotMode(true);
   });
+  document.getElementById('linkBackLogin').addEventListener('click', (e)=>{ e.preventDefault(); showForgotMode(false); });
   document.getElementById('btnDoForgotPass').addEventListener('click', doForgotPassword);
   document.getElementById('forgotPassUser').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doForgotPassword(); });
 }
@@ -11258,6 +11281,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.48 · 17 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.51 · 20 Nov 2026</div>
 </body>
 </html>
