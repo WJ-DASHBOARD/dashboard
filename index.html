@@ -7641,8 +7641,8 @@ function osaNum(v){
   return isNaN(n) ? 0 : n;
 }
 function osaPapaOpts(sn){
-  const o = { header: true, skipEmptyLines: true, worker: true, delimiter: sn.delimiter,
-    transformHeader: (h)=>String(h).replace(/^﻿/, '').replace(/^\s*["']?|["']?\s*$/g, '').trim().toLowerCase() };
+  // header:false + tanpa fungsi di config: Papa mode worker tidak bisa mengirim fungsi ke worker (DataCloneError -> macet).
+  const o = { header: false, skipEmptyLines: true, worker: true, delimiter: sn.delimiter };
   if(sn.encoding !== 'UTF-8') o.encoding = sn.encoding;
   if(sn.skip) o.skipFirstNLines = sn.skip;
   return o;
@@ -7683,6 +7683,9 @@ async function handleOsaFiles(fileList){
 
 function parseOsaBody(file, idCol, progressEl, sn){
   sn = sn || { delimiter: ',', encoding: 'UTF-8', skip: 0 };
+  const IX = {}; (sn.cols || []).forEach((c,i)=>{ if(!(c in IX)) IX[c] = i; });
+  const iDt = IX.dt_id, iPar = IX.parameter, iBr = IX.brand, iAmt = IX.amt, iId = IX[idCol];
+  let first1 = true, first2 = true;
   // Hemat memori untuk file besar (ratusan MB): dua kali baca file.
   //  Putaran 1: hanya cari tanggal terbaru per brand.
   //  Putaran 2: simpan per outlet HANYA nilai di tanggal terbaru (nilai sekarang), plus nilai terdekat
@@ -7696,11 +7699,12 @@ function parseOsaBody(file, idCol, progressEl, sn){
       chunk: function(res){
         const rows = res.data;
         for(let i=0;i<rows.length;i++){
+          if(first1){ first1 = false; continue; }   // baris header
           const row = rows[i]; rowCount++;
-          const brand = row.brand;
+          const brand = row[iBr];
           if(brand !== 'IM3' && brand !== '3ID') continue;
-          if(!OSA_PARAM_MAP[row.parameter]) continue;
-          const dt = isoDt(row.dt_id);
+          if(!OSA_PARAM_MAP[row[iPar]]) continue;
+          const dt = isoDt(row[iDt]);
           if(!/^\d{4}-\d{2}-\d{2}/.test(dt)) continue;
           const d10 = dt.slice(0,10);
           if(!maxByBrand[brand] || d10 > maxByBrand[brand]) maxByBrand[brand] = d10;
@@ -7720,17 +7724,18 @@ function parseOsaBody(file, idCol, progressEl, sn){
           chunk: function(res){
             const rows = res.data;
             for(let i=0;i<rows.length;i++){
+              if(first2){ first2 = false; continue; }   // baris header
               const row = rows[i]; n2++;
-              const t = T[row.brand]; if(!t) continue;
-              const fld = OSA_PARAM_MAP[row.parameter]; if(!fld) continue;
-              const dt = isoDt(row.dt_id);
+              const t = T[row[iBr]]; if(!t) continue;
+              const fld = OSA_PARAM_MAP[row[iPar]]; if(!fld) continue;
+              const dt = isoDt(row[iDt]);
               if(!/^\d{4}-\d{2}-\d{2}/.test(dt)) continue;
               const d = dt.slice(0,10);
-              const key = row.brand + '|' + normId(row[idCol]);
+              const key = row[iBr] + '|' + normId(row[iId]);
               if(!MASTER[key]) continue;
               let e = t.byKey.get(key);
               if(!e){ e = { c:[0,0,0], w:[0,0,0], wd:['','',''], m:[0,0,0], md:['','',''] }; t.byKey.set(key, e); }
-              const fi = FI[fld], amt = osaNum(row.amt);
+              const fi = FI[fld], amt = osaNum(row[iAmt]);
               if(d === t.max) e.c[fi] = amt;
               if(d <= t.tW && d > e.wd[fi]){ e.wd[fi] = d; e.w[fi] = amt; }
               if(d <= t.tM && d > e.md[fi]){ e.md[fi] = d; e.m[fi] = amt; }
@@ -11703,6 +11708,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.61 · 27 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.62 · 27 Nov 2026</div>
 </body>
 </html>
