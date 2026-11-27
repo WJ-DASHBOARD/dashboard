@@ -7643,9 +7643,15 @@ async function handleOsaFiles(fileList){
 }
 
 function parseOsaBody(file, idCol, progressEl){
+  // Hemat memori untuk file besar (ratusan MB): dua kali baca file.
+  //  Putaran 1: hanya cari tanggal terbaru per brand.
+  //  Putaran 2: simpan per outlet HANYA nilai di tanggal terbaru (nilai sekarang), plus nilai terdekat
+  //             pada/sebelum tanggal target WoW (-7 hari) dan MoM (bulan lalu). Tidak lagi menyimpan semua tanggal.
   return new Promise((resolve) => {
-    const B = {};   // brand -> { maxDate, byKey: Map(key -> {sp:{date:amt}, vou:{date:amt}, saldo:{date:amt}}) }
+    const FI = { sp:0, vou:1, saldo:2 };
+    const maxByBrand = {};
     let rowCount = 0;
+    const fail = (err)=>{ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); };
     Papa.parse(file, {
       header: true, skipEmptyLines: true, worker: true,
       chunk: function(res){
@@ -7654,79 +7660,96 @@ function parseOsaBody(file, idCol, progressEl){
           const row = rows[i]; rowCount++;
           const brand = row.brand;
           if(brand !== 'IM3' && brand !== '3ID') continue;
-          const field = OSA_PARAM_MAP[row.parameter];
-          if(!field) continue;   // skips the plain "osa" parameter on purpose
+          if(!OSA_PARAM_MAP[row.parameter]) continue;
           const dt = isoDt(row.dt_id);
           if(!/^\d{4}-\d{2}-\d{2}/.test(dt)) continue;
-          let b = B[brand]; if(!b) b = B[brand] = { maxDate:'', byKey:new Map() };
-          if(dt > b.maxDate) b.maxDate = dt;
-          const key = brand + '|' + normId(row[idCol]);
-          if(!MASTER[key]) continue;
-          let e = b.byKey.get(key);
-          if(!e){ e = { sp:{}, vou:{}, saldo:{} }; b.byKey.set(key, e); }
-          e[field][dt] = parseFloat(row.amt) || 0;   // keep EVERY date — see below (used for the current value and for the WoW lookup)
+          const d10 = dt.slice(0,10);
+          if(!maxByBrand[brand] || d10 > maxByBrand[brand]) maxByBrand[brand] = d10;
         }
-        if(rowCount % 50000 < rows.length) progressEl.textContent = `Memproses ${rowCount.toLocaleString('id-ID')} baris…`;
+        if(rowCount % 100000 < rows.length) progressEl.textContent = `Putaran 1/2 — membaca tanggal… ${rowCount.toLocaleString('id-ID')} baris`;
       },
-      complete: async function(){
-        const brands = Object.keys(B);
+      complete: function(){
+        const brands = Object.keys(maxByBrand);
         if(!brands.length){
           progressEl.textContent = `Tidak ada baris valid di file ini (brand harus IM3/3ID, parameter osa_sp/osa_vou/osa_saldo).`;
           resolve(); return;
         }
-        const msgs = [];
-        for(const brand of brands){
-          const b = B[brand], byKey = {};
-          b.byKey.forEach((e, key)=>{ byKey[key] = { sp: e.sp[b.maxDate]||0, vou: e.vou[b.maxDate]||0, saldo: e.saldo[b.maxDate]||0 }; });
-          progressEl.textContent = `Menggabungkan data Sell In (OSA) ${brand} (${b.byKey.size.toLocaleString('id-ID')} outlet, per ${b.maxDate})…`;
-          await finishSellinProcessing(brand, byKey, progressEl, b.maxDate);
-          msgs.push(progressEl.textContent);
+        const T = {};   // brand -> { max, tW, tM, byKey: Map(key -> {c,w,wd,m,md}) }
+        brands.forEach(br=>{ const mx = maxByBrand[br]; T[br] = { max: mx, tW: shiftDateBack(mx, 7), tM: lmtdShiftBack(mx), byKey: new Map() }; });
+        let n2 = 0;
+        Papa.parse(file, {
+          header: true, skipEmptyLines: true, worker: true,
+          chunk: function(res){
+            const rows = res.data;
+            for(let i=0;i<rows.length;i++){
+              const row = rows[i]; n2++;
+              const t = T[row.brand]; if(!t) continue;
+              const fld = OSA_PARAM_MAP[row.parameter]; if(!fld) continue;
+              const dt = isoDt(row.dt_id);
+              if(!/^\d{4}-\d{2}-\d{2}/.test(dt)) continue;
+              const d = dt.slice(0,10);
+              const key = row.brand + '|' + normId(row[idCol]);
+              if(!MASTER[key]) continue;
+              let e = t.byKey.get(key);
+              if(!e){ e = { c:[0,0,0], w:[0,0,0], wd:['','',''], m:[0,0,0], md:['','',''] }; t.byKey.set(key, e); }
+              const fi = FI[fld], amt = parseFloat(row.amt) || 0;
+              if(d === t.max) e.c[fi] = amt;
+              if(d <= t.tW && d > e.wd[fi]){ e.wd[fi] = d; e.w[fi] = amt; }
+              if(d <= t.tM && d > e.md[fi]){ e.md[fi] = d; e.m[fi] = amt; }
+            }
+            if(n2 % 100000 < rows.length) progressEl.textContent = `Putaran 2/2 — memproses… ${n2.toLocaleString('id-ID')} dari ${rowCount.toLocaleString('id-ID')} baris`;
+          },
+          complete: async function(){
+            const msgs = [];
+            for(const brand of brands){
+              const t = T[brand], byKey = {};
+              t.byKey.forEach((e, key)=>{ byKey[key] = { sp: e.c[0], vou: e.c[1], saldo: e.c[2] }; });
+              progressEl.textContent = `Menggabungkan data Sell In (OSA) ${brand} (${t.byKey.size.toLocaleString('id-ID')} outlet, per ${t.max})…`;
+              await finishSellinProcessing(brand, byKey, progressEl, t.max);
+              msgs.push(progressEl.textContent);
 
-          // WoW baseline: the value ~7 days before this file's latest date, per outlet — if
-          // this file's date range actually reaches back that far (same idea as Stock above).
-          const weekTarget = shiftDateBack(b.maxDate, 7);
-          const byKeyWeekAgo = {}; let anyWeekAgo = false;
-          b.byKey.forEach((e, key)=>{
-            const sd = bestDateOnOrBefore(e.sp, weekTarget), vd = bestDateOnOrBefore(e.vou, weekTarget), ld = bestDateOnOrBefore(e.saldo, weekTarget);
-            if(sd || vd || ld) anyWeekAgo = true;
-            byKeyWeekAgo[key] = { sp: sd?e.sp[sd]:0, vou: vd?e.vou[vd]:0, saldo: ld?e.saldo[ld]:0 };
-          });
-          if(anyWeekAgo){
-            const bl = await weekSellinBaseline(brand);
-            bl.rows.forEach(r=>{
-              const s = byKeyWeekAgo[brand + '|' + r[IDX_S.outletId]];
-              if(s){ r[IDX_S.sellinSp] = Math.round(s.sp); r[IDX_S.sellinVou] = Math.round(s.vou); r[IDX_S.sellinSaldo] = Math.round(s.saldo); }
-            });
-            bl.parts.dse = { asOf: weekTarget };
-            const okW = await weekSaveSellin(brand, bl.rows, bl.parts);
-            msgs[msgs.length-1] += okW ? ` WoW Sell In otomatis dari file ini tersimpan (dibandingkan dengan ${weekTarget}).` : ' (Gagal menyimpan WoW Sell In dari file ini.)';
-          }
+              // WoW baseline: nilai terdekat pada/sebelum (tanggal terbaru - 7 hari), per outlet.
+              const byKeyWeekAgo = {}; let anyWeekAgo = false;
+              t.byKey.forEach((e, key)=>{
+                if(e.wd[0] || e.wd[1] || e.wd[2]) anyWeekAgo = true;
+                byKeyWeekAgo[key] = { sp: e.w[0], vou: e.w[1], saldo: e.w[2] };
+              });
+              if(anyWeekAgo){
+                const bl = await weekSellinBaseline(brand);
+                bl.rows.forEach(r=>{
+                  const s = byKeyWeekAgo[brand + '|' + r[IDX_S.outletId]];
+                  if(s){ r[IDX_S.sellinSp] = Math.round(s.sp); r[IDX_S.sellinVou] = Math.round(s.vou); r[IDX_S.sellinSaldo] = Math.round(s.saldo); }
+                });
+                bl.parts.dse = { asOf: t.tW };
+                const okW = await weekSaveSellin(brand, bl.rows, bl.parts);
+                msgs[msgs.length-1] += okW ? ` WoW Sell In otomatis dari file ini tersimpan (dibandingkan dengan ${t.tW}).` : ' (Gagal menyimpan WoW Sell In dari file ini.)';
+              }
 
-          // MoM baseline: same idea, a month back — usable when this file also carries last
-          // month's dates (e.g. it spans both August and September at once).
-          const momTarget = lmtdShiftBack(b.maxDate);
-          const byKeyMom = {}; let anyMom = false;
-          b.byKey.forEach((e, key)=>{
-            const sm = bestDateOnOrBefore(e.sp, momTarget), vm = bestDateOnOrBefore(e.vou, momTarget), lm = bestDateOnOrBefore(e.saldo, momTarget);
-            if(sm || vm || lm) anyMom = true;
-            byKeyMom[key] = { sp: sm?e.sp[sm]:0, vou: vm?e.vou[vm]:0, saldo: lm?e.saldo[lm]:0 };
-          });
-          if(anyMom){
-            const blM = await lmtdSellinBaseline(brand);
-            blM.rows.forEach(r=>{
-              const s = byKeyMom[brand + '|' + r[IDX_S.outletId]];
-              if(s){ r[IDX_S.sellinSp] = Math.round(s.sp); r[IDX_S.sellinVou] = Math.round(s.vou); r[IDX_S.sellinSaldo] = Math.round(s.saldo); }
-            });
-            blM.parts.dse = { asOf: momTarget };
-            const okM = await lmtdSaveSellin(brand, blM.rows, blM.parts);
-            msgs[msgs.length-1] += okM ? ` MoM Sell In otomatis dari file ini tersimpan (dibandingkan dengan ${momTarget}).` : ' (Gagal menyimpan MoM Sell In dari file ini.)';
-          }
-        }
-        if(msgs.length > 1) progressEl.innerHTML = msgs.map(r=>'• ' + r).join('<br>');
-        else progressEl.textContent = msgs[0] || progressEl.textContent;
-        resolve();
+              // MoM baseline: sama, sebulan ke belakang — hanya bila file ini memuat tanggal bulan lalu.
+              const byKeyMom = {}; let anyMom = false;
+              t.byKey.forEach((e, key)=>{
+                if(e.md[0] || e.md[1] || e.md[2]) anyMom = true;
+                byKeyMom[key] = { sp: e.m[0], vou: e.m[1], saldo: e.m[2] };
+              });
+              if(anyMom){
+                const blM = await lmtdSellinBaseline(brand);
+                blM.rows.forEach(r=>{
+                  const s = byKeyMom[brand + '|' + r[IDX_S.outletId]];
+                  if(s){ r[IDX_S.sellinSp] = Math.round(s.sp); r[IDX_S.sellinVou] = Math.round(s.vou); r[IDX_S.sellinSaldo] = Math.round(s.saldo); }
+                });
+                blM.parts.dse = { asOf: t.tM };
+                const okM = await lmtdSaveSellin(brand, blM.rows, blM.parts);
+                msgs[msgs.length-1] += okM ? ` MoM Sell In otomatis dari file ini tersimpan (dibandingkan dengan ${t.tM}).` : ' (Gagal menyimpan MoM Sell In dari file ini.)';
+              }
+            }
+            if(msgs.length > 1) progressEl.innerHTML = msgs.map(r=>'• ' + r).join('<br>');
+            else progressEl.textContent = msgs[0] || progressEl.textContent;
+            resolve();
+          },
+          error: fail
+        });
       },
-      error: function(err){ progressEl.textContent = 'Gagal membaca file: ' + err; resolve(); }
+      error: fail
     });
   });
 }
@@ -11642,6 +11665,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.59 · 27 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.60 · 27 Nov 2026</div>
 </body>
 </html>
