@@ -1107,6 +1107,11 @@
       <div class="progress-line" id="userNameMsg"></div>
     </div>
     <div class="upload-block">
+      <label style="font-size:12.5px;display:block;margin-bottom:4px;">Reset password satu user — cari NIK / username / nama</label>
+      <input type="text" id="userResetSearch" placeholder="ketik NIK (mis. 83136608) atau nama" style="width:100%;" autocomplete="off">
+      <div id="userResetResults" style="margin-top:8px;"></div>
+    </div>
+    <div class="upload-block">
       <label style="font-size:12.5px;display:block;margin-bottom:4px;">Reset password semua user sekaligus (kembali ke default, semua wajib bikin password baru saat login berikutnya)</label>
       <button class="btn btn-ghost btn-sm" id="btnResetAllPass" style="color:var(--red);border-color:var(--red);">Reset Password Semua User</button>
       <div class="progress-line" id="resetAllMsg"></div>
@@ -8832,27 +8837,36 @@ function initMapOnce(){
     // doubled the layer count to ~150K once all three regions' points are loaded).
     mapInstance = L.map('mapContainer', {renderer: L.canvas({tolerance: 6})}).setView([-6.95, 107.6], 9);
 
-    // CyclOSM: OSM-based data, served via OpenStreetMap France's infrastructure.
-    // Free, no API key. Note: like OSM's own tile servers, this is volunteer-run —
-    // if it ever throttles/blocks this app the same way tile.openstreetmap.org did,
-    // automatically fall back to Esri's Light Gray Canvas (no API key, no known
-    // blocking issues) instead of leaving the map blank.
+    // Peta dasar: default Esri World Topographic Map (nama kota/jalan jelas + relief), tanpa API key.
+    // Pilihan lain lewat tombol layer di pojok kanan atas peta: Jalan, Satelit, CyclOSM.
+    // Bila sumber default bermasalah (banyak tile gagal), otomatis pindah ke Esri Light Gray.
+    const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+    const topoLayer = L.tileLayer(ESRI + 'World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 18, attribution: 'Tiles &copy; Esri — USGS, NOAA, Esri'
+    });
+    const streetLayer = L.tileLayer(ESRI + 'World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 18, attribution: 'Tiles &copy; Esri'
+    });
+    const satLayer = L.tileLayer(ESRI + 'World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 18, attribution: 'Tiles &copy; Esri — Maxar, Earthstar Geographics'
+    });
     const cyclLayer = L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', {
       maxZoom: 16, attribution: '&copy; OpenStreetMap contributors, CyclOSM'
     });
-    let cyclErrorCount = 0, esriFallbackActive = false;
-    cyclLayer.on('tileerror', () => {
-      cyclErrorCount++;
-      if(cyclErrorCount >= 6 && !esriFallbackActive){
+    let topoErrorCount = 0, esriFallbackActive = false;
+    topoLayer.on('tileerror', () => {
+      topoErrorCount++;
+      if(topoErrorCount >= 8 && !esriFallbackActive){
         esriFallbackActive = true;
-        mapInstance.removeLayer(cyclLayer);
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        mapInstance.removeLayer(topoLayer);
+        L.tileLayer(ESRI + 'Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
           maxZoom: 16, attribution: '&copy; Esri'
         }).addTo(mapInstance);
-        showToast('Sumber peta CyclOSM bermasalah — beralih ke peta cadangan.');
+        showToast('Sumber peta bermasalah — beralih ke peta cadangan.');
       }
     });
-    cyclLayer.addTo(mapInstance);
+    topoLayer.addTo(mapInstance);
+    L.control.layers({ 'Topografi (jelas)': topoLayer, 'Jalan': streetLayer, 'Satelit': satLayer, 'CyclOSM': cyclLayer }, null, {position:'topright'}).addTo(mapInstance);
 
     if(!HIDE_BOUNDARIES && KAB_GEOJSON && KAB_GEOJSON.features && KAB_GEOJSON.features.length){
       // The Branch/Area a polygon belongs to is looked up when it is DRAWN / HOVERED / CLICKED (not once
@@ -10665,6 +10679,27 @@ function renderUserList(){
     </tr>`).join('') || '<tr><td colspan="5" style="color:var(--muted);">Belum ada user.</td></tr>';
 }
 
+function renderUserResetResults(){
+  const box = document.getElementById('userResetResults'), inp = document.getElementById('userResetSearch');
+  if(!box || !inp) return;
+  const q = inp.value.trim().toLowerCase();
+  if(!isListLoaded && !renderUserResetResults._loading){ renderUserResetResults._loading = true; ensureIsList().then(()=>{ renderUserResetResults._loading = false; if(isListLoaded) renderUserResetResults(); }); }
+  if(!q){ box.innerHTML = ''; return; }
+  const hits = USERS.map(u=>({ u, nm: u.name || (isInfo(u.username)||{}).name || '' }))
+    .filter(x=>String(x.u.username).toLowerCase().includes(q) || String(x.nm).toLowerCase().includes(q))
+    .slice(0, 10);
+  if(!hits.length){ box.innerHTML = '<div style="color:var(--muted);font-size:12px;">Tidak ditemukan.</div>'; return; }
+  box.innerHTML = hits.map(x=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);">
+      <div style="flex:1;font-size:12.5px;"><b class="mono">${escHtml(x.u.username)}</b> ${escHtml(x.nm||'')}${x.u.role==='admin'?' <span style="color:var(--muted);">(admin)</span>':''}${x.u.resetRequestedAt?' <span style="color:var(--red);">· minta reset</span>':''}</div>
+      <button class="btn btn-sm" data-user="${escHtml(x.u.username)}" onclick="resetUserPasswordFromSearch(this.dataset.user)" style="background:var(--red);color:#fff;">Reset Pass</button>
+    </div>`).join('');
+}
+async function resetUserPasswordFromSearch(name){
+  await resetUserPassword(name);
+  renderUserResetResults();
+}
+window.resetUserPasswordFromSearch = resetUserPasswordFromSearch;
+
 async function resetUserPassword(name){
   const u = USERS.find(x=>x.username===name);
   if(!u) return;
@@ -11061,6 +11096,13 @@ function bindEvents(){
   document.getElementById('usersOverlay').addEventListener('click', (e)=>{ if(e.target.id==='usersOverlay') e.currentTarget.classList.remove('show'); });
   document.getElementById('btnAddUser').addEventListener('click', addUser);
   document.getElementById('btnResetAllPass').addEventListener('click', resetAllPasswords);
+  document.getElementById('userResetSearch').addEventListener('input', renderUserResetResults);
+  document.getElementById('userResetSearch').addEventListener('keydown', (e)=>{
+    if(e.key !== 'Enter') return;
+    const q = e.target.value.trim().toLowerCase();
+    const exact = USERS.filter(u=>String(u.username).toLowerCase()===q);
+    if(exact.length === 1) resetUserPassword(exact[0].username);
+  });
   initUploadDoneMarkers();
   document.getElementById('userNameFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleUserNameFile(e.target.files[0]); e.target.value=''; });
   document.getElementById('bulkUserFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleBulkUserFile(e.target.files[0]); });
@@ -11281,6 +11323,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.51 · 20 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.53 · 27 Nov 2026</div>
 </body>
 </html>
