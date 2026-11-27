@@ -342,7 +342,7 @@
       </div>
     </div>
     <div class="search-wrap">
-      <input type="text" id="fSearch" placeholder="Cari Outlet ID / Nama / Area (mis. &quot;cell abc kuningan&quot;)…" style="min-width:260px;">
+      <input type="text" id="fSearch" autocomplete="off" autocapitalize="off" spellcheck="false" name="outlet-search-x" placeholder="Cari Outlet ID / Nama / Area (mis. &quot;cell abc kuningan&quot;)…" style="min-width:260px;">
       <button type="button" class="chip" id="fReset" title="Kembalikan semua filter ke awal" style="margin-left:8px;">↺ Reset filter</button>
     </div>
   </div>
@@ -11399,6 +11399,19 @@ function bindEvents(){
 
 
   archBind();
+  // Chrome kadang mengisi otomatis kolom pencarian dengan username login (mis. "admin") -> semua data jadi 0.
+  // Kalau isinya sama dengan username yang tersimpan dan belum diketik user, kosongkan.
+  (function(){
+    const fs = document.getElementById('fSearch'); if(!fs) return;
+    fs.addEventListener('keydown', ()=>{ fs.dataset.typed = '1'; });
+    [300, 1200, 3000].forEach(ms=>setTimeout(()=>{
+      if(fs.dataset.typed) return;
+      const v = fs.value.trim().toLowerCase();
+      if(v && (v === String(localStorage.getItem('wj_user')||'').toLowerCase() || v === 'admin' || (USERS||[]).some(u=>String(u.username).toLowerCase()===v))){
+        fs.value = ''; fs.dispatchEvent(new Event('input', {bubbles:true}));
+      }
+    }, ms));
+  })();
   document.querySelectorAll('.tab-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -11601,6 +11614,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.55 · 27 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.56 · 27 Nov 2026</div>
 </body>
 </html>
