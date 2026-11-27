@@ -1132,6 +1132,7 @@
   </div>
   <div class="adm-subtabs">
     <button class="adm-subtab active" id="admSubUsers">Pengguna &amp; Sesi</button>
+    <button class="adm-subtab" id="admSubLog">Riwayat Login</button>
     <button class="adm-subtab" id="admSubTools">Impor nama &amp; Alat</button>
   </div>
 
@@ -1159,6 +1160,22 @@
         <tbody id="admBody"><tr><td colspan="7" style="color:var(--muted);padding:14px;">Memuat…</td></tr></tbody>
       </table>
     </div>
+  </div>
+
+  <div id="admPaneLog" class="hidden">
+    <div class="adm-toolbar">
+      <input type="text" id="admLogSearch" placeholder="Cari username / nama / area" autocomplete="off">
+      <select id="admLogRole"><option value="">Semua role</option><option value="admin">Admin</option><option value="viewer">Viewer</option></select>
+      <span id="admLogCount" class="adm-count"></span>
+      <button class="btn btn-ghost btn-sm" onclick="downloadLoginLogCsv()">Unduh Riwayat (CSV)</button>
+    </div>
+    <div class="adm-tablewrap">
+      <table class="adm-table">
+        <thead><tr><th>Waktu</th><th>Username</th><th>Nama</th><th>MC</th><th>Area</th><th>Region</th><th>Role</th></tr></thead>
+        <tbody id="loginLogBody"></tbody>
+      </table>
+    </div>
+    <p class="adm-sub" style="margin-top:8px;">Menyimpan 500 login terakhir. Unduh CSV secara berkala kalau butuh arsip lebih panjang.</p>
   </div>
 
   <div id="admPaneTools" class="hidden">
@@ -1372,16 +1389,6 @@
       </div>
     </div>
 
-    <div class="upload-block">
-      <h4>Riwayat Login</h4>
-      <p class="hint">Catatan siapa saja yang login ke dashboard (waktu, username, nama, area, region, role). <button class="btn btn-ghost btn-sm" onclick="downloadLoginLogCsv()" style="margin-left:6px;">Unduh Riwayat (CSV)</button></p>
-      <div style="max-height:200px;overflow:auto;">
-        <table class="summary" style="width:100%;">
-          <thead><tr><th style="text-align:left;">Waktu</th><th style="text-align:left;">Username</th><th style="text-align:left;">Nama</th><th style="text-align:left;">Area</th><th style="text-align:left;">Region</th><th style="text-align:left;">Role</th></tr></thead>
-          <tbody id="loginLogBody"></tbody>
-        </table>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -9399,8 +9406,9 @@ async function loadLoginLog(){
 }
 
 async function logLogin(username, role){
+  try{ await loadLoginLog(); }catch(e){}   // baca versi terbaru dulu supaya login orang lain di perangkat lain tidak tertimpa
   LOGIN_LOG.unshift({ time: new Date().toISOString(), username, role });
-  LOGIN_LOG = LOGIN_LOG.slice(0, 200); // logins happen more often than data uploads, keep more history
+  LOGIN_LOG = LOGIN_LOG.slice(0, 500); // batas ~500 entri agar tetap muat di satu sel server
   // Best-effort — a failed write here should never block someone from actually
   // logging in, so this deliberately doesn't check/report the result the way
   // saveUsers()/persistAll() do elsewhere.
@@ -9465,18 +9473,28 @@ window.downloadLoginLogCsv = downloadLoginLogCsv;
 function renderLoginLog(){
   const body = document.getElementById('loginLogBody');
   if(!body) return;
-  body.innerHTML = LOGIN_LOG.slice().sort((a,b)=>String(b.time).localeCompare(String(a.time))).map(e=>{
+  const q = ((document.getElementById('admLogSearch')||{}).value || '').trim().toLowerCase();
+  const fr = (document.getElementById('admLogRole')||{}).value || '';
+  const all = LOGIN_LOG.slice().sort((a,b)=>String(b.time).localeCompare(String(a.time)));
+  const list = all.filter(e=>{
     const i = isInfo(e.username) || {};
-    return `
-    <tr>
-      <td>${new Date(e.time).toLocaleString('id-ID')}</td>
+    if(fr && (e.role === 'admin' ? 'admin' : 'viewer') !== fr) return false;
+    if(!q) return true;
+    return (String(e.username) + ' ' + (i.name||'') + ' ' + (i.area||'') + ' ' + (i.mc||'')).toLowerCase().includes(q);
+  });
+  const cnt = document.getElementById('admLogCount'); if(cnt) cnt.textContent = `${list.length} dari ${all.length} login`;
+  body.innerHTML = list.slice(0, 500).map(e=>{
+    const i = isInfo(e.username) || {};
+    return `<tr>
+      <td>${escHtml(new Date(e.time).toLocaleString('id-ID'))}</td>
       <td>${escHtml(e.username)}</td>
       <td>${escHtml(i.name||'-')}</td>
+      <td>${escHtml(i.mc||'-')}</td>
       <td>${escHtml(i.area||'-')}</td>
       <td>${escHtml(i.region||'-')}</td>
-      <td>${e.role}</td>
+      <td><span class="adm-badge ${e.role==='admin'?'admin':'viewer'}">${e.role==='admin'?'Admin':'Viewer'}</span></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" style="color:var(--muted);">Belum ada riwayat login.</td></tr>';
+  }).join('') || '<tr><td colspan="7" style="color:var(--muted);padding:14px;">Belum ada riwayat login.</td></tr>';
   if(!isListLoaded) ensureIsList().then(()=>{ if(isListLoaded) renderLoginLog(); });
 }
 let pendingLoginUser = null; // set while the force-change-password gate is open
@@ -10943,13 +10961,18 @@ async function admEditSave(){
 }
 function bindAdminTab(){
   const $ = id => document.getElementById(id);
-  $('admBtnRefresh').addEventListener('click', ()=>{ renderAdminUsers(true); renderUserActivity(); });
+  $('admBtnRefresh').addEventListener('click', ()=>{ renderAdminUsers(true); renderUserActivity(); loadLoginLog().then(renderLoginLog); });
   $('admBtnImport').addEventListener('click', ()=>$('bulkUserFile').click());
   $('admBtnAdd').addEventListener('click', ()=>{ $('admAddBox').classList.toggle('hidden'); if(!$('admAddBox').classList.contains('hidden')) $('newUserInput').focus(); });
   ['admSearch'].forEach(id=>$(id).addEventListener('input', admRenderRows));
   ['admArea','admRole','admSort'].forEach(id=>$(id).addEventListener('change', admRenderRows));
-  $('admSubUsers').addEventListener('click', ()=>{ $('admSubUsers').classList.add('active'); $('admSubTools').classList.remove('active'); $('admPaneUsers').classList.remove('hidden'); $('admPaneTools').classList.add('hidden'); });
-  $('admSubTools').addEventListener('click', ()=>{ $('admSubTools').classList.add('active'); $('admSubUsers').classList.remove('active'); $('admPaneTools').classList.remove('hidden'); $('admPaneUsers').classList.add('hidden'); renderUserActivity(); });
+  const subs = { users:['admSubUsers','admPaneUsers'], log:['admSubLog','admPaneLog'], tools:['admSubTools','admPaneTools'] };
+  const showSub = (k)=>{ Object.keys(subs).forEach(x=>{ $(subs[x][0]).classList.toggle('active', x===k); $(subs[x][1]).classList.toggle('hidden', x!==k); }); };
+  $('admSubUsers').addEventListener('click', ()=>showSub('users'));
+  $('admSubLog').addEventListener('click', async ()=>{ showSub('log'); await loadLoginLog(); await ensureIsList(); renderLoginLog(); });
+  $('admSubTools').addEventListener('click', ()=>{ showSub('tools'); renderUserActivity(); });
+  $('admLogSearch').addEventListener('input', renderLoginLog);
+  $('admLogRole').addEventListener('change', renderLoginLog);
   $('admEditClose').addEventListener('click', ()=>$('admEditOverlay').classList.remove('show'));
   $('admEditOverlay').addEventListener('click', (e)=>{ if(e.target.id==='admEditOverlay') e.currentTarget.classList.remove('show'); });
   $('admEditSave').addEventListener('click', admEditSave);
@@ -11615,6 +11638,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.57 · 27 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.58 · 27 Nov 2026</div>
 </body>
 </html>
