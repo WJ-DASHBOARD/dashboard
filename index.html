@@ -10903,6 +10903,10 @@ function admRenderRows(){
     return true;
   });
   list.sort((x,y)=>{
+    // permintaan reset password selalu paling atas
+    const rx = x.u.resetRequestedAt ? 1 : 0, ry = y.u.resetRequestedAt ? 1 : 0;
+    if(rx !== ry) return ry - rx;
+    if(rx && ry) return String(x.u.resetRequestedAt).localeCompare(String(y.u.resetRequestedAt));
     if(sort === 'name') return (x.name || x.u.username).localeCompare(y.name || y.u.username);
     if(sort === 'online' && x.online !== y.online) return x.online ? -1 : 1;
     return y.last - x.last;
@@ -10919,7 +10923,7 @@ function admRenderRows(){
       ? `<button class="btn btn-sm" data-user="${escHtml(u.username)}" onclick="resetUserPassword(this.dataset.user)" style="background:var(--red);color:#fff;">Setujui reset</button>
          <button class="btn btn-ghost btn-sm" data-user="${escHtml(u.username)}" onclick="denyResetRequest(this.dataset.user)">Tolak</button>`
       : `<button class="btn btn-ghost btn-sm" data-user="${escHtml(u.username)}" onclick="resetUserPassword(this.dataset.user)" ${isMe?'disabled':''}>Reset pw</button>`;
-    return `<tr>
+    return `<tr${u.resetRequestedAt ? ' style="background:#fff4f5;"' : ''}>
       <td><div class="adm-name">${escHtml(r.name || u.username)}</div><div class="adm-meta">${escHtml(nik)}${r.i.mc ? ' · ' + escHtml(r.i.mc) : ''}${tags}</div>${u.resetRequestedAt ? '<div class="adm-meta" style="color:var(--red);font-weight:600;">⚠ minta reset password</div>' : ''}</td>
       <td>${r.i.role ? `<span class="adm-badge">${escHtml(r.i.role)}</span>` : '<span class="adm-off">—</span>'}</td>
       <td>${escHtml(r.area || '—')}</td>
@@ -11638,6 +11642,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.58 · 27 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.59 · 27 Nov 2026</div>
 </body>
 </html>
