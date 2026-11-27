@@ -135,6 +135,31 @@
 
   .peta-layout{display:flex;flex-direction:column;gap:14px;}
   .peta-top{display:grid;grid-template-columns:1.9fr 1fr;gap:14px;align-items:start;}
+  .adm-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
+  .adm-title{margin:0;font-size:22px;}
+  .adm-sub{margin:4px 0 0;font-size:12.5px;color:var(--muted);max-width:640px;}
+  .adm-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .adm-subtabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:12px;}
+  .adm-subtab{background:none;border:none;border-bottom:2px solid transparent;padding:8px 12px;font:inherit;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;}
+  .adm-subtab.active{color:var(--red);border-bottom-color:var(--red);}
+  .adm-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;}
+  .adm-lbl{font-size:12.5px;display:block;margin-bottom:4px;}
+  .adm-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+  .adm-toolbar input{flex:1;min-width:200px;}
+  .adm-count{font-size:12px;color:var(--muted);margin-left:auto;}
+  .adm-tablewrap{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:auto;max-height:70vh;}
+  .adm-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .adm-table th{position:sticky;top:0;background:#f8f7f4;text-align:left;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:9px 12px;border-bottom:1px solid var(--border);}
+  .adm-table td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  .adm-name{font-weight:700;}
+  .adm-meta{font-size:11px;color:var(--muted);}
+  .adm-badge{display:inline-block;font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 8px;background:#ece9f7;color:#5b3fb5;}
+  .adm-badge.admin{background:#fdf1d5;color:#9a6200;} .adm-badge.viewer{background:#e3f0fb;color:#1d5f99;}
+  .adm-on{color:var(--green);font-weight:600;white-space:nowrap;} .adm-off{color:var(--muted);white-space:nowrap;}
+  .adm-act{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;}
+  .adm-act .btn{padding:5px 10px;font-size:12px;}
+  .nearby-tip{background:#2563EB;color:#fff;border:none;box-shadow:none;font-weight:700;padding:0 5px;}
+  .nearby-tip:before{display:none;}
   .peta-map{height:560px;border-radius:10px;border:1px solid var(--border);overflow:hidden;}
   .peta-side .stat-list{margin-top:0;}
   .peta-legends-row{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;}
@@ -292,7 +317,6 @@
       <button class="btn hidden" id="btnSummaryXlsx" title="Khusus admin: summary Excel West Java">Summary Excel</button>
       <button class="btn hidden" id="btnSummaryPptx" title="Khusus admin: summary PPT West Java">Summary PPT</button>
       <button class="btn btn-primary hidden" id="btnOpenUpdate">Perbarui data</button>
-      <button class="btn hidden" id="btnManageUsers">Kelola User</button>
       <button class="btn hidden" id="btnChangePass">Ganti Password</button>
       <button class="btn hidden" id="btnLogout">Logout (<span id="loginUserLabel"></span>)</button>
     </div>
@@ -337,6 +361,7 @@
     <button class="tab-btn" id="tabBtnSupply" data-tab="supply" style="display:none">Supply</button>
     <button class="tab-btn" id="tabBtnComparison" data-tab="comparison" style="display:none">Performance WoW/MoM</button>
     <button class="tab-btn" id="tabBtnArchive" data-tab="archive">Arsip Bulan Lalu</button>
+    <button class="tab-btn" id="tabBtnAdmin" data-tab="admin" style="display:none">Admin</button>
   </div>
 </div>
 
@@ -352,6 +377,14 @@
     <div class="peta-top">
       <div id="mapContainer" class="peta-map"></div>
       <div class="peta-side">
+        <div id="nearbyBox" class="hidden" style="margin-bottom:12px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <h3 style="margin:0;font-size:13px;font-weight:600;flex:1;">Outlet terdekat dari lokasi saya</h3>
+            <button class="btn btn-ghost btn-sm" id="btnNearbyClose" title="Sembunyikan">✕</button>
+          </div>
+          <div id="nearbyMsg" style="font-size:11.5px;color:var(--muted);margin:4px 0;"></div>
+          <div id="nearbyList" style="max-height:260px;overflow:auto;"></div>
+        </div>
         <h3 style="margin:0 0 6px;font-size:13px;font-weight:600;">Summary (sesuai filter)</h3>
         <div style="overflow:auto;">
         <table class="summary" id="petaStatTable">
@@ -1083,58 +1116,92 @@
   </div>
 </div>
 
-<div class="overlay" id="usersOverlay">
-  <div class="modal" style="max-width:760px;">
-    <button class="modal-close" id="closeUsers">&times;</button>
-    <h2>Kelola User</h2>
-    <p class="desc">Semua user baru otomatis dapat password default <b id="defaultPassLabel"></b> — sampaikan ke masing-masing user, dan mereka bisa login pakai username + password default itu.</p>
-    <div class="upload-block">
-      <label style="font-size:12.5px;display:block;margin-bottom:4px;">Tambah username baru (satu-satu)</label>
-      <div style="display:flex;gap:8px;">
-        <input type="text" id="newUserInput" placeholder="mis. budi.santoso / DSE0231 / 3210458" style="flex:1;">
+<div id="tabAdmin" class="tab-panel hidden">
+  <div class="adm-head">
+    <div>
+      <h2 class="adm-title">Panel Admin</h2>
+      <p class="adm-sub">Tambah, impor, dan atur pengguna dashboard. User baru otomatis dapat password default <b id="defaultPassLabel"></b> dan diminta membuat password baru saat login.</p>
+    </div>
+    <div class="adm-actions">
+      <button class="btn btn-ghost" id="admBtnRefresh" title="Muat ulang daftar & sesi">&#8635;</button>
+      <button class="btn btn-ghost" id="admBtnImport">Impor daftar user</button>
+      <input type="file" id="bulkUserFile" accept=".csv,.txt" style="display:none;">
+      <button class="btn btn-primary" id="admBtnAdd" style="background:var(--red);color:#fff;">+ Tambah user</button>
+    </div>
+  </div>
+  <div class="adm-subtabs">
+    <button class="adm-subtab active" id="admSubUsers">Pengguna &amp; Sesi</button>
+    <button class="adm-subtab" id="admSubTools">Impor nama &amp; Alat</button>
+  </div>
+
+  <div id="admPaneUsers">
+    <div id="admAddBox" class="adm-card hidden">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <input type="text" id="newUserInput" placeholder="NIK / username (mis. 83136608)" style="flex:1;min-width:200px;">
+        <input type="text" id="newUserName" placeholder="Nama (opsional)" style="flex:1;min-width:200px;">
         <button class="btn btn-primary" id="btnAddUser" style="background:var(--red);color:#fff;">Tambah</button>
       </div>
       <div class="progress-line" id="userAddMsg"></div>
     </div>
-    <div class="upload-block">
-      <label style="font-size:12.5px;display:block;margin-bottom:4px;">Atau upload daftar user sekaligus (.csv/.txt, satu username per baris)</label>
-      <input type="file" id="bulkUserFile" accept=".csv,.txt">
-      <div class="progress-line" id="bulkUserMsg"></div>
+    <div class="progress-line" id="bulkUserMsg"></div>
+    <div class="adm-toolbar">
+      <input type="text" id="admSearch" placeholder="Cari nama / NIK / username" autocomplete="off">
+      <select id="admArea"><option value="">Semua area</option></select>
+      <select id="admRole"><option value="">Semua role</option><option value="admin">Admin</option><option value="viewer">Viewer</option></select>
+      <select id="admSort"><option value="online">Urut: Online dulu</option><option value="last">Urut: Terakhir aktif</option><option value="name">Urut: Nama A–Z</option></select>
+      <span id="admCount" class="adm-count"></span>
+      <button class="btn btn-ghost btn-sm" onclick="downloadAllUsersCsv()">Unduh daftar (CSV)</button>
     </div>
-    <div class="upload-block">
-      <label style="font-size:12.5px;display:block;margin-bottom:4px;">Upload nama user (.csv/.txt/.xlsx — kolom 1 = username, kolom 2 = nama). Hanya mengisi nama; password &amp; sesi login tidak berubah.</label>
+    <div class="adm-tablewrap">
+      <table class="adm-table">
+        <thead><tr><th>Pengguna</th><th>Role</th><th>Area</th><th>Akses</th><th>Sesi</th><th>Terakhir aktif</th><th style="text-align:right;">Aksi</th></tr></thead>
+        <tbody id="admBody"><tr><td colspan="7" style="color:var(--muted);padding:14px;">Memuat…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="admPaneTools" class="hidden">
+    <div class="adm-card">
+      <label class="adm-lbl">Upload nama user (.csv/.txt/.xlsx — kolom 1 = username, kolom 2 = nama). Hanya mengisi nama; password &amp; sesi login tidak berubah.</label>
       <input type="file" id="userNameFile" accept=".csv,.txt,.xlsx,.xls">
       <div class="progress-line" id="userNameMsg"></div>
     </div>
-    <div class="upload-block">
-      <label style="font-size:12.5px;display:block;margin-bottom:4px;">Reset password satu user — cari NIK / username / nama</label>
-      <input type="text" id="userResetSearch" placeholder="ketik NIK (mis. 83136608) atau nama" style="width:100%;" autocomplete="off">
-      <div id="userResetResults" style="margin-top:8px;"></div>
+    <div class="adm-card">
+      <label class="adm-lbl">List IS (nama, MC, area, region, role; kolom NIK = username) — dipakai untuk nama, role, dan area di tabel Pengguna</label>
+      <input type="file" id="isListFile" accept=".xlsx,.xls,.csv" onchange="handleIsListFile(this.files[0]); this.value='';">
+      <div class="progress-line" id="isListMsg"></div>
     </div>
-    <div class="upload-block">
-      <label style="font-size:12.5px;display:block;margin-bottom:4px;">Reset password semua user sekaligus (kembali ke default, semua wajib bikin password baru saat login berikutnya)</label>
+    <div class="adm-card">
+      <label class="adm-lbl">Reset password semua user sekaligus (kembali ke default, semua wajib bikin password baru saat login berikutnya)</label>
       <button class="btn btn-ghost btn-sm" id="btnResetAllPass" style="color:var(--red);border-color:var(--red);">Reset Password Semua User</button>
       <div class="progress-line" id="resetAllMsg"></div>
     </div>
-    <div class="upload-block">
-      <label style="font-size:12.5px;display:block;margin-bottom:4px;">Aktivitas user (login &amp; ganti password)</label>
+    <div class="adm-card">
+      <label class="adm-lbl">Aktivitas user (login &amp; ganti password)</label>
       <button class="btn btn-ghost btn-sm" onclick="downloadAllUsersCsv()">Unduh Semua User (CSV)</button>
-      <div style="margin-top:8px;font-size:12px;">List IS (nama, MC, area, region; kolom NIK = username): <input type="file" id="isListFile" accept=".xlsx,.xls,.csv" onchange="handleIsListFile(this.files[0]); this.value='';"></div>
-      <div class="progress-line" id="isListMsg"></div>
       <div class="progress-line" id="userActMsg"></div>
-      <div style="max-height:220px;overflow:auto;margin-top:8px;">
+      <div style="max-height:320px;overflow:auto;margin-top:8px;">
         <table class="summary" style="width:100%;font-size:11.5px;">
           <thead><tr><th style="text-align:left;">Username</th><th style="text-align:left;">Nama</th><th style="text-align:left;">MC</th><th style="text-align:left;">Area</th><th style="text-align:left;">Region</th><th style="text-align:left;">Role</th><th style="text-align:left;">Login terakhir</th><th>Jml login</th><th style="text-align:left;">Ganti password</th><th style="text-align:left;">Status</th></tr></thead>
           <tbody id="userActBody"></tbody>
         </table>
       </div>
     </div>
-    <div style="max-height:300px;overflow:auto;margin-top:10px;">
-      <table class="summary" style="width:100%;">
-        <thead><tr><th style="text-align:left;">Username</th><th style="text-align:left;">Nama</th><th style="text-align:left;">Password</th><th style="text-align:left;">Role</th><th></th></tr></thead>
-        <tbody id="userListBody"></tbody>
-      </table>
-    </div>
+  </div>
+</div>
+
+<div class="overlay" id="admEditOverlay">
+  <div class="modal" style="max-width:420px;">
+    <button class="modal-close" id="admEditClose">&times;</button>
+    <h2 style="margin-top:0;">Edit pengguna</h2>
+    <label class="adm-lbl">Username / NIK</label>
+    <input type="text" id="admEditUser" readonly style="width:100%;margin-bottom:10px;background:#f3f2ee;">
+    <label class="adm-lbl">Nama</label>
+    <input type="text" id="admEditName" style="width:100%;margin-bottom:10px;">
+    <label class="adm-lbl">Akses</label>
+    <select id="admEditRole" style="width:100%;margin-bottom:6px;"><option value="viewer">Viewer (lihat + unduh)</option><option value="admin">Admin (bisa upload & kelola user)</option></select>
+    <div class="progress-line" id="admEditMsg"></div>
+    <button class="btn btn-primary" id="admEditSave" style="margin-top:10px;width:100%;background:var(--red);color:#fff;">Simpan</button>
   </div>
 </div>
 
@@ -8924,6 +8991,22 @@ function initMapOnce(){
       try{ const b = kabLayer.getBounds(); if(b && b.isValid()) mapInstance.fitBounds(b, {padding:[10,10]}); }catch(e){}
     }
     mapMarkerLayer = L.layerGroup().addTo(mapInstance);
+    // tombol "Lokasi saya" (bawah tombol zoom): tandai posisi kamu + tampilkan 10 outlet terdekat
+    const LocCtl = L.Control.extend({ options:{position:'topleft'}, onAdd: function(){
+      const wrap = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+      const a = L.DomUtil.create('a', '', wrap);
+      a.href = '#'; a.title = 'Lokasi saya — tampilkan outlet terdekat'; a.innerHTML = '&#9678;'; a.style.cssText = 'font-size:18px;line-height:30px;text-align:center;font-weight:700;color:#2563EB;';
+      L.DomEvent.disableClickPropagation(wrap);
+      L.DomEvent.on(a, 'click', (e)=>{ L.DomEvent.preventDefault(e); locateMe(); });
+      return wrap;
+    }});
+    new LocCtl().addTo(mapInstance);
+    document.getElementById('btnNearbyClose').addEventListener('click', ()=>{
+      document.getElementById('nearbyBox').classList.add('hidden');
+      meLatLng = null;
+      if(meLayer) meLayer.clearLayers();
+      if(nearLayer) nearLayer.clearLayers();
+    });
   }catch(e){
     console.error('Gagal memuat peta', e);
   }
@@ -9037,11 +9120,89 @@ function restyleKabLayer(){
   });
 }
 
+// ---------- Lokasi saya + outlet terdekat ----------
+let MAP_SHOWN = [];        // titik yang sedang tampil di peta (ikut filter): [lat, lon, marker, nama, id, brand, isRed]
+let meLatLng = null, meLayer = null, nearLayer = null;
+function distM(lat1, lon1, lat2, lon2){
+  const R = 6371000, rad = Math.PI/180;
+  const dLat = (lat2-lat1)*rad, dLon = (lon2-lon1)*rad;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*rad)*Math.cos(lat2*rad)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function fmtDist(m){ return m < 1000 ? Math.round(m) + ' m' : (m/1000).toFixed(m < 10000 ? 1 : 0).replace('.', ',') + ' km'; }
+function setNearbyMsg(t, isErr){
+  const box = document.getElementById('nearbyBox'), msg = document.getElementById('nearbyMsg');
+  if(!box || !msg) return;
+  box.classList.remove('hidden');
+  msg.style.color = isErr ? 'var(--red)' : 'var(--muted)';
+  msg.textContent = t;
+}
+function locateMe(){
+  if(!mapInstance) return;
+  if(!navigator.geolocation){ setNearbyMsg('Browser ini tidak mendukung lokasi.', true); return; }
+  setNearbyMsg('Mencari lokasi kamu… (izinkan akses lokasi di browser)');
+  document.getElementById('nearbyList').innerHTML = '';
+  navigator.geolocation.getCurrentPosition((pos)=>{
+    meLatLng = [pos.coords.latitude, pos.coords.longitude];
+    if(meLayer) meLayer.clearLayers(); else meLayer = L.layerGroup().addTo(mapInstance);
+    L.circle(meLatLng, {radius: Math.min(pos.coords.accuracy || 50, 2000), color:'#2563EB', weight:1, fillColor:'#2563EB', fillOpacity:0.12, interactive:false}).addTo(meLayer);
+    L.circleMarker(meLatLng, {radius:8, color:'#fff', weight:3, fillColor:'#2563EB', fillOpacity:1}).bindTooltip('Lokasi saya').addTo(meLayer);
+    mapInstance.setView(meLatLng, 15);
+    updateNearby(true, pos.coords.accuracy);
+  }, (err)=>{
+    const m = err && err.code === 1 ? 'Akses lokasi ditolak. Izinkan lokasi untuk situs ini di pengaturan browser, lalu coba lagi.'
+            : err && err.code === 3 ? 'Waktu pencarian lokasi habis. Coba lagi (pastikan GPS/lokasi aktif).'
+            : 'Lokasi tidak tersedia. Pastikan GPS/lokasi aktif.';
+    setNearbyMsg(m, true);
+  }, {enableHighAccuracy:true, timeout:20000, maximumAge:15000});
+}
+function updateNearby(fit, accuracy){
+  const listEl = document.getElementById('nearbyList');
+  if(!meLatLng || !listEl) return;
+  if(nearLayer) nearLayer.clearLayers(); else nearLayer = L.layerGroup().addTo(mapInstance);
+  const N = 10, top = [];
+  for(let i=0;i<MAP_SHOWN.length;i++){
+    const q = MAP_SHOWN[i], d = distM(meLatLng[0], meLatLng[1], q[0], q[1]);
+    if(top.length < N || d < top[top.length-1].d){
+      top.push({d, q});
+      top.sort((x,y)=>x.d-y.d);
+      if(top.length > N) top.pop();
+    }
+  }
+  const accTxt = accuracy ? ` · akurasi ±${Math.round(accuracy)} m` : '';
+  if(!top.length){
+    setNearbyMsg('Tidak ada outlet di peta (cek filter di atas).' + accTxt, true);
+    listEl.innerHTML = '';
+    return;
+  }
+  setNearbyMsg(`${top.length} outlet terdekat (sesuai filter)${accTxt}. Klik nama untuk melihat di peta.`);
+  listEl.innerHTML = top.map((t,i)=>`<div class="nearby-row" data-i="${i}" style="display:flex;gap:6px;align-items:baseline;padding:4px 2px;border-bottom:1px solid var(--line);cursor:pointer;font-size:12px;">
+      <span style="color:#2563EB;font-weight:700;min-width:16px;">${i+1}</span>
+      <span style="flex:1;"><span style="color:${t.q[6]?'var(--red)':'var(--green)'};">●</span> ${escHtml(t.q[3])}<br><span style="color:var(--muted);font-size:11px;">${escHtml(t.q[5])} · ${escHtml(String(t.q[4]))}</span></span>
+      <b style="white-space:nowrap;">${fmtDist(t.d)}</b></div>`).join('');
+  listEl.querySelectorAll('.nearby-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const t = top[+row.dataset.i];
+      mapInstance.setView([t.q[0], t.q[1]], 17);
+      try{ t.q[2].openPopup(); }catch(e){}
+    });
+  });
+  top.forEach((t,i)=>{
+    L.circleMarker([t.q[0], t.q[1]], {radius:9, color:'#2563EB', weight:2, fillOpacity:0, interactive:false})
+      .bindTooltip(String(i+1), {permanent:true, direction:'top', offset:[0,-6], className:'nearby-tip'}).addTo(nearLayer);
+  });
+  if(fit){
+    const b = L.latLngBounds([meLatLng].concat(top.slice(0,5).map(t=>[t.q[0], t.q[1]])));
+    mapInstance.fitBounds(b, {padding:[40,40], maxZoom:17});
+  }
+}
+
 function renderMapPoints(){
   if(!mapInstance || !mapMarkerLayer || typeof L === 'undefined') return;
   try{
   restyleKabLayer();
   mapMarkerLayer.clearLayers();
+  MAP_SHOWN = [];
 
   const brand = document.getElementById('fBrand').value;
   const region = document.getElementById('fRegion').value;
@@ -9129,8 +9290,10 @@ function renderMapPoints(){
       return `<b>${escHtml(displayName)}</b><br>Outlet ID: ${dispOutletId(brandName, p[GIDX.outletId])||'–'}<br>Brand: ${brandName} · Area: ${META.branches[p[GIDX.branchIdx]]} · MC: ${META.micros[p[GIDX.microIdx]]}<br>Kategori: ${META.cats[p[GIDX.catIdx]]}<br>Lat/Long: ${p[GIDX.lat]}, ${p[GIDX.lon]}<br>Sell In SP (Rp): ${sellinSp!==null ? fmtN(sellinSp) : '-'}<br>Sell In SP (Qty): ${sellinSpPcs!==null ? fmtN(sellinSpPcs) : '-'}<br>Sell In Saldo: ${sellinSaldo!==null ? fmtN(sellinSaldo) : '-'}<br>Stock Saldo (Salmo): ${stockSaldo!==null ? fmtN(stockSaldo) : '-'}<br>Status: ${isRed ? '<span style="color:#C81E3A;font-weight:600;">Ada masalah (cek GA/Sell In SP/Sell In Saldo/Stock)</span>' : '<span style="color:#1B8A5A;font-weight:600;">Lengkap</span>'}${isNoStock ? '<br><span style="color:#C81E3A;font-weight:600;">⚠ Tidak ada stock sama sekali</span>' : ''}`;
     });
     mapMarkerLayer.addLayer(marker);
+    MAP_SHOWN.push([p[GIDX.lat], p[GIDX.lon], marker, displayName, dispOutletId(brandName, p[GIDX.outletId])||'', brandName, isRed]);
     if(searchTokens.length) shownLatLngs.push([p[GIDX.lat], p[GIDX.lon]]);
   });
+  updateNearby(false);
   const pcEl = document.getElementById('mapPointCount');
   if(!GEO_POINTS.length && MASTER && Object.keys(MASTER).length){
     pcEl.style.color = 'var(--red)';
@@ -10267,7 +10430,7 @@ function applyLoginState(){
   document.getElementById('authGate').classList.toggle('hidden', loggedIn);
   const isAdmin = loggedIn && currentRole() === 'admin';
   document.getElementById('btnOpenUpdate').classList.toggle('hidden', !isAdmin);
-  document.getElementById('btnManageUsers').classList.toggle('hidden', !isAdmin);
+  { const tb = document.getElementById('tabBtnAdmin'); if(tb) tb.style.display = isAdmin ? '' : 'none'; }
   document.getElementById('btnSummaryXlsx').classList.toggle('hidden', !isAdmin);
   document.getElementById('btnSummaryPptx').classList.toggle('hidden', !isAdmin);
   { const p = document.getElementById('archPptx'); if(p) p.classList.toggle('hidden', !isAdmin); }
@@ -10283,11 +10446,11 @@ function applyLoginState(){
 
 function updateResetBadge(){
   try{
-    const b = document.getElementById('btnManageUsers'); if(!b) return;
+    const b = document.getElementById('tabBtnAdmin'); if(!b) return;
     const isAdmin = localStorage.getItem('wj_logged_in') === '1' && currentRole() === 'admin';
     const pend = isAdmin ? (USERS||[]).filter(u=>u.resetRequestedAt).length : 0;
-    b.textContent = pend ? `Kelola User (${pend} minta reset)` : 'Kelola User';
-    if(pend && !window.__resetToastShown){ window.__resetToastShown = true; showToast(`Ada ${pend} permintaan reset password — buka Kelola User untuk menyetujui.`); }
+    b.textContent = pend ? `Admin (${pend} minta reset)` : 'Admin';
+    if(pend && !window.__resetToastShown){ window.__resetToastShown = true; showToast(`Ada ${pend} permintaan reset password — buka tab Admin untuk menyetujui.`); }
   }catch(e){}
 }
 function finishLogin(username, role){
@@ -10450,6 +10613,7 @@ async function forceReleaseUser(name){
   try{ await storageSet('sess_' + name, { token: null, lastSeen: 0, released: true }); }catch(e){}
   showToast(`Sesi "${name}" dihentikan.`);
   renderUserActivity();
+  renderAdminUsers(true);
 }
 window.forceReleaseUser = forceReleaseUser;
 function autoLogout(reason){
@@ -10655,28 +10819,145 @@ function doLogoutLocal(){
   applyLoginState();
 }
 
+// ---------- Tab Admin: pengguna & sesi ----------
+let ADM_SESS = {}, ADM_AREAOF = null;
+async function loadAdminSessions(){
+  const keys = USERS.map(u=>'sess_' + u.username);
+  let got = null;
+  try{ got = await storageGetMulti(keys); }catch(e){}
+  const out = {};
+  if(got){
+    USERS.forEach(u=>{
+      let v = got['sess_' + u.username];
+      if(typeof v === 'string'){ try{ v = JSON.parse(v); }catch(e){ v = null; } }
+      if(v && typeof v === 'object') out[u.username] = v;
+    });
+  }
+  ADM_SESS = out;
+}
+function admLastActive(u){
+  const sv = ADM_SESS[u.username], ua = USER_ACT[u.username];
+  const a = sv && sv.lastSeen > 0 ? sv.lastSeen : 0;
+  const b = ua && ua.lastLogin ? Date.parse(ua.lastLogin) || 0 : 0;
+  return Math.max(a, b);
+}
+function admIsOnline(u){
+  const sv = ADM_SESS[u.username];
+  return !!(sv && sv.token && sv.lastSeen && (Date.now() - sv.lastSeen) < SESSION_STALE_MS);
+}
+function admFmt(ms){
+  if(!ms) return '–';
+  return new Date(ms).toLocaleString('id-ID', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}).replace(/\./g, '.');
+}
+async function renderAdminUsers(reload){
+  const body = document.getElementById('admBody');
+  if(!body) return;
+  if(reload){
+    body.innerHTML = '<tr><td colspan="7" style="color:var(--muted);padding:14px;">Memuat…</td></tr>';
+    await Promise.all([loadAdminSessions(), loadUserActivity(), ensureIsList()]);
+    ADM_AREAOF = null;
+  }
+  admRenderRows();
+}
+function admRenderRows(){
+  const body = document.getElementById('admBody');
+  if(!body) return;
+  if(!ADM_AREAOF) ADM_AREAOF = buildUserAreaLookup();
+  const areaOf = ADM_AREAOF;
+  const me = localStorage.getItem('wj_user');
+  const rows = USERS.map(u=>{
+    const i = isInfo(u.username) || {};
+    const area = i.area || (areaOf(u.username) !== '-' ? areaOf(u.username) : '');
+    return { u, i, name: u.name || i.name || '', area, online: admIsOnline(u), last: admLastActive(u) };
+  });
+  // dropdown area (pertahankan pilihan)
+  const areaSel = document.getElementById('admArea'), curArea = areaSel.value;
+  const areas = Array.from(new Set(rows.map(r=>r.area).filter(Boolean))).sort();
+  areaSel.innerHTML = '<option value="">Semua area</option>' + areas.map(a=>`<option value="${escHtml(a)}">${escHtml(a)}</option>`).join('');
+  areaSel.value = areas.includes(curArea) ? curArea : '';
+  const q = document.getElementById('admSearch').value.trim().toLowerCase();
+  const fa = areaSel.value, fr = document.getElementById('admRole').value, sort = document.getElementById('admSort').value;
+  let list = rows.filter(r=>{
+    if(fa && r.area !== fa) return false;
+    if(fr && (r.u.role === 'admin' ? 'admin' : 'viewer') !== fr) return false;
+    if(q && !(String(r.u.username).toLowerCase().includes(q) || r.name.toLowerCase().includes(q))) return false;
+    return true;
+  });
+  list.sort((x,y)=>{
+    if(sort === 'name') return (x.name || x.u.username).localeCompare(y.name || y.u.username);
+    if(sort === 'online' && x.online !== y.online) return x.online ? -1 : 1;
+    return y.last - x.last;
+  });
+  const onlineN = rows.filter(r=>r.online).length;
+  document.getElementById('admCount').innerHTML = `<span style="color:var(--green);font-weight:600;">&#9679; ${onlineN} online</span> · ${list.length} dari ${rows.length} pengguna`;
+  const MAXR = 400;
+  body.innerHTML = list.slice(0, MAXR).map(r=>{
+    const u = r.u, isAdm = u.role === 'admin', isMe = u.username === me;
+    const nik = /^\d+$/.test(u.username) ? 'NIK ' + u.username : u.username;
+    const sess = isAdm ? '<span class="adm-off">—</span>' : (r.online ? '<span class="adm-on">&#9679; Online</span>' : '<span class="adm-off">&#9679; Offline</span>');
+    const tags = (u.mustChangePassword !== false ? ' <span class="adm-meta">· belum ganti password</span>' : '');
+    const acts = u.resetRequestedAt
+      ? `<button class="btn btn-sm" data-user="${escHtml(u.username)}" onclick="resetUserPassword(this.dataset.user)" style="background:var(--red);color:#fff;">Setujui reset</button>
+         <button class="btn btn-ghost btn-sm" data-user="${escHtml(u.username)}" onclick="denyResetRequest(this.dataset.user)">Tolak</button>`
+      : `<button class="btn btn-ghost btn-sm" data-user="${escHtml(u.username)}" onclick="resetUserPassword(this.dataset.user)" ${isMe?'disabled':''}>Reset pw</button>`;
+    return `<tr>
+      <td><div class="adm-name">${escHtml(r.name || u.username)}</div><div class="adm-meta">${escHtml(nik)}${r.i.mc ? ' · ' + escHtml(r.i.mc) : ''}${tags}</div>${u.resetRequestedAt ? '<div class="adm-meta" style="color:var(--red);font-weight:600;">⚠ minta reset password</div>' : ''}</td>
+      <td>${r.i.role ? `<span class="adm-badge">${escHtml(r.i.role)}</span>` : '<span class="adm-off">—</span>'}</td>
+      <td>${escHtml(r.area || '—')}</td>
+      <td><span class="adm-badge ${isAdm?'admin':'viewer'}">${isAdm?'Admin':'Viewer'}</span></td>
+      <td>${sess}</td>
+      <td>${admFmt(r.last)}</td>
+      <td><div class="adm-act">
+        <button class="btn btn-ghost btn-sm" data-user="${escHtml(u.username)}" onclick="admEdit(this.dataset.user)">Edit</button>
+        ${acts}
+        <button class="btn btn-ghost btn-sm" data-user="${escHtml(u.username)}" onclick="forceReleaseUser(this.dataset.user)" ${(isAdm||isMe)?'disabled':''}>Logout</button>
+        <button class="btn btn-ghost btn-sm" data-user="${escHtml(u.username)}" onclick="removeUserByName(this.dataset.user)" ${isMe?'disabled':''} style="color:var(--red);border-color:var(--red);">&#10005;</button>
+      </div></td></tr>`;
+  }).join('') || '<tr><td colspan="7" style="color:var(--muted);padding:14px;">Tidak ada pengguna yang cocok.</td></tr>';
+  if(list.length > MAXR) body.innerHTML += `<tr><td colspan="7" style="color:var(--muted);padding:10px;">Menampilkan ${MAXR} pertama — persempit dengan pencarian/filter.</td></tr>`;
+}
+function admEdit(name){
+  const u = USERS.find(x=>x.username===name); if(!u) return;
+  const i = isInfo(name) || {};
+  document.getElementById('admEditUser').value = u.username;
+  document.getElementById('admEditName').value = u.name || i.name || '';
+  document.getElementById('admEditRole').value = u.role === 'admin' ? 'admin' : 'viewer';
+  document.getElementById('admEditMsg').textContent = '';
+  document.getElementById('admEditOverlay').classList.add('show');
+}
+window.admEdit = admEdit;
+async function admEditSave(){
+  const name = document.getElementById('admEditUser').value;
+  const nm = document.getElementById('admEditName').value, role = document.getElementById('admEditRole').value;
+  const u = USERS.find(x=>x.username===name); if(!u) return;
+  const msg = document.getElementById('admEditMsg');
+  msg.textContent = 'Menyimpan…';
+  if(String(u.name||'') !== nm.trim()) await setUserName(name, nm);
+  if((u.role === 'admin' ? 'admin' : 'viewer') !== role){
+    if(name === localStorage.getItem('wj_user') && role !== 'admin' && !confirm('Kamu menurunkan akses akunmu sendiri ke Viewer. Lanjut?')){ msg.textContent = ''; return; }
+    await setUserRole(name, role);
+  }
+  document.getElementById('admEditOverlay').classList.remove('show');
+  renderAdminUsers(false);
+}
+function bindAdminTab(){
+  const $ = id => document.getElementById(id);
+  $('admBtnRefresh').addEventListener('click', ()=>{ renderAdminUsers(true); renderUserActivity(); });
+  $('admBtnImport').addEventListener('click', ()=>$('bulkUserFile').click());
+  $('admBtnAdd').addEventListener('click', ()=>{ $('admAddBox').classList.toggle('hidden'); if(!$('admAddBox').classList.contains('hidden')) $('newUserInput').focus(); });
+  ['admSearch'].forEach(id=>$(id).addEventListener('input', admRenderRows));
+  ['admArea','admRole','admSort'].forEach(id=>$(id).addEventListener('change', admRenderRows));
+  $('admSubUsers').addEventListener('click', ()=>{ $('admSubUsers').classList.add('active'); $('admSubTools').classList.remove('active'); $('admPaneUsers').classList.remove('hidden'); $('admPaneTools').classList.add('hidden'); });
+  $('admSubTools').addEventListener('click', ()=>{ $('admSubTools').classList.add('active'); $('admSubUsers').classList.remove('active'); $('admPaneTools').classList.remove('hidden'); $('admPaneUsers').classList.add('hidden'); renderUserActivity(); });
+  $('admEditClose').addEventListener('click', ()=>$('admEditOverlay').classList.remove('show'));
+  $('admEditOverlay').addEventListener('click', (e)=>{ if(e.target.id==='admEditOverlay') e.currentTarget.classList.remove('show'); });
+  $('admEditSave').addEventListener('click', admEditSave);
+}
+
 function renderUserList(){
-  // nama yang belum diisi manual diambil dari daftar IS (is_list) — sama seperti tab Aktivitas User
-  if(!isListLoaded && !renderUserList._loading){ renderUserList._loading = true; ensureIsList().then(()=>{ renderUserList._loading = false; if(isListLoaded) renderUserList(); }); }
-  document.getElementById('defaultPassLabel').textContent = DEFAULT_PASSWORD;
-  document.getElementById('userListBody').innerHTML = USERS.map(u=>`
-    <tr>
-      <td>${u.username}${u.resetRequestedAt ? `<div style="color:var(--red);font-size:10.5px;font-weight:600;">⚠ Minta reset password<br><span style="font-weight:400;color:var(--muted);">${escHtml(new Date(u.resetRequestedAt).toLocaleString('id-ID'))}</span></div>` : ''}</td>
-      <td><input type="text" value="${escHtml(u.name||(isInfo(u.username)||{}).name||'')}" placeholder="isi nama" data-user="${u.username}" onchange="setUserName(this.dataset.user, this.value)" style="width:130px;font-size:11.5px;padding:3px 4px;"></td>
-      <td class="mono">${u.mustChangePassword!==false ? '<i style="color:var(--muted);">(belum diganti)</i>' : '••••••••'}</td>
-      <td>
-        <select data-user="${u.username}" onchange="setUserRole(this.dataset.user, this.value)" style="font-size:11.5px;padding:3px 4px;">
-          <option value="viewer" ${u.role!=='admin'?'selected':''}>Viewer (lihat+unduh)</option>
-          <option value="admin" ${u.role==='admin'?'selected':''}>Admin (bisa upload)</option>
-        </select>
-      </td>
-      <td style="white-space:nowrap;">
-        ${u.resetRequestedAt ? `<button class="btn btn-sm" data-user="${u.username}" onclick="resetUserPassword(this.dataset.user)" style="background:var(--red);color:#fff;">Setujui Reset</button>
-        <button class="btn btn-ghost btn-sm" data-user="${u.username}" onclick="denyResetRequest(this.dataset.user)">Tolak</button>` : `<button class="btn btn-ghost btn-sm" data-user="${u.username}" onclick="resetUserPassword(this.dataset.user)">Reset Pass</button>`}
-        <button class="btn btn-ghost btn-sm" data-user="${u.username}" onclick="forceReleaseUser(this.dataset.user)">Paksa Logout</button>
-        <button class="btn btn-ghost btn-sm" data-user="${u.username}" onclick="removeUserByName(this.dataset.user)">Hapus</button>
-      </td>
-    </tr>`).join('') || '<tr><td colspan="5" style="color:var(--muted);">Belum ada user.</td></tr>';
+  const l = document.getElementById('defaultPassLabel'); if(l) l.textContent = DEFAULT_PASSWORD;
+  renderAdminUsers(false);
+  updateResetBadge();
 }
 
 function renderUserResetResults(){
@@ -10757,7 +11038,8 @@ async function addUser(){
   if(!name){ msg.textContent = 'Isi username dulu.'; return; }
   if(USERS.find(u=>u.username.toLowerCase()===name.toLowerCase())){ msg.textContent = 'Username sudah ada.'; return; }
   // new users default to viewer (view + download only) — promote to admin manually if needed
-  USERS.push({ username: name, salt: DEFAULT_CREDENTIAL.salt, passwordHash: DEFAULT_CREDENTIAL.passwordHash, role: 'viewer', mustChangePassword: true });
+  const nmEl = document.getElementById('newUserName'); const nm = nmEl ? nmEl.value.trim() : '';
+  USERS.push({ username: name, salt: DEFAULT_CREDENTIAL.salt, passwordHash: DEFAULT_CREDENTIAL.passwordHash, role: 'viewer', mustChangePassword: true, ...(nm ? {name: nm} : {}) });
   msg.textContent = 'Menyimpan...';
   const saveOk = await saveUsers();
   if(!saveOk){
@@ -10766,7 +11048,8 @@ async function addUser(){
     return;
   }
   msg.textContent = `User "${name}" ditambahkan sebagai Viewer dengan password default.`;
-  input.value = '';
+  showToast(msg.textContent);
+  input.value = ''; if(nmEl) nmEl.value = '';
   renderUserList();
 }
 
@@ -10861,6 +11144,7 @@ function handleBulkUserFile(file){
         return;
       }
       msg.textContent = `Selesai. ${added} user baru ditambahkan sebagai Viewer (password default)${skipped? `, ${skipped} dilewati karena sudah ada/duplikat`:''}.`;
+      showToast(msg.textContent);
       renderUserList();
     }catch(err){
       msg.textContent = 'Gagal memproses file: ' + err.message;
@@ -10882,6 +11166,7 @@ async function setUserRole(name, role){
     return;
   }
   showToast(`Role "${name}" diubah ke ${role==='admin'?'Admin':'Viewer'}.`);
+  renderAdminUsers(false);
   if(name === localStorage.getItem('wj_user')){
     localStorage.setItem('wj_user_role', role);
     applyLoginState();
@@ -11091,18 +11376,9 @@ function bindEvents(){
   document.getElementById('btnDoChangePass').addEventListener('click', doChangePassword);
   document.getElementById('cpNewPass2').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doChangePassword(); });
   document.getElementById('btnLogout').addEventListener('click', doLogout);
-  document.getElementById('btnManageUsers').addEventListener('click', ()=>{ renderUserList(); renderUserActivity(); document.getElementById('usersOverlay').classList.add('show'); });
-  document.getElementById('closeUsers').addEventListener('click', ()=>document.getElementById('usersOverlay').classList.remove('show'));
-  document.getElementById('usersOverlay').addEventListener('click', (e)=>{ if(e.target.id==='usersOverlay') e.currentTarget.classList.remove('show'); });
   document.getElementById('btnAddUser').addEventListener('click', addUser);
   document.getElementById('btnResetAllPass').addEventListener('click', resetAllPasswords);
-  document.getElementById('userResetSearch').addEventListener('input', renderUserResetResults);
-  document.getElementById('userResetSearch').addEventListener('keydown', (e)=>{
-    if(e.key !== 'Enter') return;
-    const q = e.target.value.trim().toLowerCase();
-    const exact = USERS.filter(u=>String(u.username).toLowerCase()===q);
-    if(exact.length === 1) resetUserPassword(exact[0].username);
-  });
+  bindAdminTab();
   initUploadDoneMarkers();
   document.getElementById('userNameFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleUserNameFile(e.target.files[0]); e.target.value=''; });
   document.getElementById('bulkUserFile').addEventListener('change', (e)=>{ if(e.target.files[0]) handleBulkUserFile(e.target.files[0]); });
@@ -11134,6 +11410,8 @@ function bindEvents(){
       document.getElementById('tabSupply').classList.toggle('hidden', activeTab!=='supply');
       document.getElementById('tabComparison').classList.toggle('hidden', activeTab!=='comparison');
       document.getElementById('tabArchive').classList.toggle('hidden', activeTab!=='archive');
+      { const ta = document.getElementById('tabAdmin'); if(ta) ta.classList.toggle('hidden', activeTab!=='admin'); }
+      if(activeTab==='admin'){ renderAdminUsers(true); renderUserActivity(); }
       if(activeTab==='archive') archiveOpen();
       if(activeTab==='sellin') renderSellinAll();
       if(activeTab==='supply') renderSupplyAll();
@@ -11323,6 +11601,6 @@ init();
 })();
 </script>
 <div style="text-align:center;font-size:9px;letter-spacing:.2em;color:var(--muted);opacity:.28;padding:18px 0 10px;user-select:none;" aria-hidden="true">IS</div>
-<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.53 · 27 Nov 2026</div>
+<div id="appVersion" style="text-align:center;font-size:11px;color:var(--muted);padding:0 0 18px;">Versi v1.55 · 27 Nov 2026</div>
 </body>
 </html>
